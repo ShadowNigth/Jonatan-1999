@@ -1,27 +1,29 @@
-/* KitsuneDE SwayNC Anime Notification Theme - Cyberpunk Neon Tokyo */
+/* KitsuneDE SwayNC Anime Notification Center - Cyberpunk Neon Tokyo */
 * {
-  font-family: "JetBrainsMono Nerd Font", sans-serif;
+  font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", sans-serif;
 }
 
 .notification-row .notification-background .notification {
   background: #131026;
   color: #eef6ff;
   border-radius: 12px;
-  border: 2px solid #00f0ff;
-  padding: 10px;
+  border: 1.5px solid #00f0ff;
+  padding: 10px 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 
 .control-center {
-  background: #0b0916EE;
+  background: #0b0916EB;
   color: #eef6ff;
-  border-radius: 12px;
-  border: 2px solid #00f0ff;
+  border-radius: 16px;
+  border: 1.5px solid #00f0ff;
   padding: 14px;
 }
 
 .widget-title > button {
-  background: #00f0ff;
-  color: #0b0916;
+  background: linear-gradient(135deg, #00f0ff, #ff2a85);
+  color: #090812;
+  font-weight: 800;
   border-radius: 8px;
-  padding: 4px 10px;
+  padding: 4px 12px;
 }

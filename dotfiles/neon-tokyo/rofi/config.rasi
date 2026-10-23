@@ -1,6 +1,16 @@
 /* KitsuneDE Rofi Wayland Anime Launcher - Cyberpunk Neon Tokyo */
+configuration {
+    modi: "drun,run,window";
+    show-icons: true;
+    icon-theme: "Papirus-Dark";
+    display-drun: "󰣇  drun ❯";
+    display-run: "❯_ run";
+    display-window: "󰖲  win";
+    drun-display-format: "{name}";
+}
+
 * {
-    bg:      #0b0916E6;
+    bg:      #0b0916EB;
     surface: #131026;
     primary: #00f0ff;
     accent:  #ff2a85;
@@ -15,7 +25,7 @@ window {
     border: 2px;
     border-color: @primary;
     border-radius: 12px;
-    padding: 18px;
+    padding: 16px;
 }
 
 inputbar {
@@ -27,18 +37,45 @@ inputbar {
 }
 
 prompt {
+    background-color: transparent;
     text-color: @primary;
     padding: 0 10px 0 0;
+}
+
+entry {
+    background-color: transparent;
+    text-color: @fg;
+    placeholder: "Buscar aplicación, tema o comando...";
+    placeholder-color: @muted;
 }
 
 listview {
     lines: 7;
     spacing: 6px;
     margin: 12px 0 0 0;
+    background-color: transparent;
+}
+
+element {
+    padding: 9px 12px;
+    border-radius: 9px;
+    background-color: transparent;
+    text-color: @fg;
 }
 
 element selected {
     background-color: @primary;
-    text-color: #0b0916;
-    border-radius: 8px;
+    text-color: #090812;
+    border-radius: 9px;
+}
+
+element-icon {
+    size: 22px;
+    margin: 0 10px 0 0;
+    background-color: transparent;
+}
+
+element-text {
+    background-color: transparent;
+    text-color: inherit;
 }

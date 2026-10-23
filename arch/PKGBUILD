@@ -1,23 +1,30 @@
 # Maintainer: KitsuneDE Contributors
 pkgname=kitsune-de
-pkgver=1.1.0
+pkgver=1.2.0
 pkgrel=1
-pkgdesc="Escritorio y suite de ricing estilo Anime para Sway, SwayFX y Arch Linux escrito en Go"
+pkgdesc="Escritorio Anime Visual-Twin en Go para Arch Linux, Sway y SwayFX (idéntico al ejemplo web)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/ShadowNigth/Jonatan-1999"
 license=('MIT')
 depends=('glibc')
 makedepends=('go')
 optdepends=(
+  'swayfx: Compositor Anime con corner_radius, blur, shadow_color y layer_effects (AUR)'
   'sway: Compositor Wayland oficial compatible vía $SWAYSOCK'
-  'swayfx: Fork de Sway con corner_radius, blur, shadows y layer_effects (AUR)'
-  'waybar: Barra superior configurada con sway/workspaces y sway/mode'
-  'swaybg: Fondo de pantalla nativo para Sway y SwayFX'
-  'swww: Transiciones animadas de wallpapers en Wayland'
-  'autotiling: División automática espiral para contenedores de Sway/SwayFX'
-  'kitty: Emulador de terminal GPU con paletas anime'
-  'cage: Modo sesión Kiosk standalone opcional'
-  'ttf-jetbrains-mono-nerd: Fuente recomendada con iconos Nerd Font'
+  'waybar: Barra superior cristalina con píldoras Kanji y telemetría'
+  'nwg-dock: Dock inferior flotante estilo Anime Dock en Wayland'
+  'swww: Transiciones circulares animadas a 60 FPS para wallpapers'
+  'rofi-wayland: Lanzador de aplicaciones centrado con blur en SwayFX (AUR)'
+  'swaync: Centro de notificaciones Wayland con recarga CSS en caliente (AUR)'
+  'swaylock-effects-git: Pantalla de bloqueo con blur y anillo neón (AUR)'
+  'kitty: Terminal acelerada por GPU con recarga de paleta ANSI en vivo'
+  'cage: Compositor Wayland kiosco para sesión Full Anime Shell 100% idéntica al web'
+  'chromium: Motor Wayland GPU para Full Anime Shell y ventana Kitsune Rice Studio'
+  'ttf-jetbrains-mono-nerd: Tipografía principal con iconos Nerd Font'
+  'noto-fonts-cjk: Tipografía japonesa Kanji (壱 弐 参 四 伍 / ネオン東京)'
+  'noto-fonts-emoji: Emojis a color para Waybar, Rofi y notificaciones'
+  'papirus-icon-theme: Tema de iconos vectorial oscuro para Dock y Rofi'
+  'bibata-cursor-theme-bin: Cursor Bibata-Modern-Ice (AUR)'
 )
 source=()
 sha256sums=()
@@ -39,6 +46,7 @@ package() {
   install -Dm644 "${startdir}/kitsune-sway.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-sway.desktop"
   install -Dm644 "${startdir}/kitsune-de.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-de.desktop"
   install -Dm644 "${startdir}/kitsune-de-x11.desktop" "${pkgdir}/usr/share/xsessions/kitsune-de-x11.desktop"
+  install -Dm644 "${startdir}/kitsune-studio.desktop" "${pkgdir}/usr/share/applications/kitsune-studio.desktop"
 
   install -d "${pkgdir}/usr/share/kitsune-de/wallpapers"
   install -Dm644 "${startdir}/../internal/ui/static/wallpapers/"*.jpg "${pkgdir}/usr/share/kitsune-de/wallpapers/"

@@ -8,10 +8,13 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/ShadowNigth/Jonatan-1999/internal/config"
+	"github.com/ShadowNigth/Jonatan-1999/internal/ricer"
 )
 
 const magic = "i3-ipc"
@@ -150,13 +153,53 @@ func (c *Client) ApplyLiveState(theme config.Theme, s config.DesktopSettings) er
 		if !s.BorderGlow {
 			shadowState = "disable"
 		}
+		pHex := strings.TrimPrefix(theme.Primary, "#")
 		cmds = append(cmds,
 			fmt.Sprintf("corner_radius %d", s.BorderRadius),
 			fmt.Sprintf("blur %s", blurState),
 			fmt.Sprintf("shadows %s", shadowState),
+			fmt.Sprintf("shadow_color #%s77", pHex),
 		)
 	}
 
 	_, err := c.RunCommand(strings.Join(cmds, "; "))
 	return err
+}
+
+// SyncNativeDesktop updates ~/.config dotfiles and triggers 60fps swww wallpaper animation + live Waybar/Kitty/SwayNC CSS reload.
+func (c *Client) SyncNativeDesktop(theme config.Theme, s config.DesktopSettings) {
+	if !c.Available() {
+		return
+	}
+	_ = c.ApplyLiveState(theme, s)
+
+	go func() {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			return
+		}
+		cfgDir := filepath.Join(home, ".config")
+		_, _ = ricer.ExportToDir(cfgDir, theme, s)
+
+		wallPath := filepath.Join(cfgDir, "kitsune-de", "wallpapers", filepath.Base(theme.Wallpaper))
+		if _, err := os.Stat(wallPath); err == nil {
+			if swwwBin, err := exec.LookPath("swww"); err == nil {
+				_ = exec.Command(swwwBin, "img", wallPath,
+					"--transition-type", "grow",
+					"--transition-pos", "0.85,0.90",
+					"--transition-duration", "1.1",
+					"--transition-fps", "60",
+				).Run()
+			} else {
+				_, _ = c.RunCommand(fmt.Sprintf("output * bg %s fill", wallPath))
+			}
+		}
+
+		// Hot-reload Waybar CSS, Kitty ANSI colors, and SwayNC theme without flickering
+		_ = exec.Command("pkill", "-SIGUSR2", "waybar").Run()
+		_ = exec.Command("killall", "-SIGUSR1", "kitty").Run()
+		if swayncBin, err := exec.LookPath("swaync-client"); err == nil {
+			_ = exec.Command(swayncBin, "-rs").Run()
+		}
+	}()
 }

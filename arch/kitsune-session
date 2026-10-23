@@ -1,26 +1,65 @@
 #!/usr/bin/env bash
-# Lanzador de sesión nativa KitsuneDE para SDDM / Greetd / LightDM / GDM / startx en Arch Linux
+# ==============================================================================
+# Lanzador de sesión Full Anime Shell de KitsuneDE (100% Idéntico al Ejemplo Web)
+# Compatible con SDDM, GDM, LightDM, greetd, ly o ejecución directa desde TTY.
+# Renderiza el escritorio completo con partículas Canvas 60fps, audio pentatónico,
+# animaciones spring, Waybar, Dock, Rofi, Terminal PTY real y Rice Studio.
+# ==============================================================================
 set -euo pipefail
 
 export KITSUNE_PORT="${KITSUNE_PORT:-18080}"
 export KITSUNE_URL="http://127.0.0.1:${KITSUNE_PORT}"
+export XCURSOR_THEME="${XCURSOR_THEME:-Bibata-Modern-Ice}"
+export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
+export MOZ_ENABLE_WAYLAND=1
 
-mkdir -p "${HOME}/.config/kitsune-de"
+mkdir -p "${HOME}/.config/kitsune-de/wallpapers" "${HOME}/.config/kitsune-de/shell-profile"
+
+if [[ -d /usr/share/kitsune-de/wallpapers ]]; then
+  cp -n /usr/share/kitsune-de/wallpapers/*.jpg "${HOME}/.config/kitsune-de/wallpapers/" 2>/dev/null || true
+fi
 
 # Iniciar el motor Go de KitsuneDE en segundo plano
-kitsune-de --addr "127.0.0.1:${KITSUNE_PORT}" --workdir "${HOME}" &
+kitsune-de --addr "127.0.0.1:${KITSUNE_PORT}" --workdir "${HOME}" --compositor swayfx &
 DE_PID=$!
-trap 'kill "${DE_PID}" 2>/dev/null || true' EXIT INT TERM
+cleanup() {
+  kill "${DE_PID}" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
 
-sleep 0.4
+# Esperar hasta que el servidor local responda (máx ~3s)
+for _ in {1..30}; do
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS "${KITSUNE_URL}/api/health" >/dev/null 2>&1 && break
+  fi
+  sleep 0.1
+done
 
-# Si no hay sesión Wayland/X11 activa, arrancar mediante Cage (compositor Wayland kiosk)
+CHROME_FLAGS=(
+  "--ozone-platform-hint=auto"
+  "--enable-gpu-rasterization"
+  "--enable-zero-copy"
+  "--autoplay-policy=no-user-gesture-required"
+  "--disable-infobars"
+  "--no-first-run"
+  "--no-default-browser-check"
+  "--user-data-dir=${HOME}/.config/kitsune-de/shell-profile"
+  "--kiosk"
+  "--app=${KITSUNE_URL}"
+)
+
+# Si arranca desde TTY o Display Manager sin sesión Wayland/X11 previa -> Cage Wayland Kiosk
 if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
   if command -v cage >/dev/null 2>&1; then
-    if command -v chromium >/dev/null 2>&1; then
-      exec cage -s -- chromium --kiosk --app="${KITSUNE_URL}" --no-first-run
-    elif command -v firefox >/dev/null 2>&1; then
-      exec cage -s -- firefox --kiosk "${KITSUNE_URL}"
+    for browser in chromium brave google-chrome-stable; do
+      if command -v "${browser}" >/dev/null 2>&1; then
+        cage -s -- "${browser}" "${CHROME_FLAGS[@]}"
+        exit 0
+      fi
+    done
+    if command -v firefox >/dev/null 2>&1; then
+      cage -s -- firefox --kiosk "${KITSUNE_URL}"
+      exit 0
     fi
   fi
 fi
@@ -28,7 +67,7 @@ fi
 # Dentro de Wayland o X11 existente
 for browser in chromium brave google-chrome-stable; do
   if command -v "${browser}" >/dev/null 2>&1; then
-    "${browser}" --kiosk --app="${KITSUNE_URL}" --no-first-run
+    "${browser}" "${CHROME_FLAGS[@]}"
     exit 0
   fi
 done

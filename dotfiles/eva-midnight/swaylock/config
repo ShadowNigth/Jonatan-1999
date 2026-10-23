@@ -1,10 +1,16 @@
-# KitsuneDE Swaylock / Swaylock-Effects Anime Config - Midnight Evangelion
+# KitsuneDE Swaylock-Effects Anime Lockscreen - Midnight Evangelion
 image=~/.config/kitsune-de/wallpapers/eva-midnight.jpg
 scaling=fill
+clock
+timestr=%H:%M
+datestr=%A, %d %B
+indicator
+indicator-radius=115
+indicator-thickness=9
+effect-blur=9x6
+effect-vignette=0.5:0.5
+fade-in=0.25
 font=JetBrainsMono Nerd Font
-font-size=24
-indicator-radius=110
-indicator-thickness=10
 
 inside-color=190e2cCC
 ring-color=39ff14FF
@@ -14,8 +20,12 @@ bs-hl-color=ff0055FF
 separator-color=00000000
 text-color=f0fdf4FF
 
+inside-clear-color=190e2cCC
+ring-clear-color=9d4eddFF
+text-clear-color=f0fdf4FF
+
 inside-ver-color=190e2cCC
-ring-ver-color=ff9e00FF
+ring-ver-color=39ff14FF
 text-ver-color=f0fdf4FF
 
 inside-wrong-color=190e2cCC

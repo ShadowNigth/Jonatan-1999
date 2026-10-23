@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -115,6 +116,7 @@ func (s *Server) registerRoutes() error {
 	s.mux.HandleFunc("/api/ctl", s.handleCtl)
 	s.mux.HandleFunc("/api/ricer/preview", s.handleRicerPreview)
 	s.mux.HandleFunc("/api/ricer/export", s.handleRicerExport)
+	s.mux.HandleFunc("/api/native/launch", s.handleNativeLaunch)
 
 	s.mux.HandleFunc("/api/fs/list", s.fsHandler.HandleList)
 	s.mux.HandleFunc("/api/fs/read", s.fsHandler.HandleRead)
@@ -144,7 +146,7 @@ func (s *Server) registerRoutes() error {
 
 func (s *Server) syncLiveCompositor() {
 	if s.sway.Available() {
-		_ = s.sway.ApplyLiveState(s.store.ActiveTheme(), s.store.Settings())
+		s.sway.SyncNativeDesktop(s.store.ActiveTheme(), s.store.Settings())
 	}
 }
 
@@ -404,6 +406,45 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	s.term.ServeWS(conn)
 }
 
+func (s *Server) handleNativeLaunch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		App string `json:"app"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid json"})
+		return
+	}
+	allowed := map[string]bool{
+		"kitty":       true,
+		"thunar":      true,
+		"firefox":     true,
+		"chromium":    true,
+		"pavucontrol": true,
+		"nwg-look":    true,
+	}
+	appName := strings.TrimSpace(req.App)
+	if !allowed[appName] {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "aplicación nativa no permitida"})
+		return
+	}
+	binPath, err := exec.LookPath(appName)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": appName + " no instalado en el host actual"})
+		return
+	}
+	cmd := exec.Command(binPath)
+	if err := cmd.Start(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	go func() { _ = cmd.Wait() }()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "launched": appName})
+}
+
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
@@ -412,17 +453,17 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func builtinArchCatalog() []ArchPackage {
 	return []ArchPackage{
-		{Repo: "kitsune", Name: "kitsune-de", Version: "1.1.0-1", Category: "Desktop & Sway IPC", Installed: true, Description: "Escritorio y demonio sway-ipc estilo Anime en Go para Sway, SwayFX y Wayland", Command: "makepkg -si (en ./arch)"},
-		{Repo: "aur", Name: "swayfx", Version: "0.4.0-2", Category: "Compositor Anime", Installed: true, Description: "Fork de Sway con esquinas redondeadas (corner_radius), blur, sombras y layer_effects", Command: "yay -S swayfx"},
-		{Repo: "extra", Name: "sway", Version: "1.10-1", Category: "Compositor Wayland", Installed: true, Description: "Compositor Wayland ultraligero compatible con i3 e integrado por $SWAYSOCK con Go", Command: "sudo pacman -S sway"},
-		{Repo: "extra", Name: "swaybg", Version: "1.2.1-1", Category: "Wallpapers Sway", Installed: true, Description: "Utilidad oficial de fondos de pantalla para compositores Wayland / Sway", Command: "sudo pacman -S swaybg"},
-		{Repo: "aur", Name: "swaylock-effects-git", Version: "1.7.0-1", Category: "Bloqueo Anime", Installed: true, Description: "Pantalla de bloqueo para Sway/SwayFX con blur dinámico, reloj e indicador circular", Command: "yay -S swaylock-effects-git"},
-		{Repo: "extra", Name: "autotiling", Version: "2.1.2-1", Category: "Mosaico Dinámico", Installed: true, Description: "Alterna automáticamente splith/splitv en Sway y SwayFX estilo espiral Dwindle", Command: "sudo pacman -S autotiling"},
-		{Repo: "extra", Name: "waybar", Version: "0.11.0-2", Category: "Barra Superior", Installed: true, Description: "Barra Wayland configurada con módulos nativos sway/workspaces, sway/mode y sway/window", Command: "sudo pacman -S waybar"},
-		{Repo: "extra", Name: "swww", Version: "0.9.5-1", Category: "Wallpapers Animados", Installed: true, Description: "Demonio de transiciones animadas de wallpapers compatible con Sway y SwayFX", Command: "sudo pacman -S swww"},
-		{Repo: "aur", Name: "swaync", Version: "0.10.1-2", Category: "Notificaciones", Installed: true, Description: "Centro de notificaciones Wayland estilizable para Sway / SwayFX", Command: "yay -S swaync"},
-		{Repo: "extra", Name: "kitty", Version: "0.38.1-1", Category: "Terminal GPU", Installed: true, Description: "Emulador de terminal acelerado por GPU con soporte de avatares anime en fastfetch", Command: "sudo pacman -S kitty"},
-		{Repo: "aur", Name: "rofi-wayland", Version: "1.7.5-3", Category: "App Launcher", Installed: true, Description: "Lanzador drun compatible con layer_effects blur en SwayFX", Command: "yay -S rofi-wayland"},
-		{Repo: "extra", Name: "grim", Version: "1.4.1-2", Category: "Capturas Wayland", Installed: true, Description: "Utilidad de capturas de pantalla para Sway y SwayFX junto con slurp", Command: "sudo pacman -S grim slurp wl-clipboard"},
+		{Repo: "kitsune", Name: "kitsune-de", Version: "1.2.0-1", Category: "Desktop & Sway IPC", Installed: true, Description: "Escritorio Full Anime Shell + demonio sway-ipc en Go idéntico al ejemplo web", Command: "makepkg -si (en ./arch)"},
+		{Repo: "aur", Name: "swayfx", Version: "0.4.0-2", Category: "Compositor Anime", Installed: true, Description: "Fork de Sway con esquinas redondeadas (corner_radius), blur, shadow_color y layer_effects", Command: "yay -S swayfx"},
+		{Repo: "extra", Name: "nwg-dock", Version: "0.4.2-1", Category: "Dock Flotante", Installed: true, Description: "Dock inferior flotante para Sway/SwayFX con blur cristalino y glow neón estilo Web Preview", Command: "sudo pacman -S nwg-dock"},
+		{Repo: "extra", Name: "swww", Version: "0.9.5-1", Category: "Animaciones 60fps", Installed: true, Description: "Transiciones circulares animadas a 60 FPS al cambiar entre los 4 temas anime", Command: "sudo pacman -S swww"},
+		{Repo: "extra", Name: "waybar", Version: "0.11.0-2", Category: "Barra Superior", Installed: true, Description: "Barra cristalina con píldoras Kanji (一 二 三 四 五), telemetría, layout y selector de tema", Command: "sudo pacman -S waybar"},
+		{Repo: "extra", Name: "cage", Version: "0.2.0-1", Category: "Sesión Web-Nativa", Installed: true, Description: "Compositor Wayland kiosco GPU para correr KitsuneDE Full Anime Shell 100% píxel-idéntico", Command: "sudo pacman -S cage chromium"},
+		{Repo: "aur", Name: "rofi-wayland", Version: "1.7.5-3", Category: "App Launcher", Installed: true, Description: "Lanzador drun centrado con 2 columnas, íconos Papirus-Dark y layer_effects blur", Command: "yay -S rofi-wayland"},
+		{Repo: "aur", Name: "swaync", Version: "0.10.1-2", Category: "Notificaciones", Installed: true, Description: "Centro de notificaciones Wayland con tarjetas glassmorphism y hot-reload de colores", Command: "yay -S swaync"},
+		{Repo: "aur", Name: "swaylock-effects-git", Version: "1.7.0-1", Category: "Bloqueo Anime", Installed: true, Description: "Pantalla de bloqueo con blur dinámico, reloj central e indicador circular neón", Command: "yay -S swaylock-effects-git"},
+		{Repo: "extra", Name: "kitty", Version: "0.38.1-1", Category: "Terminal GPU", Installed: true, Description: "Terminal GPU con recarga en vivo SIGUSR1 de paleta ANSI al cambiar de tema", Command: "sudo pacman -S kitty fastfetch"},
+		{Repo: "extra", Name: "noto-fonts-cjk", Version: "20230817-2", Category: "Tipografía Kanji", Installed: true, Description: "Fuentes japonesas Kanji + Noto Color Emoji + JetBrainsMono Nerd Font para cero cuadros vacíos", Command: "sudo pacman -S noto-fonts-cjk noto-fonts-emoji ttf-jetbrains-mono-nerd inter-font"},
+		{Repo: "aur", Name: "bibata-cursor-theme-bin", Version: "2.0.7-1", Category: "Iconos & GTK", Installed: true, Description: "Cursor Bibata-Modern-Ice + iconos Papirus-Dark + temas oscuros GTK3/GTK4", Command: "yay -S bibata-cursor-theme-bin nwg-look && sudo pacman -S papirus-icon-theme"},
 	}
 }

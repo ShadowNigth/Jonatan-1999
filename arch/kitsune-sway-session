@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Lanzador de sesión Wayland para KitsuneDE sobre Sway o SwayFX en Arch Linux
-# Detecta automáticamente si /usr/bin/sway corresponde a SwayFX o Sway estándar.
+# Lanzador de sesión Wayland Visual-Twin de KitsuneDE sobre SwayFX o Sway
+# Configura Waybar, nwg-dock flotante, swww 60fps, Rofi, SwayNC, GTK3/4 y Go IPC
 # ==============================================================================
 set -euo pipefail
 
 export XDG_SESSION_TYPE=wayland
 export XDG_CURRENT_DESKTOP=sway
 export XDG_SESSION_DESKTOP=sway
+export GTK_THEME="${GTK_THEME:-Adwaita:dark}"
+export XCURSOR_THEME="${XCURSOR_THEME:-Bibata-Modern-Ice}"
+export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
 export MOZ_ENABLE_WAYLAND=1
 export QT_QPA_PLATFORM="wayland;xcb"
 export SDL_VIDEODRIVER=wayland
@@ -15,14 +18,23 @@ export _JAVA_AWT_WM_NONREPARENTING=1
 
 MODE="${1:-auto}"
 
-# Generar configs iniciales si el usuario aún no tiene ~/.config/sway
+mkdir -p "${HOME}/.config/kitsune-de/wallpapers"
+if [[ -d /usr/share/kitsune-de/wallpapers ]]; then
+  cp -n /usr/share/kitsune-de/wallpapers/*.jpg "${HOME}/.config/kitsune-de/wallpapers/" 2>/dev/null || true
+fi
+
+# Generar todos los 17 dotfiles Visual-Twin si es el primer inicio del usuario
 if [[ ! -f "${HOME}/.config/sway/config" && -x /usr/bin/kitsune-ctl ]]; then
   /usr/bin/kitsune-ctl export --compositor sway --theme neon-tokyo --out "${HOME}/.config" >/dev/null 2>&1 || true
 fi
 if [[ ! -f "${HOME}/.config/swayfx/config" && -x /usr/bin/kitsune-ctl ]]; then
   /usr/bin/kitsune-ctl export --compositor swayfx --theme neon-tokyo --out "${HOME}/.config" >/dev/null 2>&1 || true
 fi
+if [[ -f "${HOME}/.config/sway/start-dock.sh" ]]; then
+  chmod +x "${HOME}/.config/sway/start-dock.sh" 2>/dev/null || true
+fi
 
+# Si sway/swayfx no está instalado, usar la sesión Full Anime Shell (Cage + Chromium)
 if ! command -v sway >/dev/null 2>&1; then
   exec /usr/bin/kitsune-session
 fi

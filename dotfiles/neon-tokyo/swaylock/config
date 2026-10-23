@@ -1,10 +1,16 @@
-# KitsuneDE Swaylock / Swaylock-Effects Anime Config - Cyberpunk Neon Tokyo
+# KitsuneDE Swaylock-Effects Anime Lockscreen - Cyberpunk Neon Tokyo
 image=~/.config/kitsune-de/wallpapers/neon-tokyo.jpg
 scaling=fill
+clock
+timestr=%H:%M
+datestr=%A, %d %B
+indicator
+indicator-radius=115
+indicator-thickness=9
+effect-blur=9x6
+effect-vignette=0.5:0.5
+fade-in=0.25
 font=JetBrainsMono Nerd Font
-font-size=24
-indicator-radius=110
-indicator-thickness=10
 
 inside-color=131026CC
 ring-color=00f0ffFF
@@ -14,8 +20,12 @@ bs-hl-color=ff2a6dFF
 separator-color=00000000
 text-color=eef6ffFF
 
+inside-clear-color=131026CC
+ring-clear-color=bd00ffFF
+text-clear-color=eef6ffFF
+
 inside-ver-color=131026CC
-ring-ver-color=ff2a85FF
+ring-ver-color=00ffa3FF
 text-ver-color=eef6ffFF
 
 inside-wrong-color=131026CC

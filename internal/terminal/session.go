@@ -371,7 +371,7 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 			}
 			settings, theme, _ := h.store.SetTheme(nextID)
 			if h.sway != nil && h.sway.Available() {
-				_ = h.sway.ApplyLiveState(theme, settings)
+				h.sway.SyncNativeDesktop(theme, settings)
 			}
 			h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": settings, "theme": theme}})
 			return fmt.Sprintf("\x1b[1;32m✓ Tema cambiado a %s (%s)\x1b[0m\n", theme.Name, theme.JapaneseName)
@@ -382,7 +382,7 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 				return fmt.Sprintf("\x1b[31mError: %s\x1b[0m\n", err.Error())
 			}
 			if h.sway != nil && h.sway.Available() {
-				_ = h.sway.ApplyLiveState(theme, settings)
+				h.sway.SyncNativeDesktop(theme, settings)
 			}
 			h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": settings, "theme": theme}})
 			return fmt.Sprintf("\x1b[1;32m✓ Tema aplicado en vivo: %s (%s)\x1b[0m\n", theme.Name, theme.JapaneseName)

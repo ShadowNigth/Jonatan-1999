@@ -1,0 +1,31 @@
+/* KitsuneDE Floating Anime Dock (nwg-dock) - Cyberpunk Neon Tokyo */
+window {
+  background: rgba(11, 9, 22, 0.80);
+  border-radius: 16px;
+  border: 1px solid #00f0ff;
+}
+
+#box {
+  padding: 6px 10px;
+}
+
+button, image {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+button {
+  padding: 5px;
+  margin: 2px 4px;
+  border-radius: 11px;
+  background: #131026;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.18s ease;
+}
+
+button:hover {
+  background: #1e1938;
+  border: 1px solid #00f0ff;
+  box-shadow: 0 0 12px #00f0ff;
+}
