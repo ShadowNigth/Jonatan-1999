@@ -1,0 +1,292 @@
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  swaydesk · configuración de sway generada automáticamente          ║
+# ║  Edita este archivo o crea overrides en ~/.config/sway/config.d/     ║
+# ║  Regenerar:  swaydesk init --force                                   ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+
+### Variables ##############################################################
+
+set $mod Mod4
+set $term {{TERMINAL}}
+set $menu {{LAUNCHER}}
+set $menu_all swaymenu --float --commands
+set $power swaymenu --power
+set $themes swaydesk theme --gallery
+set $wall swaydesk wallpaper --gallery
+set $ctl swayctl
+set $clip swayclip
+set $boot swaydesk boot --force
+set $lock swaylock -f -c '{{THEME_BG_HEX}}'
+set $browser {{BROWSER}}
+set $files {{FILES}}
+set $editor {{EDITOR}}
+
+set $ws1 "1"
+set $ws2 "2"
+set $ws3 "3"
+set $ws4 "4"
+set $ws5 "5"
+set $ws6 "6"
+set $ws7 "7"
+set $ws8 "8"
+set $ws9 "9"
+set $ws10 "10"
+
+### Salida y apariencia ####################################################
+
+output * bg {{THEME_BG_HEX}} solid_color
+output * scale_filter linear
+
+default_border pixel 2
+default_floating_border normal
+default_border_color {{THEME_BORDER_HEX}}
+floating_border_color {{THEME_BORDER_HEX}}
+focused_border_color {{THEME_ACCENT_HEX}}
+urgent_border_color {{THEME_ERR_HEX}}
+hide_edge_borders smart
+
+# Esquinas y desenfoque: se activan solos en swayfx; en sway puro quedan comentados.
+{{FX_ROUNDING_LINE}}
+{{FX_BLUR_LINE}}
+
+gaps inner {{GAPS_INNER}}
+gaps outer {{GAPS_OUTER}}
+smart_gaps on
+smart_borders on
+
+font pango:{{FONT}} {{FONT_SIZE}}
+titlebar_border_thickness 1
+titlebar_padding 4 2
+focus_follows_mouse no
+mouse_warping output
+focus_wrapping yes
+
+client.focused          {{THEME_ACCENT_HEX}} {{THEME_ACCENT_HEX}} {{THEME_BG_HEX}} {{THEME_ACCENT_HEX}} {{THEME_ACCENT_HEX}}
+# Los bordes admiten alfa (#RRGGBBAA): ventanas sin foco más discretas.
+client.focused_inactive {{THEME_BG_SEL_HEX}}{{INACTIVE_ALPHA_HEX}}  {{THEME_BG_SEL_HEX}}  {{THEME_FG_HEX}} {{THEME_BG_SEL_HEX}}  {{THEME_BG_SEL_HEX}}
+client.unfocused        {{THEME_BG_ALT_HEX}}{{BAR_ALPHA_HEX}}  {{THEME_BG_ALT_HEX}}  {{THEME_FG_DIM_HEX}} {{THEME_BG_ALT_HEX}} {{THEME_BG_ALT_HEX}}
+client.urgent           {{THEME_ERR_HEX}}     {{THEME_ERR_HEX}}     {{THEME_BG_HEX}} {{THEME_ERR_HEX}}     {{THEME_ERR_HEX}}
+
+### Ventanas flotantes de swaydesk #########################################
+
+for_window [app_id="^swaydesk-menu$"] floating enable, border pixel 2, resize set 900 520, move position center
+for_window [app_id="^swaydesk-ctl$"] floating enable, border pixel 2, resize set 1080 680, move position center
+for_window [app_id="^swaydesk-clip$"] floating enable, border pixel 2, resize set 820 520, move position center
+for_window [app_id="^swaydesk-run$"] floating enable, border pixel 2, resize set 900 560, move position center
+for_window [app_id="^swaydesk-themes$"] floating enable, border pixel 2, resize set 1040 700, move position center
+for_window [app_id="^swaydesk-wallpapers$"] floating enable, border pixel 2, resize set 1180 740, move position center
+for_window [app_id="^swaydesk-dialog$"] floating enable, border pixel 2, resize set 560 220, move position center
+# Animación de arranque: ventana a pantalla completa sin bordes ni decoración.
+for_window [app_id="^swaydesk-boot$"] fullscreen enable, border none
+# La barra propia no se enfoca ni aparece en el árbol de ventanas.
+for_window [app_id="^swaydesk-bar$"] border none
+
+### Translucidez por aplicación ############################################
+# El fondo animado se ve a través de las ventanas compatibles.
+for_window [app_id="foot"] opacity {{TERM_OPACITY}}
+for_window [app_id="org.wezfurlong.wezterm"] opacity {{TERM_OPACITY}}
+for_window [app_id="Alacritty"] opacity {{TERM_OPACITY}}
+for_window [app_id="kitty"] opacity {{TERM_OPACITY}}
+for_window [class="Thunar"] opacity {{INACTIVE_OPACITY}}
+for_window [class="org.gnome.Nautilus" title=".*"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="pavucontrol"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="com.github.hluk.copyq"] opacity {{INACTIVE_OPACITY}}
+for_window [class="Pavucontrol"] opacity {{INACTIVE_OPACITY}}
+for_window [class="Code"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="code"] opacity {{INACTIVE_OPACITY}}
+for_window [class="Spotify"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="imv"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="chromium"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="google-chrome"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="brave-browser"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="obsidian"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="md.obsidian.Obsidian"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="org.telegram.desktop"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="Signal"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="discord"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="webcord"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="Element"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="dolphin"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="zathura"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="org.gnome.Evince"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="org.gnome.Calculator"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="blueman-manager"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="nm-connection-editor"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="org.gnome.TextEditor"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="com.raggesilver.BlackBox"] opacity {{TERM_OPACITY}}
+# Ventanas flotantes propias de swaydesk: siempre translúcidas.
+for_window [app_id="^swaydesk-menu$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-ctl$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-clip$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-run$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-themes$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-wallpapers$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-boot$"] opacity 1.00
+
+### Atajos de teclado ######################################################
+
+# Aplicaciones
+bindsym $mod+Return exec $term
+bindsym $mod+d exec $menu
+bindsym $mod+Shift+d exec $menu_all
+bindsym $mod+b exec $browser
+bindsym $mod+Shift+f exec $files
+bindsym $mod+Shift+Return exec $term -e $editor
+
+# swaydesk
+bindsym $mod+p exec $power
+bindsym $mod+t exec $themes
+bindsym $mod+Shift+t exec $themes
+bindsym $mod+Shift+w exec $wall
+bindsym $mod+Shift+b exec $boot
+# Reiniciar la barra (por ejemplo, al cambiar la configuración)
+bindsym $mod+Ctrl+b exec sh -c 'pkill -x swaybar; pkill -x waybar; sleep 0.2; ~/.config/swaydesk/autostart.sh >/dev/null 2>&1 &' 
+bindsym $mod+c exec --no-startup-id $clip
+bindsym $mod+i exec --no-startup-id $ctl
+bindsym $mod+Shift+l exec $lock
+bindsym $mod+Shift+n exec --no-startup-id swaydesk notify "swaydesk" "Notificaciones de prueba"
+# Modo «no molestar» de las notificaciones propias
+bindsym $mod+Ctrl+n exec --no-startup-id swaydesk notifications dnd
+# Cerrar todas las notificaciones en pantalla
+bindsym $mod+Ctrl+Shift+n exec --no-startup-id swaydesk notifications clear
+# Centro de notificaciones (también se abre con clic en el indicador de la barra)
+bindsym $mod+n exec --no-startup-id swaydesk notifications center
+
+# Capturas de pantalla
+bindsym Print exec sh -c 'mkdir -p ~/Capturas && grim ~/Capturas/$(date +%Y%m%d-%H%M%S).png'
+bindsym $mod+Print exec sh -c 'mkdir -p ~/Capturas && grim -g "$(slurp)" ~/Capturas/$(date +%Y%m%d-%H%M%S).png'
+bindsym $mod+Shift+Print exec sh -c 'grim -g "$(slurp)" - | wl-copy'
+
+# Gestión de ventanas
+bindsym $mod+q kill
+bindsym $mod+Shift+q kill
+bindsym $mod+f fullscreen toggle
+bindsym $mod+Shift+f floating toggle
+bindsym $mod+Shift+space floating toggle
+bindsym $mod+space focus mode_toggle
+bindsym $mod+a focus parent
+bindsym $mod+Shift+a focus child
+
+# Movimiento y foco
+bindsym $mod+h focus left
+bindsym $mod+j focus down
+bindsym $mod+k focus up
+bindsym $mod+l focus right
+bindsym $mod+Left focus left
+bindsym $mod+Down focus down
+bindsym $mod+Up focus up
+bindsym $mod+Right focus right
+
+bindsym $mod+Shift+h move left
+bindsym $mod+Shift+j move down
+bindsym $mod+Shift+k move up
+bindsym $mod+Shift+l move right
+bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Down move down
+bindsym $mod+Shift+Up move up
+bindsym $mod+Shift+Right move right
+
+# Distribución
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+e layout toggle split
+bindsym $mod+g split h
+bindsym $mod+v split v
+bindsym $mod+Shift+g gaps inner current toggle 0
+
+# Workspaces
+bindsym $mod+1 workspace number $ws1
+bindsym $mod+2 workspace number $ws2
+bindsym $mod+3 workspace number $ws3
+bindsym $mod+4 workspace number $ws4
+bindsym $mod+5 workspace number $ws5
+bindsym $mod+6 workspace number $ws6
+bindsym $mod+7 workspace number $ws7
+bindsym $mod+8 workspace number $ws8
+bindsym $mod+9 workspace number $ws9
+bindsym $mod+0 workspace number $ws10
+
+bindsym $mod+Shift+1 move container to workspace number $ws1
+bindsym $mod+Shift+2 move container to workspace number $ws2
+bindsym $mod+Shift+3 move container to workspace number $ws3
+bindsym $mod+Shift+4 move container to workspace number $ws4
+bindsym $mod+Shift+5 move container to workspace number $ws5
+bindsym $mod+Shift+6 move container to workspace number $ws6
+bindsym $mod+Shift+7 move container to workspace number $ws7
+bindsym $mod+Shift+8 move container to workspace number $ws8
+bindsym $mod+Shift+9 move container to workspace number $ws9
+bindsym $mod+Shift+0 move container to workspace number $ws10
+
+bindsym $mod+Tab workspace back_and_forth
+bindsym $mod+minus scratchpad show
+bindsym $mod+Shift+minus move scratchpad
+
+# Medios y hardware
+# El volumen muestra un aviso flotante con el nivel (swayosd) al cambiarlo.
+bindsym XF86AudioRaiseVolume exec --no-startup-id swaydesk volume up
+bindsym XF86AudioLowerVolume exec --no-startup-id swaydesk volume down
+bindsym XF86AudioMute exec --no-startup-id swaydesk volume mute
+# Subir o bajar sin teclas multimedia, y repetir el aviso del volumen
+bindsym $mod+equal exec --no-startup-id swayosd volume up
+bindsym $mod+Shift+equal exec --no-startup-id swayosd volume down
+bindsym $mod+Shift+m exec --no-startup-id swaydesk osd show
+bindsym XF86AudioPlay exec playerctl play-pause
+bindsym XF86AudioNext exec playerctl next
+bindsym XF86AudioPrev exec playerctl previous
+bindsym XF86MonBrightnessUp exec brightnessctl set +5%
+bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
+
+# Recarga y salida
+bindsym $mod+Shift+c reload
+bindsym $mod+Shift+r restart
+bindsym $mod+Shift+e exec $power
+bindsym $mod+Shift+x exec swaydesk lock
+
+### Modos ##################################################################
+
+mode "resize" {
+    bindsym h resize shrink width 20 px
+    bindsym j resize grow height 20 px
+    bindsym k resize shrink height 20 px
+    bindsym l resize grow width 20 px
+    bindsym Left resize shrink width 20 px
+    bindsym Down resize grow height 20 px
+    bindsym Up resize shrink height 20 px
+    bindsym Right resize grow width 20 px
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
+bindsym $mod+r mode "resize"
+
+### Entrada ################################################################
+
+input type:keyboard {
+    xkb_layout {{KEYBOARD_LAYOUT}}
+    xkb_options caps:escape
+    repeat_delay 300
+    repeat_rate 40
+}
+
+input type:touchpad {
+    tap enabled
+    natural_scroll enabled
+    dwt enabled
+    middle_emulation enabled
+    scroll_method two_finger
+}
+
+input type:pointer {
+    accel_profile adaptive
+}
+
+### Autostart ##############################################################
+
+# 1. Regenera waybar/foot/mako/swaylock con la paleta activa y avisa a sway.
+exec_always --no-startup-id swaydesk apply
+
+# 2. Arranca barra, notificaciones, bloqueo por inactividad, portapapeles...
+#    El script comprueba qué programas están instalados antes de lanzarlos.
+exec_always --no-startup-id ~/.config/swaydesk/autostart.sh
+
+# Overrides del usuario
+include ~/.config/sway/config.d/*

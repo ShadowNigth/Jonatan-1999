@@ -1,0 +1,65 @@
+# Maintainer: Jonatan <shadow@example.com>
+pkgname=swaydesk
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Escritorio completo para sway en Go: lanzador, panel, portapapeles, barra, notificaciones, OSD, temas y fondos animados"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ShadowNigth/Jonatan-1999"
+license=('MIT')
+depends=('sway')
+makedepends=('go')
+optdepends=(
+  'dbus: bus de sesión (necesario para swaynotify)'
+  'kbd: fuentes de consola PSF para swaybar, swaynotify y swayosd'
+  'foot: terminal por defecto'
+  'swaylock: bloqueo de pantalla'
+  'swayidle: bloqueo por inactividad y apagado de pantalla'
+  'grim: capturas de pantalla'
+  'slurp: selección de región para capturas'
+  'wl-clipboard: portapapeles'
+  'cliphist: historial del portapapeles'
+  'ttf-jetbrains-mono-nerd: iconos de la barra'
+  'playerctl: control de reproducción'
+  'wireplumber: volumen del sistema (wpctl) para el OSD de volumen'
+  'pulseaudio-utils: alternativa a wpctl para el volumen (pactl)'
+  'ffmpeg: fondos de pantalla de vídeo (mp4, webm)'
+  'swayfx: desenfoque y esquinas redondeadas'
+  'chromium: navegador por defecto'
+  'waybar: barra de estado alternativa (swaydesk trae la suya: swaybar)'
+  'mako: daemon de notificaciones alternativo (swaydesk trae el suyo: swaynotify)'
+)
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  export CGO_ENABLED=0
+  for bin in swaydesk swaymenu swayctl swayclip swaybar swaynotify swayosd; do
+    go build -trimpath -ldflags="-s -w" -o "build/$bin" "./cmd/$bin"
+  done
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  for bin in swaydesk swaymenu swayctl swayclip swaybar swaynotify swayosd; do
+    install -Dm755 "build/$bin" "$pkgdir/usr/bin/$bin"
+  done
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 docs/ARQUITECTURA.md "$pkgdir/usr/share/doc/$pkgname/ARQUITECTURA.md"
+  install -Dm644 docs/PERSONALIZACION.md "$pkgdir/usr/share/doc/$pkgname/PERSONALIZACION.md"
+  install -Dm644 assets/files/applications/swaydesk-menu.desktop \
+    "$pkgdir/usr/share/applications/swaydesk-menu.desktop"
+
+  cat > "$pkgdir/usr/share/doc/$pkgname/INSTALACION" <<'INST'
+Tras instalar el paquete ejecuta:
+
+  swaydesk init
+  swaymsg reload
+
+Y comprueba las dependencias con:
+
+  swaydesk doctor
+INST
+}

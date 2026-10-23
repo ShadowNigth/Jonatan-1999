@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=swaydesk portapapeles
+Name[es]=swaydesk portapapeles
+Comment=Historial del portapapeles con búsqueda
+Comment[es]=Historial del portapapeles con búsqueda
+Exec=foot --app-id=swaydesk-clip -e swayclip
+Icon=edit-paste
+Terminal=false
+Categories=Utility;
+Keywords=clipboard;portapapeles;historial;copiar;
+StartupNotify=false

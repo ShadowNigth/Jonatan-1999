@@ -1,0 +1,235 @@
+package main
+
+import (
+	"fmt"
+	"image"
+	"image/color"
+	"image/png"
+	"math"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/font"
+	"github.com/ShadowNigth/swaydesk/internal/notify"
+	"github.com/ShadowNigth/swaydesk/internal/ui"
+)
+
+// demoNotes son las notificaciones de ejemplo de la vista previa. Incluye una
+// pila de tres mensajes del mismo chat para que se vea el grupo plegado.
+func demoNotes(now time.Time) []notify.Notification {
+	return []notify.Notification{
+		{
+			ID: 1, App: "swaydesk", Summary: "Tema aplicado",
+			Body:    "Sakura · 31 paletas disponibles, cambia con <b>Super+t</b>",
+			Urgency: notify.Normal, Created: now.Add(-40 * time.Second),
+			Expires: now.Add(6 * time.Second), Timeout: 6000, Progress: -1,
+		},
+		{
+			ID: 2, App: "pacman", Summary: "12 paquetes por actualizar",
+			Body:    "Entre ellos el kernel y Mesa. Reinicia la sesión al terminar.",
+			Urgency: notify.Critical, Created: now.Add(-30 * time.Second), Progress: 42,
+			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Luego"}},
+		},
+		{
+			ID: 3, App: "spotify", Summary: "Lofi Girl · Midnight Study",
+			Body:    "Reproduciendo la lista «estudio»",
+			Urgency: notify.Low, Created: now.Add(-20 * time.Second), Timeout: -1, Progress: -1,
+			Image: demoArt(96),
+		},
+		{
+			ID: 4, App: "Telegram", GroupID: "chat-marta", Sender: "Marta",
+			Summary: "Marta", Body: "¿Quedamos el sábado?",
+			Urgency: notify.Normal, Created: now.Add(-12 * time.Second),
+			Timeout: 20000, Progress: -1,
+		},
+		{
+			ID: 5, App: "Telegram", GroupID: "chat-marta", Sender: "Marta",
+			Summary: "Marta", Body: "Traigo el postre, tú el café.",
+			Urgency: notify.Normal, Created: now.Add(-6 * time.Second),
+			Timeout: 20000, Progress: -1,
+		},
+		{
+			ID: 6, App: "Telegram", GroupID: "chat-marta", Sender: "Marta", Summary: "Marta",
+			Body:    "¿Comemos a las dos? Traigo el postre.",
+			Urgency: notify.Normal, Created: now.Add(-time.Second), Timeout: 20000, Progress: -1,
+			InlineReply: true, ReplyPlaceholder: "Responder a Marta…",
+			Actions: []notify.Action{{Key: notify.InlineReplyAction, Label: "Responder"}},
+		},
+	}
+}
+
+// demoArt genera una carátula de ejemplo (degradado y círculos) para que la
+// vista previa enseñe cómo se ve una notificación con imagen.
+func demoArt(size int) *notify.Image {
+	pal := ui.PaletteByName("sakura")
+	rgb := func(c ui.Color) (float64, float64, float64) {
+		h := strings.TrimPrefix(string(c), "#")
+		if len(h) != 6 {
+			return 0.5, 0.5, 0.5
+		}
+		v, err := strconv.ParseUint(h, 16, 32)
+		if err != nil {
+			return 0.5, 0.5, 0.5
+		}
+		return float64(v>>16&0xFF) / 255, float64(v>>8&0xFF) / 255, float64(v&0xFF) / 255
+	}
+	topR, topG, topB := rgb(pal.Accent2)
+	botR, botG, botB := rgb(pal.Bg)
+	im := &notify.Image{W: size, H: size, Pix: make([]uint8, size*size*4)}
+	for y := 0; y < size; y++ {
+		t := float64(y) / float64(size-1)
+		for x := 0; x < size; x++ {
+			i := (y*size + x) * 4
+			// Degradado diagonal con un halo claro en la esquina.
+			d := (t + float64(x)/float64(size-1)) / 2
+			im.Pix[i] = uint8(255 * (topR + (botR-topR)*d))
+			im.Pix[i+1] = uint8(255 * (topG + (botG-topG)*d))
+			im.Pix[i+2] = uint8(255 * (topB + (botB-topB)*d))
+			im.Pix[i+3] = 255
+		}
+	}
+	// Tres círculos concéntricos en el centro.
+	cx, cy := float64(size)/2, float64(size)/2
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			dx, dy := float64(x)-cx, float64(y)-cy
+			dist := math.Sqrt(dx*dx + dy*dy)
+			if dist < float64(size)*0.30 && dist > float64(size)*0.26 {
+				i := (y*size + x) * 4
+				im.Pix[i] = 255
+				im.Pix[i+1] = 255
+				im.Pix[i+2] = 255
+			}
+			if dist < float64(size)*0.09 {
+				i := (y*size + x) * 4
+				im.Pix[i] = uint8(im.Pix[i] / 4)
+				im.Pix[i+1] = uint8(im.Pix[i+1] / 4)
+				im.Pix[i+2] = uint8(im.Pix[i+2] / 4)
+			}
+		}
+	}
+	return im
+}
+
+// demoViews agrupa las notificaciones de ejemplo como las pintaría el daemon.
+func demoViews(now time.Time, grouped bool) []notify.GroupView {
+	items := demoNotes(now)
+	if !grouped {
+		return notify.Views(items, nil)
+	}
+	groups := notify.GroupAll(items)
+	out := make([]notify.GroupView, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, notify.GroupView{Key: g.Key, Items: g.Items})
+	}
+	return out
+}
+
+// renderPreview compone las tarjetas sobre un fondo del tema y guarda el PNG.
+func renderPreview(cfg *config.Config, path string) error {
+	return renderPreviewWith(cfg, path, true)
+}
+
+// renderPreviewWith compone las tarjetas; con backdrop=false el PNG sale con
+// fondo transparente para superponerlo a una captura.
+func renderPreviewWith(cfg *config.Config, path string, backdrop bool) error {
+	now := time.Now()
+	r := notify.New(notify.RenderOptions{
+		Width:    cfg.NotifyWidth,
+		Padding:  cfg.NotifyPadding,
+		Gap:      cfg.NotifyGap,
+		Radius:   cfg.NotifyRadius,
+		Opacity:  cfg.NotifyOpacity,
+		Face:     font.Best(cfg.NotifyFont),
+		Theme:    ui.PaletteByName(cfg.Theme),
+		Scale:    2,
+		MaxLines: cfg.NotifyMaxLines,
+		Shadow:   true,
+	})
+	canvas, _ := r.RenderGroups(demoViews(now, cfg.NotifyGroup), now)
+
+	// Fondo simulado: degradado del tema con margen alrededor.
+	const marginX, marginY = 24, 20
+	w, h := canvas.W+2*marginX, canvas.H+2*marginY
+	pal := ui.PaletteByName(cfg.Theme)
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	top := color.RGBAModel.Convert(hexColor(string(pal.BgAlt))).(color.RGBA)
+	bottom := color.RGBAModel.Convert(hexColor(string(pal.Bg))).(color.RGBA)
+	for y := 0; backdrop && y < h; y++ {
+		t := float64(y) / float64(h-1)
+		row := color.RGBA{
+			R: uint8(float64(top.R) + (float64(bottom.R)-float64(top.R))*t),
+			G: uint8(float64(top.G) + (float64(bottom.G)-float64(top.G))*t),
+			B: uint8(float64(top.B) + (float64(bottom.B)-float64(top.B))*t),
+			A: 255,
+		}
+		for x := 0; x < w; x++ {
+			img.SetRGBA(x, y, row)
+		}
+	}
+	// Composición alfa de las tarjetas.
+	for y := 0; y < canvas.H; y++ {
+		for x := 0; x < canvas.W; x++ {
+			i := (y*canvas.W + x) * 4
+			a := float64(canvas.Pix[i+3]) / 255
+			if a == 0 {
+				continue
+			}
+			if !backdrop {
+				img.SetRGBA(x+marginX, y+marginY, color.RGBA{
+					R: canvas.Pix[i], G: canvas.Pix[i+1], B: canvas.Pix[i+2], A: canvas.Pix[i+3],
+				})
+				continue
+			}
+			dst := img.RGBAAt(x+marginX, y+marginY)
+			img.SetRGBA(x+marginX, y+marginY, color.RGBA{
+				R: uint8(float64(canvas.Pix[i])*a + float64(dst.R)*(1-a)),
+				G: uint8(float64(canvas.Pix[i+1])*a + float64(dst.G)*(1-a)),
+				B: uint8(float64(canvas.Pix[i+2])*a + float64(dst.B)*(1-a)),
+				A: 255,
+			})
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		return fmt.Errorf("guardando el PNG: %w", err)
+	}
+	return nil
+}
+
+// hexColor convierte "#rrggbb" en color.RGBA.
+func hexColor(s string) color.RGBA {
+	if len(s) > 0 && s[0] == '#' {
+		s = s[1:]
+	}
+	var v [6]uint8
+	for i := 0; i < 6 && i < len(s); i++ {
+		d := s[i]
+		switch {
+		case d >= '0' && d <= '9':
+			v[i] = d - '0'
+		case d >= 'a' && d <= 'f':
+			v[i] = d - 'a' + 10
+		case d >= 'A' && d <= 'F':
+			v[i] = d - 'A' + 10
+		}
+	}
+	return color.RGBA{
+		R: v[0]<<4 | v[1],
+		G: v[2]<<4 | v[3],
+		B: v[4]<<4 | v[5],
+		A: 255,
+	}
+}

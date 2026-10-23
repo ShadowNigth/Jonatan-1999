@@ -1,0 +1,136 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 34,
+  "spacing": 6,
+  "margin-top": 0,
+  "margin-bottom": 0,
+  "margin-left": 0,
+  "margin-right": 0,
+  "modules-left": ["custom/logo", "sway/workspaces", "sway/mode", "sway/scratchpad"],
+  "modules-center": ["sway/window"],
+  "modules-right": [
+    "custom/recording",
+    "tray",
+    "pulseaudio",
+    "network",
+    "cpu",
+    "memory",
+    "temperature",
+    "battery",
+    "clock",
+    "custom/power"
+  ],
+  "sway/workspaces": {
+    "disable-scroll": false,
+    "all-outputs": true,
+    "format": "{icon}",
+    "format-icons": {
+      "1": "1",
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5": "5",
+      "6": "6",
+      "7": "7",
+      "8": "8",
+      "9": "9",
+      "10": "10",
+      "urgent": "!",
+      "default": "·"
+    },
+    "on-click": "activate"
+  },
+  "sway/mode": {
+    "format": "  {}  ",
+    "tooltip": false
+  },
+  "sway/window": {
+    "format": "{title}",
+    "max-length": 60,
+    "rewrite": {
+      "": "sway"
+    }
+  },
+  "sway/scratchpad": {
+    "format": "{icon} {count}",
+    "show-empty": false,
+    "format-icons": ["", ""],
+    "tooltip": false,
+    "on-click": "swaymsg scratchpad show"
+  },
+  "custom/logo": {
+    "format": "  {{ICON_LOGO}} ",
+    "tooltip": false,
+    "on-click": "swaymenu --float",
+    "interval": "once"
+  },
+  "custom/power": {
+    "format": " {{ICON_POWER}} ",
+    "tooltip": false,
+    "on-click": "swaymenu --power",
+    "interval": "once"
+  },
+  "custom/recording": {
+    "exec": "swaydesk status --module recording",
+    "interval": 2,
+    "format": "{}",
+    "tooltip": false,
+    "on-click": "swayctl"
+  },
+  "tray": {
+    "icon-size": 16,
+    "spacing": 8
+  },
+  "pulseaudio": {
+    "format": "{{ICON_VOLUME}} {volume}%",
+    "format-muted": "{{ICON_MUTED}} silencio",
+    "scroll-step": 5,
+    "on-click": "swaydesk volume mute",
+    "on-click-right": "pavucontrol",
+    "tooltip-format": "{desc}"
+  },
+  "network": {
+    "format-wifi": "{{ICON_WIFI}} {essid}",
+    "format-ethernet": "{{ICON_NET}} cable",
+    "format-disconnected": "sin red",
+    "tooltip-format": "{essid} · {signalStrength}% · {ipaddr}",
+    "on-click": "nm-connection-editor"
+  },
+  "cpu": {
+    "format": "{{ICON_CPU}} {usage}%",
+    "interval": 3,
+    "on-click": "swayctl",
+    "tooltip-format": "carga {load}"
+  },
+  "memory": {
+    "format": "{{ICON_RAM}} {percentage}%",
+    "interval": 5,
+    "tooltip-format": "{used} / {total}",
+    "on-click": "swayctl"
+  },
+  "temperature": {
+    "format": "{{ICON_TEMP}} {temperatureC}°C",
+    "critical-threshold": 80,
+    "interval": 5
+  },
+  "battery": {
+    "states": {
+      "warning": 20,
+      "critical": 10
+    },
+    "format": "{{ICON_BATTERY}} {capacity}%",
+    "format-charging": "{{ICON_CHARGING}} {capacity}%",
+    "format-plugged": "{{ICON_PLUG}} {capacity}%",
+    "format-alt": "{{ICON_BATTERY}} {time}",
+    "interval": 30
+  },
+  "clock": {
+    "format": "{{ICON_CLOCK}} {:%H:%M}",
+    "format-alt": "{{ICON_CALENDAR}} {:%a %d %b %Y}",
+    "tooltip-format": "{calendar}",
+    "calendar": {
+      "mode": "month"
+    }
+  }
+}

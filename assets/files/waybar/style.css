@@ -1,0 +1,215 @@
+/* swaydesk · waybar
+ * Paleta: {{THEME_NAME}}
+ * Generado por `swaydesk apply`. Edita la plantilla en assets/files/waybar/style.css
+ */
+
+@define-color bg          {{THEME_BG_HEX}};
+@define-color bg_alt      {{THEME_BG_ALT_HEX}};
+@define-color bg_sel      {{THEME_BG_SEL_HEX}};
+@define-color fg          {{THEME_FG_HEX}};
+@define-color fg_dim      {{THEME_FG_DIM_HEX}};
+@define-color muted       {{THEME_MUTED_HEX}};
+@define-color accent      {{THEME_ACCENT_HEX}};
+@define-color accent2     {{THEME_ACCENT2_HEX}};
+@define-color ok          {{THEME_OK_HEX}};
+@define-color warn        {{THEME_WARN_HEX}};
+@define-color err         {{THEME_ERR_HEX}};
+@define-color border      {{THEME_BORDER_HEX}};
+
+* {
+    font-family: "{{FONT}}", "Symbols Nerd Font", monospace;
+    font-size: {{BAR_FONT_SIZE}}px;
+    font-weight: 500;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+}
+
+window#waybar {
+    background: transparent;
+    color: @fg;
+}
+
+window#waybar.hidden {
+    opacity: 0.2;
+}
+
+/* Barra con esquinas redondeadas y separación del borde superior */
+.modules-left,
+.modules-center,
+.modules-right {
+    background: alpha(@bg, {{BAR_OPACITY}});
+    border: 1px solid @border;
+    border-radius: 12px;
+    margin: 6px 8px 0 8px;
+    padding: 2px 8px;
+}
+
+.modules-center {
+    padding: 2px 16px;
+}
+
+tooltip {
+    background: alpha(@bg, {{BAR_OPACITY}});
+    border: 1px solid alpha(@border, 0.6);
+    border-radius: 10px;
+}
+
+tooltip label {
+    color: @fg;
+    padding: 4px;
+}
+
+/* ─── Módulos genéricos ─────────────────────────────────────────────── */
+#cpu,
+#memory,
+#temperature,
+#battery,
+#pulseaudio,
+#network,
+#clock,
+#tray,
+#custom-logo,
+#custom-power,
+#custom-recording {
+    padding: 0 10px;
+    color: @fg;
+    background: transparent;
+    border-radius: 8px;
+}
+
+#cpu:hover,
+#memory:hover,
+#temperature:hover,
+#battery:hover,
+#pulseaudio:hover,
+#network:hover,
+#clock:hover,
+#custom-logo:hover,
+#custom-power:hover {
+    background: @bg_sel;
+    color: @accent;
+}
+
+/* ─── Logo y botón de energía ───────────────────────────────────────── */
+#custom-logo {
+    color: @accent;
+    font-weight: 700;
+    font-size: {{BAR_FONT_SIZE_LOGO}}px;
+    padding-left: 6px;
+    padding-right: 4px;
+}
+
+#custom-power {
+    color: @err;
+    font-size: {{BAR_FONT_SIZE_LOGO}}px;
+    padding-right: 8px;
+}
+
+#custom-power:hover {
+    background: @err;
+    color: @bg;
+}
+
+#custom-recording {
+    color: @err;
+    font-weight: 700;
+}
+
+/* ─── Workspaces ────────────────────────────────────────────────────── */
+#workspaces {
+    padding: 0 4px;
+}
+
+#workspaces button {
+    padding: 0 9px;
+    margin: 3px 2px;
+    color: @muted;
+    background: transparent;
+    border-radius: 8px;
+    font-weight: 600;
+    min-width: 18px;
+}
+
+#workspaces button:hover {
+    color: @accent;
+    background: @bg_sel;
+}
+
+#workspaces button.visible {
+    color: @fg;
+    background: @bg_sel;
+}
+
+#workspaces button.focused,
+#workspaces button.active {
+    color: @bg;
+    background: @accent;
+}
+
+#workspaces button.urgent {
+    color: @bg;
+    background: @err;
+}
+
+#workspaces button.persistent {
+    color: @muted;
+}
+
+/* ─── Título de la ventana ──────────────────────────────────────────── */
+#window {
+    color: @fg_dim;
+    font-weight: 500;
+    padding: 0 12px;
+}
+
+window#waybar.empty #window {
+    background: transparent;
+    color: transparent;
+}
+
+/* ─── Modo de sway (resize) ─────────────────────────────────────────── */
+#mode {
+    color: @bg;
+    background: @warn;
+    border-radius: 8px;
+    margin: 3px 2px;
+    padding: 0 10px;
+    font-weight: 700;
+}
+
+/* ─── Estados ───────────────────────────────────────────────────────── */
+#battery.charging,
+#battery.plugged {
+    color: @ok;
+}
+
+#battery.warning:not(.charging) {
+    color: @warn;
+}
+
+#battery.critical:not(.charging) {
+    color: @err;
+    animation: blink 1s steps(2, start) infinite;
+}
+
+#temperature.critical {
+    color: @err;
+}
+
+#network.disconnected {
+    color: @err;
+}
+
+#pulseaudio.muted {
+    color: @err;
+}
+
+@keyframes blink {
+    to {
+        color: @bg;
+        background: @err;
+    }
+}
