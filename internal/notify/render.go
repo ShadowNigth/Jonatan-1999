@@ -27,11 +27,19 @@ type RenderOptions struct {
 // Rect es un área de la superficie.
 type Rect struct{ X, Y, W, H int }
 
+// Button es un botón dibujado dentro de una tarjeta: sus acciones normales o
+// el campo de respuesta rápida (clave InlineReplyAction).
+type Button struct {
+	Key   string
+	Label string
+	Rect  Rect
+}
+
 // Card es una tarjeta dibujada, con su notificación y su área.
 type Card struct {
 	Notification Notification
 	Rect         Rect
-	Actions      []Rect // áreas de los botones, en el mismo orden que Actions
+	Buttons      []Button
 }
 
 // Renderer dibuja notificaciones como tarjetas apiladas.
@@ -89,6 +97,19 @@ func (r *Renderer) advance(scale int) int { return (r.face.W + scale) * scale }
 
 func (r *Renderer) rows(scale int) int { return r.face.Rows(scale) }
 
+// lead es el aire vertical entre líneas. Sin él las líneas de una fuente de
+// mapa de bits quedan pegadas (y a escala 2 se tocan).
+func (r *Renderer) lead(scale int) int {
+	l := 2 * scale
+	if l < 3 {
+		l = 3
+	}
+	return l
+}
+
+// lineH es el alto de una línea de texto con su interlineado.
+func (r *Renderer) lineH(scale int) int { return r.rows(scale) + r.lead(scale) }
+
 // colors devuelve la paleta resuelta.
 func (r *Renderer) colors() (bg, border, fg, muted, accent, accent2, warn, err bar.RGBA) {
 	p := r.Opt.Theme
@@ -140,13 +161,13 @@ func (r *Renderer) cardHeight(n *Notification, now time.Time) int {
 		titleScale = 2
 	}
 	titleLines := Wrap(Sanitize(n.Summary, 0), inner, r.advance(titleScale), 2)
-	h += len(titleLines) * r.rows(titleScale)
+	h += len(titleLines) * r.lineH(titleScale)
 	if body := strings.TrimSpace(StripMarkup(n.Body)); body != "" {
 		h += 4
 		bodyLines := Wrap(body, inner, r.advance(r.sc), r.Opt.MaxLines)
-		h += len(bodyLines) * r.rows(r.sc)
+		h += len(bodyLines) * r.lineH(r.sc)
 	}
-	if len(n.Actions) > 0 {
+	if len(n.Actions) > 0 || n.InlineReply {
 		h += 6
 		h += r.rows(r.sc)
 	}
@@ -219,7 +240,7 @@ func (r *Renderer) Render(items []Notification, now time.Time) (*bar.Canvas, []C
 		}
 		for _, line := range Wrap(Sanitize(n.Summary, 0), inner, r.advance(titleScale), 2) {
 			c.Text(r.face, x, ty, line, titleScale, titleScale, fg)
-			ty += r.rows(titleScale)
+			ty += r.lineH(titleScale)
 		}
 
 		// Cuerpo.
@@ -227,30 +248,48 @@ func (r *Renderer) Render(items []Notification, now time.Time) (*bar.Canvas, []C
 			ty += 4
 			for _, line := range Wrap(body, inner, r.advance(r.sc), r.Opt.MaxLines) {
 				c.Text(r.face, x, ty, line, r.sc, r.sc, muted)
-				ty += r.rows(r.sc)
+				ty += r.lineH(r.sc)
 			}
 		}
 
-		// Acciones: clave entre corchetes y etiqueta.
-		if len(n.Actions) > 0 {
+		// Acciones y respuesta rápida: etiqueta entre corchetes.
+		type boton struct {
+			key, label string
+			principal  bool
+		}
+		var botones []boton
+		for _, a := range n.Actions {
+			label := a.Label
+			if label == "" {
+				label = a.Key
+			}
+			botones = append(botones, boton{a.Key, label, a.Key == "default"})
+		}
+		if n.InlineReply {
+			label := n.ReplyPlaceholder
+			if label == "" {
+				label = "Responder"
+			}
+			botones = append(botones, boton{InlineReplyAction, label, true})
+		}
+		if len(botones) > 0 {
 			ty += 6
 			bx := x
-			for _, a := range n.Actions {
-				label := a.Label
-				if label == "" {
-					label = a.Key
-				}
-				txt := "[" + label + "]"
+			for _, b := range botones {
+				txt := "[" + b.label + "]"
 				tw := bar.TextWidth(r.face, txt, r.sc, r.sc)
 				if bx+tw > rect.X+rect.W-pad {
 					break
 				}
 				col := accent2
-				if a.Key == "default" {
+				if b.principal {
 					col = accent
 				}
 				c.Text(r.face, bx, ty, txt, r.sc, r.sc, col)
-				card.Actions = append(card.Actions, Rect{X: bx, Y: ty - 2, W: tw, H: r.rows(r.sc) + 4})
+				card.Buttons = append(card.Buttons, Button{
+					Key: b.key, Label: b.label,
+					Rect: Rect{X: bx, Y: ty - 2, W: tw, H: r.rows(r.sc) + 4},
+				})
 				bx += tw + 8*r.sc
 			}
 			ty += r.rows(r.sc)

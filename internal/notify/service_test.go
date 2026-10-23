@@ -392,3 +392,177 @@ func TestClientTimeout(t *testing.T) {
 		t.Fatal("se esperaba un tiempo agotado")
 	}
 }
+
+// TestInlineReplyEndToEnd comprueba el ciclo completo de una respuesta rápida:
+// la aplicación envía la acción inline-reply, el daemon responde y la
+// aplicación recibe NotificationReplied solo para ella.
+func TestInlineReplyEndToEnd(t *testing.T) {
+	store := NewStore(Options{Timeout: time.Hour, MaxVisible: 4})
+	store.SetNow(func() time.Time { return at(0) })
+	svc := NewService(store)
+
+	path := filepath.Join(t.TempDir(), "bus")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	go func() {
+		nc, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer nc.Close()
+		br := bufio.NewReader(nc)
+		if _, err := br.ReadByte(); err != nil {
+			return
+		}
+		if _, err := br.ReadString('\n'); err != nil {
+			return
+		}
+		fmt.Fprint(nc, "OK cafebabe\r\n")
+		if _, err := br.ReadString('\n'); err != nil {
+			return
+		}
+		srv := dbus.WrapConn(&bufferedConn{Conn: nc, r: br})
+		svc.Attach(srv)
+		srv.SetMethodHandler(func(m *dbus.Message) {
+			if m.Member == "Hello" {
+				_ = srv.Reply(m, "s", ":1.9")
+				return
+			}
+			// El bus real rellena el remitente; el de prueba hace lo mismo.
+			m.Sender = ":1.9"
+			svc.Handle(m)
+		})
+		time.Sleep(5 * time.Second)
+	}()
+
+	c, err := dialClient("unix:path=" + path)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer c.conn.Close()
+
+	replies := make(chan *dbus.Message, 4)
+	c.OnSignal(func(m *dbus.Message) {
+		if m.Member == "NotificationReplied" {
+			replies <- m
+		}
+	})
+
+	// Una aplicación de chat pide respuesta rápida.
+	id, err := c.Send(Notification{
+		App: "Telegram", Summary: "Nuevo mensaje", Body: "¿Vienes?",
+		Actions:     []Action{{Key: InlineReplyAction, Label: "Responder"}},
+		InlineReply: true,
+	})
+	if err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for len(store.Visible()) != 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	n, ok := store.Get(id)
+	if !ok {
+		t.Fatal("la notificación no llegó al almacén")
+	}
+	if !n.InlineReply {
+		t.Fatal("debería admitir respuesta rápida")
+	}
+	if n.ReplyPlaceholder != "Responder" {
+		t.Errorf("texto de ayuda: %q", n.ReplyPlaceholder)
+	}
+	if len(n.Actions) != 0 {
+		t.Errorf("la acción inline-reply no debe dibujarse como botón: %+v", n.Actions)
+	}
+	if n.Sender != ":1.9" {
+		t.Errorf("remitente: %q", n.Sender)
+	}
+
+	// El daemon (aquí el propio servicio) entrega la respuesta.
+	if err := svc.Reply(id, "  ¡Allá voy!  "); err != nil {
+		t.Fatalf("reply: %v", err)
+	}
+	select {
+	case sig := <-replies:
+		if sig.Signature != "us" || len(sig.Body) < 2 {
+			t.Fatalf("señal: %s %#v", sig.Signature, sig.Body)
+		}
+		if got, _ := asUint(sig.Body[0]); got != id {
+			t.Errorf("id en la señal: %d", got)
+		}
+		if text, _ := sig.Body[1].(string); text != "¡Allá voy!" {
+			t.Errorf("texto: %q", text)
+		}
+		if sig.Destination != ":1.9" {
+			t.Errorf("la respuesta debe ir solo al remitente, va a %q", sig.Destination)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no llegó NotificationReplied")
+	}
+
+	// Y la notificación se cierra (no era residente).
+	if _, ok := store.Get(id); ok {
+		t.Error("tras responder debe cerrarse")
+	}
+	if err := svc.Reply(id, "otra vez"); err == nil {
+		t.Error("responder a una cerrada debe fallar")
+	}
+}
+
+func TestReplyValidation(t *testing.T) {
+	store := NewStore(Options{Timeout: time.Hour})
+	store.SetNow(func() time.Time { return at(0) })
+	svc := NewService(store)
+	sinRespuesta := store.Add(Notification{Summary: "sin respuesta", Progress: -1})
+	if err := svc.Reply(sinRespuesta.ID, "hola"); err == nil {
+		t.Error("una notificación sin inline-reply no admite respuesta")
+	}
+
+	var got string
+	svc.OnReply = func(n Notification, text string) { got = text }
+	conRespuesta := store.Add(Notification{Summary: "chat", InlineReply: true,
+		Resident: true, Progress: -1, Sender: ""})
+	if err := svc.Reply(conRespuesta.ID, ""); err == nil {
+		t.Error("una respuesta vacía debe rechazarse")
+	}
+	if err := svc.Reply(conRespuesta.ID, "vale"); err != nil {
+		t.Fatalf("reply: %v", err)
+	}
+	if got != "vale" {
+		t.Errorf("callback: %q", got)
+	}
+	// Residente: sigue viva tras responder.
+	if _, ok := store.Get(conRespuesta.ID); !ok {
+		t.Error("una residente debe seguir viva")
+	}
+	if err := svc.Reply(999, "x"); err == nil {
+		t.Error("un id inexistente debe fallar")
+	}
+}
+
+// asUint normaliza los enteros que llegan por D-Bus.
+func asUint(v any) (uint32, bool) {
+	if n, ok := toUint(v); ok {
+		return uint32(n), true
+	}
+	return 0, false
+}
+
+func TestCapabilitiesIncludeInlineReply(t *testing.T) {
+	found := false
+	for _, c := range Capabilities {
+		if c == "inline-reply" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("GetCapabilities debe anunciar inline-reply")
+	}
+	if len(Capabilities) == 0 {
+		t.Fatal("sin capacidades")
+	}
+}

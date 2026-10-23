@@ -84,11 +84,22 @@ type Notification struct {
 	Resident  bool     `json:"resident,omitempty"`
 	Progress  int      `json:"progress"` // -1 si no hay barra de progreso
 	// ReplacesID pide sustituir una notificación existente (0 = ninguna).
-	ReplacesID uint32    `json:"-"`
-	Timeout    int       `json:"timeout_ms"`
-	Created    time.Time `json:"created"`
-	Expires    time.Time `json:"expires,omitempty"`
-	ActionKey  string    `json:"action,omitempty"`
+	ReplacesID uint32 `json:"-"`
+
+	// InlineReply indica que la notificación admite una respuesta rápida: la
+	// aplicación envió una acción con la clave "inline-reply" y espera el
+	// texto por la señal NotificationReplied.
+	InlineReply bool `json:"inline_reply,omitempty"`
+	// ReplyPlaceholder es el texto de ayuda del campo de respuesta (hint
+	// x-kde-reply-placeholder-text).
+	ReplyPlaceholder string `json:"reply_placeholder,omitempty"`
+	// Sender es el nombre único D-Bus del cliente que la envió, para poder
+	// entregarle la respuesta solo a él.
+	Sender    string    `json:"-"`
+	Timeout   int       `json:"timeout_ms"`
+	Created   time.Time `json:"created"`
+	Expires   time.Time `json:"expires,omitempty"`
+	ActionKey string    `json:"action,omitempty"`
 
 	// internal
 	closed bool
@@ -317,6 +328,21 @@ func (s *Store) Expire() []uint32 {
 	return ids
 }
 
+// Hold detiene la caducidad de una notificación (por ejemplo, mientras el
+// usuario escribe una respuesta). Devuelve false si ya no existe.
+func (s *Store) Hold(id uint32) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, n := range s.items {
+		if n.ID == id {
+			n.Expires = time.Time{}
+			n.Timeout = 0
+			return true
+		}
+	}
+	return false
+}
+
 // Clear cierra todas las visibles y devuelve sus IDs.
 func (s *Store) Clear() []uint32 {
 	s.mu.Lock()
@@ -481,6 +507,33 @@ func Sanitize(s string, max int) string {
 		s = strings.TrimRight(string(r[:max-1]), " ") + "…"
 	}
 	return s
+}
+
+// MaxReplyLen es la longitud máxima de una respuesta rápida.
+const MaxReplyLen = 512
+
+// SanitizeReply limpia el texto de una respuesta: una sola línea, sin espacios
+// repetidos ni caracteres de control, y con un límite de longitud. Devuelve ""
+// si no queda nada útil.
+func SanitizeReply(s string) string {
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			// Los caracteres de control se convierten en espacio: así no se
+			// pegan dos palabras al limpiar el texto.
+			b.WriteRune(' ')
+			continue
+		}
+		b.WriteRune(r)
+	}
+	out := strings.Join(strings.Fields(b.String()), " ")
+	if r := []rune(out); len(r) > MaxReplyLen {
+		out = string(r[:MaxReplyLen])
+	}
+	return out
 }
 
 // Shorten recorta a n caracteres añadiendo puntos suspensivos.

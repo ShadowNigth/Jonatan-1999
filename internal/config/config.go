@@ -166,7 +166,7 @@ func Default() *Config {
 		BarFontScale:         0,
 		BarShadow:            true,
 		BarExclusive:         true,
-		BarModules:           []string{"media", "cpu", "ram", "volume", "network", "battery", "clock"},
+		BarModules:           []string{"media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"},
 
 		NotifyEnabled:      true,
 		NotifyPosition:     "top-right",
@@ -523,8 +523,8 @@ font_scale = %d
 shadow = %t
 # reservar espacio para que las ventanas no se solapen
 exclusive = %t
-# módulos de la derecha: media, recording, cpu, ram, disk, temp, uptime,
-# volume, network, battery, updates, title, clock, date
+# módulos de la derecha: media, recording, notify, cpu, ram, disk, temp,
+# uptime, volume, network, battery, updates, title, clock, date
 modules = [%s]
 
 [notify]

@@ -326,7 +326,7 @@ font = ""                  # ruta a un .psf / .psf.gz; vacío = fuente del siste
 font_scale = 1.0
 shadow = true              # sombra suave bajo las islas
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "cpu", "ram", "volume", "network", "battery", "clock"]
+modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
 ```
 
 Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
@@ -397,6 +397,46 @@ font_scale = 0             # 0 = automática
 - **Cuenta atrás**: una línea fina se va vaciando hasta que la tarjeta
   desaparece sola. Un clic en cualquier parte de la tarjeta la cierra
   (`NotificationClosed` con motivo 2).
+
+### Responder desde la tarjeta (`inline-reply`)
+
+Los chats (Telegram, Signal, Discord, el cliente de Matrix…) pueden pedir una
+**respuesta rápida**. Cuando una aplicación declara la capacidad `inline-reply`
+y añade la acción con clave `inline-reply`, la tarjeta muestra un último botón,
+**Responder**, con el texto de ayuda que manda la app en el hint
+`x-kde-reply-placeholder-text`:
+
+```bash
+swaynotify send --app "Chat" --reply --reply-hint "Responder a Marta…" \
+    --timeout 20000 "Marta" "¿Comemos a las dos?"
+```
+
+Al pulsarlo se abre una **ventana flotante de terminal** (`swaynotify reply
+<id>`) con el campo de escritura; la tarjeta queda retenida (`Hold`) para que
+no caduque mientras escribes. Al confirmar con `Enter`:
+
+1. Se sanea el texto: una sola línea, sin caracteres de control, máximo
+   `MaxReplyLen` (512) caracteres.
+2. El daemon emite **`NotificationReplied(id, texto)` en modo *unicast*, solo
+   al cliente que creó la notificación**. El texto no se difunde por el bus.
+3. La tarjeta se cierra salvo que la app la haya marcado como `resident`.
+
+La continuación natural es el **centro de notificaciones**: una TUI con todo lo
+que hay en pantalla y el historial, filtro incremental, y las mismas acciones.
+
+```bash
+swaydesk notifications center      # también con clic en el indicador de la barra
+swaynotify reply 7 "voy saliendo"  # respuesta directa, sin interfaz
+```
+
+Teclas del centro: `↑`/`↓` mover, `Enter` actuar (responder si se puede, si no
+cerrar), `r` responder, `x` cerrar, `m` no molestar, `c` cerrar todas, `X`
+borrar historial, `F5` recargar, `Esc` salir (o borrar el filtro).
+
+El indicador de la barra es el módulo `notify`: muestra una pastilla con el
+número de avisos en pantalla (con `+` si alguno admite respuesta), `dnd` en
+ámbar cuando el modo «no molestar» está activo y `avisos` en gris cuando no hay
+nada. Un clic izquierdo abre el centro en una terminal flotante.
 
 ### Desde el terminal
 

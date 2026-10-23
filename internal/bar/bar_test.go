@@ -216,3 +216,84 @@ func TestCompositeAndImage(t *testing.T) {
 		t.Fatal("Image devolvió un tamaño distinto")
 	}
 }
+
+func TestNotifyModuleShowsCount(t *testing.T) {
+	r := New(Options{
+		Height:  38,
+		Margin:  6,
+		Padding: 14,
+		Gap:     10,
+		Islands: true,
+		Modules: []string{"notify", "clock"},
+		Theme:   ui.PaletteByName("sakura"),
+		Face:    font.Builtin(),
+	})
+	s := sampleSnapshot()
+	s.Notifications = 3
+	s.NotifReplies = 1
+	items := r.rightItems(s, RGBA{}, RGBA{}, RGBA{}, RGBA{}, RGBA{}, RGBA{})
+	found := false
+	for _, it := range items {
+		if it.click == "notify" {
+			found = true
+			if it.text != "3+" || it.kind != itemPill {
+				t.Fatalf("indicador = %q (kind %d), se esperaba la pastilla 3+", it.text, it.kind)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no hay indicador de notificaciones en %+v", items)
+	}
+
+	// Sin notificaciones y sin DND: cero en color apagado.
+	s.Notifications, s.NotifReplies = 0, 0
+	items = r.rightItems(s, RGBA{}, RGBA{}, RGBA{}, RGBA{}, RGBA{}, RGBA{})
+	if items[0].text != "avisos" {
+		t.Fatalf("sin notificaciones = %q", items[0].text)
+	}
+
+	// Con DND se avisa del modo silencioso.
+	s.NotifDND = true
+	items = r.rightItems(s, RGBA{}, RGBA{}, RGBA{}, RGBA{}, RGBA{}, RGBA{})
+	if items[0].text != "dnd" || items[0].fg != (RGBA{}) {
+		t.Logf("DND: %q", items[0].text)
+	}
+	s.Notifications = 2
+	items = r.rightItems(s, RGBA{}, RGBA{}, RGBA{}, RGBA{}, RGBA{}, RGBA{})
+	if !strings.Contains(items[0].text, "dnd") && !strings.Contains(items[0].text, "2") {
+		t.Fatalf("DND no visible: %q", items[0].text)
+	}
+}
+
+func TestNotifyRegionIsClickable(t *testing.T) {
+	r := New(Options{
+		Height:  38,
+		Margin:  6,
+		Padding: 14,
+		Gap:     10,
+		Islands: true,
+		Modules: []string{"notify", "clock"},
+		Theme:   ui.PaletteByName("sakura"),
+		Face:    font.Builtin(),
+	})
+	s := sampleSnapshot()
+	s.Notifications = 2
+	r.Render(s, 1200)
+
+	regions := r.Regions()
+	if len(regions) != 1 || regions[0].Name != "notify" {
+		t.Fatalf("regiones = %+v", regions)
+	}
+	reg := regions[0]
+	if _, ok := r.RegionAt(reg.X+1, reg.Y+1); !ok {
+		t.Fatalf("un punto de la zona no la encuentra: %+v", reg)
+	}
+	if _, ok := r.RegionAt(reg.X-20, reg.Y+1); ok {
+		t.Fatalf("un punto fuera de la zona la encuentra")
+	}
+	// Un segundo Render no acumula zonas viejas.
+	r.Render(s, 1200)
+	if got := len(r.Regions()); got != 1 {
+		t.Fatalf("regiones tras repintar = %d", got)
+	}
+}

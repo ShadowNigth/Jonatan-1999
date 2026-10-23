@@ -21,6 +21,12 @@ const (
 	ServerVersion = "1.0"
 	SpecVersion   = "1.2"
 
+	// InlineReplyAction es la clave de la acción con la que las aplicaciones
+	// piden una respuesta rápida (extensión de KDE adoptada por el ecosistema).
+	InlineReplyAction = "inline-reply"
+	// ReplyPlaceholderHint es el hint con el texto de ayuda del campo.
+	ReplyPlaceholderHint = "x-kde-reply-placeholder-text"
+
 	// ClosedReason es el motivo de cierre (según la especificación).
 	ClosedExpired   = 1
 	ClosedDismissed = 2
@@ -39,6 +45,8 @@ type Service struct {
 	OnAction func(n Notification, key string)
 	// OnClosed se llama al cerrar por petición del servidor.
 	OnClosed func(id uint32)
+	// OnReply se llama cuando llega una respuesta rápida.
+	OnReply func(n Notification, text string)
 }
 
 // NewService crea el servicio sin conectar.
@@ -153,7 +161,7 @@ func toUint(v any) (uint64, bool) {
 func (s *Service) handleNotify(m *dbus.Message) {
 	switch m.Member {
 	case "GetCapabilities":
-		_ = s.conn.Reply(m, "as", []string{"body", "body-markup", "actions", "persistence", "icon-static"})
+		_ = s.conn.Reply(m, "as", Capabilities)
 	case "GetServerInformation":
 		_ = s.conn.Reply(m, "ssss", ServerName, ServerVendor, ServerVersion, SpecVersion)
 	case "Notify":
@@ -166,11 +174,19 @@ func (s *Service) handleNotify(m *dbus.Message) {
 			Timeout:    argInt(m, 7),
 			Progress:   -1,
 		}
+		n.Sender = m.Sender
 		if len(m.Body) > 5 {
 			if acts, ok := m.Body[5].([]any); ok {
 				for i := 0; i+1 < len(acts); i += 2 {
 					key, _ := acts[i].(string)
 					label, _ := acts[i+1].(string)
+					if key == InlineReplyAction {
+						// La etiqueta suele ser «Responder»; el texto se pide
+						// aparte, así que no se dibuja como botón normal.
+						n.InlineReply = true
+						n.ReplyPlaceholder = label
+						continue
+					}
 					n.Actions = append(n.Actions, Action{Key: key, Label: label})
 				}
 			}
@@ -216,6 +232,9 @@ func applyHints(n *Notification, h dbus.Dict) {
 	}
 	if b, ok := h.Value("resident").(bool); ok {
 		n.Resident = b
+	}
+	if ph, ok := h.Value(ReplyPlaceholderHint).(string); ok && ph != "" {
+		n.ReplyPlaceholder = ph
 	}
 	if p := h.Value("progress"); p != nil {
 		if v, ok := toUint(p); ok {
@@ -295,6 +314,61 @@ func (s *Service) InvokeAction(id uint32, key string) {
 	}
 }
 
+// Capabilities es la lista que se anuncia en GetCapabilities.
+var Capabilities = []string{
+	"body", "body-markup", "actions", "persistence", "icon-static", "inline-reply",
+}
+
+// Hold detiene la caducidad de una notificación y repinta.
+func (s *Service) Hold(id uint32) bool {
+	ok := s.Store.Hold(id)
+	if ok {
+		s.Touch()
+	}
+	return ok
+}
+
+// Reply entrega una respuesta rápida: emite NotificationReplied al cliente que
+// envió la notificación (no a todo el bus, porque el texto puede ser privado)
+// y cierra la notificación salvo que sea residente.
+func (s *Service) Reply(id uint32, text string) error {
+	n, ok := s.Store.Get(id)
+	if !ok {
+		return fmt.Errorf("la notificación %d ya no existe", id)
+	}
+	if !n.InlineReply {
+		return fmt.Errorf("la notificación %d no admite respuesta", id)
+	}
+	text = SanitizeReply(text)
+	if text == "" {
+		return fmt.Errorf("la respuesta está vacía")
+	}
+	s.emit(n.Sender, "NotificationReplied", "us", id, text)
+	if s.OnReply != nil {
+		s.OnReply(n, text)
+	}
+	if !n.Resident {
+		s.closeByServer(id, ClosedDismissed)
+	} else {
+		s.Touch()
+	}
+	return nil
+}
+
+// emit manda una señal al cliente concreto si se conoce su nombre único.
+func (s *Service) emit(dest, member, sig string, args ...any) {
+	if s.conn == nil {
+		return
+	}
+	_ = s.conn.EmitTo(dest, ObjPath, Iface, member, sig, args...)
+}
+
+// VisibleJSON devuelve las notificaciones en pantalla serializadas.
+func (s *Service) VisibleJSON() []byte {
+	data, _ := json.Marshal(s.Store.Visible())
+	return data
+}
+
 // ClearAll cierra todas las notificaciones.
 func (s *Service) ClearAll() int {
 	ids := s.Store.Clear()
@@ -340,6 +414,20 @@ func (s *Service) handleOwn(m *dbus.Message) {
 	case "Dismiss":
 		ok := s.Dismiss(argUint(m, 0))
 		_ = s.conn.Reply(m, "b", ok)
+	case "ListVisible":
+		_ = s.conn.Reply(m, "s", string(s.VisibleJSON()))
+	case "Reply":
+		id := argUint(m, 0)
+		if len(m.Body) < 2 {
+			_ = s.conn.ReplyError(m, "org.freedesktop.DBus.Error.InvalidArgs", "falta el texto")
+			return
+		}
+		text, _ := m.Body[1].(string)
+		if err := s.Reply(id, text); err != nil {
+			_ = s.conn.ReplyError(m, "org.swaydesk.Notifications.Error.NoReply", err.Error())
+			return
+		}
+		_ = s.conn.Reply(m, "b", true)
 	default:
 		_ = s.conn.ReplyError(m, "org.freedesktop.DBus.Error.UnknownMethod",
 			"método desconocido: "+m.Member)
@@ -353,9 +441,11 @@ type Status struct {
 	Pending int      `json:"pending"`
 	Visible []uint32 `json:"visible"`
 	History int      `json:"history"`
-	Owner   string   `json:"owner"`
-	Version string   `json:"version"`
-	BusName string   `json:"bus_name"`
+	// Replies indica cuántas notificaciones en pantalla admiten respuesta.
+	Replies int    `json:"replies"`
+	Owner   string `json:"owner"`
+	Version string `json:"version"`
+	BusName string `json:"bus_name"`
 }
 
 // StatusJSON devuelve el estado serializado.
@@ -365,9 +455,15 @@ func (s *Service) StatusJSON() []byte {
 	for _, n := range vis {
 		ids = append(ids, n.ID)
 	}
+	replies := 0
+	for _, n := range vis {
+		if n.InlineReply {
+			replies++
+		}
+	}
 	st := Status{
 		Running: true, DND: s.Store.DND(), Pending: s.Store.Pending(),
-		Visible: ids, History: len(s.Store.History()),
+		Visible: ids, History: len(s.Store.History()), Replies: replies,
 		Owner: ServerName, Version: ServerVersion, BusName: Iface,
 	}
 	data, _ := json.MarshalIndent(st, "", "  ")
@@ -396,6 +492,13 @@ func DialClient() (*Client, error) {
 
 // Close cierra la conexión.
 func (c *Client) Close() { _ = c.conn.Close() }
+
+// OnSignal registra la función que recibe las señales del bus (por ejemplo
+// NotificationReplied cuando este cliente es una aplicación de chat).
+func (c *Client) OnSignal(fn func(*dbus.Message)) { c.conn.SetSignalHandler(fn) }
+
+// Unique devuelve el nombre único de esta conexión en el bus.
+func (c *Client) Unique() string { return c.conn.Unique }
 
 // Send envía una notificación y devuelve su id.
 func (c *Client) Send(n Notification) (uint32, error) {
@@ -456,6 +559,90 @@ func (c *Client) Call(member, sig string, args ...any) (*dbus.Message, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	return c.conn.Call(ctx, Iface, ObjPath, OwnIface, member, sig, args...)
+}
+
+// Reply envía una respuesta rápida a una notificación.
+func (c *Client) Reply(id uint32, text string) error {
+	_, err := c.Call("Reply", "us", id, text)
+	return err
+}
+
+// ListVisible pide las notificaciones en pantalla.
+func (c *Client) ListVisible() ([]Notification, error) {
+	reply, err := c.Call("ListVisible", "")
+	if err != nil {
+		return nil, err
+	}
+	if len(reply.Body) == 0 {
+		return nil, nil
+	}
+	raw, _ := reply.Body[0].(string)
+	var out []Notification
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, fmt.Errorf("respuesta ilegible del daemon: %w", err)
+	}
+	return out, nil
+}
+
+// ListHistory pide el historial completo.
+func (c *Client) ListHistory() ([]Record, error) {
+	reply, err := c.Call("ListHistory", "")
+	if err != nil {
+		return nil, err
+	}
+	if len(reply.Body) == 0 {
+		return nil, nil
+	}
+	raw, _ := reply.Body[0].(string)
+	var out []Record
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, fmt.Errorf("historial ilegible del daemon: %w", err)
+	}
+	return out, nil
+}
+
+// Status pide el estado del daemon ya decodificado.
+func (c *Client) Status() (Status, error) {
+	reply, err := c.Call("GetStatus", "")
+	if err != nil {
+		return Status{}, err
+	}
+	var st Status
+	if len(reply.Body) > 0 {
+		raw, _ := reply.Body[0].(string)
+		if err := json.Unmarshal([]byte(raw), &st); err != nil {
+			return st, err
+		}
+	}
+	return st, nil
+}
+
+// Dismiss pide al daemon que cierre una notificación.
+func (c *Client) Dismiss(id uint32) (bool, error) {
+	reply, err := c.Call("Dismiss", "u", id)
+	if err != nil {
+		return false, err
+	}
+	ok := false
+	if len(reply.Body) > 0 {
+		ok, _ = reply.Body[0].(bool)
+	}
+	return ok, nil
+}
+
+// SetDND fija el modo «no molestar».
+func (c *Client) SetDND(on bool) (bool, error) {
+	reply, err := c.Call("SetDND", "b", on)
+	if err != nil {
+		return false, err
+	}
+	v := on
+	if len(reply.Body) > 0 {
+		if b, ok := reply.Body[0].(bool); ok {
+			v = b
+		}
+	}
+	return v, nil
 }
 
 // Available indica si hay un servidor de notificaciones atendiendo.

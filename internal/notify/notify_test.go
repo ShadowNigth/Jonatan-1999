@@ -285,9 +285,9 @@ func TestRenderLayout(t *testing.T) {
 		if card.Rect.Y+card.Rect.H > c.H {
 			t.Errorf("la tarjeta %d se sale del lienzo", i)
 		}
-		for _, a := range card.Actions {
-			if a.Y+a.H > card.Rect.Y+card.Rect.H || a.X+a.W > 360 {
-				t.Errorf("acción fuera de la tarjeta: %+v en %+v", a, card.Rect)
+		for _, b := range card.Buttons {
+			if b.Rect.Y+b.Rect.H > card.Rect.Y+card.Rect.H || b.Rect.X+b.Rect.W > 360 {
+				t.Errorf("botón fuera de la tarjeta: %+v en %+v", b, card.Rect)
 			}
 		}
 	}
@@ -307,8 +307,8 @@ func TestRenderLayout(t *testing.T) {
 	if cards[1].Notification.Urgency != Critical {
 		t.Errorf("urgencia perdida: %v", cards[1].Notification.Urgency)
 	}
-	if len(cards[1].Actions) != 2 {
-		t.Errorf("acciones dibujadas: %d", len(cards[1].Actions))
+	if len(cards[1].Buttons) != 2 {
+		t.Errorf("acciones dibujadas: %d", len(cards[1].Buttons))
 	}
 }
 
@@ -330,8 +330,8 @@ func TestRenderNarrowHidesLongActions(t *testing.T) {
 	if len(cards) != 1 {
 		t.Fatalf("tarjetas: %d", len(cards))
 	}
-	if len(cards[0].Actions) != 0 {
-		t.Errorf("una acción que no cabe no debe dibujarse: %+v", cards[0].Actions)
+	if len(cards[0].Buttons) != 0 {
+		t.Errorf("una acción que no cabe no debe dibujarse: %+v", cards[0].Buttons)
 	}
 }
 
@@ -341,5 +341,37 @@ func TestCardHeightGrowsWithBody(t *testing.T) {
 	long := Notification{Summary: "hola", Body: strings.Repeat("palabra ", 60), Created: at(0), Progress: -1}
 	if r.cardHeight(&long, at(1)) <= r.cardHeight(&short, at(1)) {
 		t.Error("un cuerpo largo debería ocupar más")
+	}
+}
+
+func TestRenderInlineReplyButton(t *testing.T) {
+	n := Notification{
+		ID: 5, App: "Telegram", Summary: "Nuevo mensaje", Body: "¿Vienes?",
+		Created: at(0), Progress: -1, InlineReply: true, ReplyPlaceholder: "Escribe…",
+	}
+	r := testRenderer(360)
+	_, cards := r.Render([]Notification{n}, at(1))
+	if len(cards) != 1 {
+		t.Fatalf("tarjetas: %d", len(cards))
+	}
+	if len(cards[0].Buttons) != 1 {
+		t.Fatalf("botones: %+v", cards[0].Buttons)
+	}
+	b := cards[0].Buttons[0]
+	if b.Key != InlineReplyAction {
+		t.Errorf("clave del botón: %q", b.Key)
+	}
+	if b.Label != "Escribe…" {
+		t.Errorf("etiqueta: %q", b.Label)
+	}
+	if b.Rect.W <= 0 || b.Rect.H <= 0 {
+		t.Errorf("rectángulo vacío: %+v", b.Rect)
+	}
+	// Sin texto de ayuda se usa «Responder».
+	n2 := n
+	n2.ReplyPlaceholder = ""
+	_, cards2 := r.Render([]Notification{n2}, at(1))
+	if got := cards2[0].Buttons[0].Label; got != "Responder" {
+		t.Errorf("etiqueta por defecto: %q", got)
 	}
 }

@@ -15,9 +15,19 @@ const Version = "1.0.0"
 func main() {
 	args := os.Args[1:]
 	cmd := "daemon"
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		cmd = args[0]
-		args = args[1:]
+	if len(args) > 0 {
+		if strings.HasPrefix(args[0], "-") {
+			// Opciones sueltas: --help, --version, --out… se tratan como la
+			// orden equivalente sin guiones (y si no, arrancan el daemon).
+			switch strings.TrimLeft(args[0], "-") {
+			case "help", "h", "version", "v":
+				cmd = strings.TrimLeft(args[0], "-")
+				args = args[1:]
+			}
+		} else {
+			cmd = args[0]
+			args = args[1:]
+		}
 	}
 	switch cmd {
 	case "daemon", "run", "serve":
@@ -32,6 +42,8 @@ func main() {
 		runHistory(args)
 	case "clear":
 		runClear(args)
+	case "reply", "responder":
+		runReply(args)
 	case "preview":
 		runPreview(args)
 	case "version", "--version", "-v":
@@ -57,11 +69,15 @@ Uso: swaynotify <orden> [opciones]
   status                     estado del daemon en JSON
   history [--json]           historial de notificaciones
   clear [--all]              cierra las visibles (--all también el historial)
+  reply <id> [texto]         responde a una notificación (respuesta rápida)
   preview --out RUTA         PNG de ejemplo con las tarjetas
 
 Opciones de send
   --app NOMBRE               aplicación que envía (por defecto swaydesk)
   --icon NOMBRE              icono (nombre o ruta)
+  --reply                    añade la acción de responder (inline-reply)
+  --reply-hint TEXTO         texto de ayuda del campo de respuesta
+  --resident                 la tarjeta no se cierra al responder
   --urgency baja|normal|urgente
   --timeout MS               milisegundos en pantalla (-1 = no caducar)
   --action clave=etiqueta    botón (se puede repetir)
@@ -111,7 +127,7 @@ func parseFlags(args []string, repeat map[string]bool) (map[string][]string, []s
 func takesValue(name string) bool {
 	switch name {
 	case "app", "icon", "urgency", "timeout", "action", "category", "theme",
-		"scale", "out", "body":
+		"scale", "out", "body", "reply-hint":
 		return true
 	}
 	return false

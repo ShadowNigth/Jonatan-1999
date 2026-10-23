@@ -353,6 +353,15 @@ func (c *Conn) Emit(path, iface, member, sig string, args ...any) error {
 	return err
 }
 
+// EmitTo manda una señal con destino concreto (unicast). Si dest está vacío se
+// comporta como Emit, difundiéndola por el bus.
+func (c *Conn) EmitTo(dest, path, iface, member, sig string, args ...any) error {
+	m := NewSignal(path, iface, member, sig, args...)
+	m.Destination = dest
+	_, err := c.send(m)
+	return err
+}
+
 // Reply responde a una llamada con un valor de retorno.
 func (c *Conn) Reply(call *Message, sig string, args ...any) error {
 	m := &Message{

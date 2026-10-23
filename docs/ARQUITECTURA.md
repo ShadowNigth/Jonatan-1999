@@ -51,6 +51,7 @@ internal/bar     barra de estado dibujada en píxeles
 internal/notify  notificaciones de escritorio
   notify.go      modelo, caducidad, modo «no molestar» e historial en JSON
   render.go      tarjetas en píxeles: urgencias, acciones, progreso y cuenta atrás
+  center.go      modelo del centro: filtro sin acentos, orden y selección
   service.go     servidor y cliente de org.freedesktop.Notifications
 internal/dbus    cliente y servidor D-Bus en Go puro
   message.go     formato binario: firmas, alineación, arrays, variantes, dicts
@@ -260,6 +261,12 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
   formato (arrays de cadenas y bytes, estructuras, diccionarios con variantes),
   validación de firmas, y un autobús de pruebas sobre socket UNIX que verifica
   el saludo, las llamadas, los errores y las respuestas.
+- **`internal/notify`** — el modelo del centro (vivas primero, sin duplicar lo
+  que ya está en pantalla, filtro que ignora mayúsculas y acentos, selección y
+  recuento por urgencia), el saneado de respuestas (`SanitizeReply`: una línea,
+  sin caracteres de control, recorte por runas), y la respuesta rápida de
+  extremo a extremo: el servicio emite `NotificationReplied` **solo al
+  remitente** y cierra la tarjeta salvo que sea `resident`.
 - **`internal/notify`** — alta, sustitución por `replaces_id` y caducidad,
   modo «no molestar» con excepción para las urgentes, historial en disco,
   marcado limitado del protocolo (etiquetas y entidades), ajuste de texto en
@@ -267,7 +274,9 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
   ellas, acciones que no caben). Incluye una prueba de extremo a extremo con
   un cliente y el servicio hablando D-Bus de verdad.
 - **`internal/bar`** — colores, composición alfa, esquinas redondeadas,
-  medidas de texto y elección de variantes cuando falta espacio.
+  medidas de texto, elección de variantes cuando falta espacio y zonas
+  pulsables (el indicador de notificaciones se publica como `Region` y
+  `RegionAt` resuelve el clic del ratón).
 - **`internal/font`** — PSF1/PSF2 sintéticos con gzip y tabla Unicode,
   archivos corruptos y la fuente incorporada.
 

@@ -14,9 +14,25 @@ import (
 	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/host"
 	"github.com/ShadowNigth/swaydesk/internal/launcher"
+	"github.com/ShadowNigth/swaydesk/internal/notify"
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 	"github.com/ShadowNigth/swaydesk/internal/ui"
 )
+
+// notificationState consulta al daemon cuántas notificaciones hay en pantalla.
+// Si el daemon no está en marcha devuelve ceros: la barra no debe fallar por eso.
+func notificationState() (visible, replies int, dnd bool) {
+	client, err := notify.DialClient()
+	if err != nil {
+		return 0, 0, false
+	}
+	defer client.Close()
+	st, err := client.Status()
+	if err != nil {
+		return 0, 0, false
+	}
+	return len(st.Visible), st.Replies, st.DND
+}
 
 // encodePNG escribe una imagen en PNG.
 func encodePNG(w io.Writer, img image.Image) error {
@@ -58,6 +74,9 @@ func snapshot(cfg *config.Config, col *host.Collector) bar.Snapshot {
 	}
 	if mods(cfg.BarModules)["recording"] {
 		s.Recording = running("wf-recorder") || running("wl-screenrec")
+	}
+	if mods(cfg.BarModules)["notify"] {
+		s.Notifications, s.NotifReplies, s.NotifDND = notificationState()
 	}
 
 	// Estado de sway: workspaces y ventana enfocada.

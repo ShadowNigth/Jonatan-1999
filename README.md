@@ -86,6 +86,12 @@ terceros.
   tarjetas dibujadas en píxeles sobre una capa overlay. Urgencias con color,
   acciones, barra de progreso, caducidad con cuenta atrás, modo «no molestar»,
   historial persistente y clic para cerrar o para pulsar una acción. Sin mako.
+- **Respuesta rápida y centro de notificaciones**: las apps que hablan
+  `inline-reply` (Telegram, Signal, Discord…) muestran el botón **Responder**;
+  el texto se escribe en una ventana flotante y vuelve a la app solo a ella
+  (`NotificationReplied` en *unicast*). El centro (`Super+n` o clic en la
+  pastilla de la barra) lista lo que hay en pantalla y el historial, con filtro
+  incremental —sin distinguir mayúsculas ni acentos— y acciones por teclado.
 - **Animación de arranque** (`Super+Shift+b`): logotipo con degradado, pétalos
   o lluvia de neón, lista de componentes que se activan en vivo y barra de
   progreso. Cuatro estilos (`sakura`, `neon`, `matrix`, `minimal`), duración
@@ -213,8 +219,10 @@ Notificaciones
   notifications dnd [on|off] Modo «no molestar»
   notifications history      Historial (con --json para scripts)
   notifications clear        Cierra las visibles (--all borra el historial)
+  notifications center       Centro interactivo: lista, filtro y respuestas
+  notifications reply ID     Responde a una notificación (inline-reply)
   notifications preview      PNG con tarjetas de ejemplo
-  notifications test         Notificación de prueba
+  notifications test         Tres avisos de prueba (chat, descarga, aviso)
 
 Barra propia
   bar                        Estado de la barra (o `bar status`)
@@ -240,6 +248,7 @@ Barra propia
 | `Super+Shift+b` | Repetir la animación de arranque | `Super+Shift+w` | Selector de fondos |
 | `Super+Ctrl+b` | Reiniciar la barra | `Super+Shift+n` | Notificación de prueba |
 | `Super+Ctrl+n` | No molestar | `Super+Ctrl+Shift+n` | Cerrar notificaciones |
+| `Super+n` | Centro de notificaciones (o clic en la barra) | `Enter` | Responder o cerrar en el centro |
 
 La chuleta completa está en `Super+i` → *Atajos*, y en
 [`assets/files/sway/config`](assets/files/sway/config).
@@ -277,13 +286,18 @@ segundo para el reloj y las métricas; si no hay cambios no consume CPU apenas.
 |---|---|
 | Izquierda | Logotipo, workspaces (el enfocado resaltado, los ocupados en color), ventanas flotantes |
 | Centro | Título de la ventana enfocada y `app_id`, recortado al hueco libre |
-| Derecha | Reproductor, CPU, RAM, volumen, red, batería y reloj |
+| Derecha | Reproductor, notificaciones, CPU, RAM, volumen, red, batería y reloj |
 
 - `panel del tema` — los colores salen de la paleta activa; al cambiar de tema
   la barra se recolorea sola (escucha la señal `SIGUSR2`).
 - `módulos` — se eligen con `swaydesk bar modules …` o con `modules = [...]`
   en `[bar]`. Si falta un dato (sin batería, sin red, sin reproductor) el módulo
   desaparece en vez de mostrar un hueco.
+- `indicador de notificaciones` — el módulo `notify` es una pastilla con el
+  número de avisos en pantalla (con `+` si alguno admite respuesta rápida),
+  `dnd` cuando está el modo «no molestar» y `avisos` en gris cuando no hay
+  nada. Es la única zona pulsable de la barra: un clic abre el centro de
+  notificaciones.
 - `recorte inteligente` — si el título no cabe, se acorta por caracteres
   completos; si ni así, se sacrifica primero el reproductor y después la isla
   central, para no solaparse nunca con la derecha.
@@ -365,7 +379,7 @@ logo = true
 font = ""                  # fuente PSF (vacío = automática)
 shadow = true
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "cpu", "ram", "volume", "network", "battery", "clock"]
+modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
 
 [boot]
 enabled = true             # animación al iniciar sesión

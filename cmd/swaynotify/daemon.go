@@ -12,6 +12,7 @@ import (
 	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/dbus"
 	"github.com/ShadowNigth/swaydesk/internal/font"
+	"github.com/ShadowNigth/swaydesk/internal/launcher"
 	"github.com/ShadowNigth/swaydesk/internal/notify"
 	"github.com/ShadowNigth/swaydesk/internal/ui"
 	"github.com/ShadowNigth/swaydesk/internal/wayland"
@@ -265,6 +266,26 @@ func (d *daemon) draw() error {
 	return d.panel.Draw(canvas.Pix, canvas.W, canvas.H)
 }
 
+// openReply lanza el diálogo de respuesta rápida en una ventana flotante.
+func (d *daemon) openReply(n notify.Notification) {
+	exe := "swaynotify"
+	if self, err := os.Executable(); err == nil {
+		exe = self
+	}
+	args := []string{exe, "reply", fmt.Sprint(n.ID)}
+	// Si la notificación desaparece mientras se escribe, el diálogo avisa y no
+	// envía nada.
+	if err := launcher.LaunchTerminal(d.cfg.Terminal, "swaynotify-reply", "Responder",
+		62, 10, args); err != nil {
+		fmt.Fprintf(os.Stderr, "swaynotify: no se pudo abrir el diálogo: %v\n", err)
+		return
+	}
+	// Mientras se escribe, la tarjeta no debe caducar y se marca como «en
+	// respuesta» para que se vea que está activa.
+	d.svc.Hold(n.ID)
+	d.draw()
+}
+
 // itemsKey resume el estado para evitar repintados innecesarios.
 func itemsKey(items []notify.Notification, now time.Time) string {
 	var b strings.Builder
@@ -285,15 +306,20 @@ func (d *daemon) click(x, y int) {
 			ly < c.Rect.Y || ly >= c.Rect.Y+c.Rect.H {
 			continue
 		}
-		for i, a := range c.Actions {
-			if lx >= a.X && lx < a.X+a.W && ly >= a.Y && ly < a.Y+a.H {
-				key := ""
-				if i < len(c.Notification.Actions) {
-					key = c.Notification.Actions[i].Key
-				}
-				d.svc.InvokeAction(c.Notification.ID, key)
+		for _, b := range c.Buttons {
+			if lx < b.Rect.X || lx >= b.Rect.X+b.Rect.W ||
+				ly < b.Rect.Y || ly >= b.Rect.Y+b.Rect.H {
+				continue
+			}
+			if b.Key == notify.InlineReplyAction {
+				// La respuesta rápida necesita teclado: se abre el diálogo en
+				// una ventana flotante (la terminal ya sabe de teclado y de
+				// acentos, cosa que el panel no puede hacer sin xkbcommon).
+				d.openReply(c.Notification)
 				return
 			}
+			d.svc.InvokeAction(c.Notification.ID, b.Key)
+			return
 		}
 		// Clic en el resto de la tarjeta: se cierra.
 		d.svc.Dismiss(c.Notification.ID)

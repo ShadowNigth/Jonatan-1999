@@ -44,6 +44,14 @@ func runSend(args []string) {
 	case "urgente", "critical", "crítica", "critica":
 		n.Urgency = notify.Critical
 	}
+	if _, ok := vals["reply"]; ok || last(vals, "reply-hint") != "" {
+		// Respuesta rápida: la tarjeta muestra un botón que abre el diálogo.
+		n.InlineReply = true
+		n.ReplyPlaceholder = last(vals, "reply-hint")
+	}
+	if _, ok := vals["resident"]; ok {
+		n.Resident = true
+	}
 	if t := last(vals, "timeout"); t != "" {
 		if ms, err := atoi(t); err == nil {
 			n.Timeout = ms

@@ -176,6 +176,8 @@ func demoSnapshot(base bar.Snapshot) bar.Snapshot {
 	base.Signal = 82
 	base.Connected = true
 	base.Volumen = 45
+	base.Notifications = 3
+	base.NotifReplies = 1
 	if base.CPU < 5 {
 		base.CPU = 23
 	}

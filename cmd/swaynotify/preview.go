@@ -31,6 +31,13 @@ func demoNotes(now time.Time) []notify.Notification {
 			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Luego"}},
 		},
 		{
+			ID: 4, App: "Telegram", Sender: "Marta", Summary: "Marta",
+			Body:    "¿Comemos a las dos? Traigo el postre.",
+			Urgency: notify.Normal, Created: now.Add(-time.Second), Timeout: 20000, Progress: -1,
+			InlineReply: true, ReplyPlaceholder: "Responder a Marta…",
+			Actions: []notify.Action{{Key: notify.InlineReplyAction, Label: "Responder"}},
+		},
+		{
 			ID: 3, App: "spotify", Summary: "Lofi Girl · Midnight Study",
 			Body:    "Reproduciendo la lista «estudio»",
 			Urgency: notify.Low, Created: now.Add(-4 * time.Second), Timeout: -1, Progress: -1,

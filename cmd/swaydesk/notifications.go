@@ -40,6 +40,13 @@ func cmdNotifications(args []string) {
 		notifyPreview(cfg, args)
 	case "test", "prueba":
 		notifyTest(cfg)
+	case "center", "centro":
+		if err := runCenter(cfg.Theme, cfg.NerdFont); err != nil {
+			fmt.Fprintf(os.Stderr, "swaydesk: %v\n", err)
+			os.Exit(1)
+		}
+	case "reply", "responder":
+		notifyReplyFromCLI(args)
 	case "config":
 		notifyConfig(cfg)
 	case "help", "--help", "-h":
@@ -58,6 +65,8 @@ func notifyUsage() {
   dnd [on|off|toggle]    Modo «no molestar»
   history [--json]       Historial de notificaciones
   clear [--all]          Cierra las visibles (--all borra el historial)
+  center                 Centro interactivo (lista, filtro, responder)
+  reply <id> [texto]     Responde a una notificación
   preview [--out RUTA]   PNG con tarjetas de ejemplo
   test                   Envía una notificación de prueba
   config                 Valores de la sección [notify]
@@ -244,7 +253,46 @@ func notifyPreview(cfg *config.Config, args []string) {
 	fmt.Println(out)
 }
 
+// notifyReplyFromCLI delega en swaynotify para no duplicar el diálogo.
+func notifyReplyFromCLI(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "uso: swaydesk notifications reply <id> [texto]")
+		os.Exit(2)
+	}
+	exe := "swaynotify"
+	if self, err := os.Executable(); err == nil {
+		if hermano := filepath.Join(filepath.Dir(self), "swaynotify"); fileExists(hermano) {
+			exe = hermano
+		}
+	}
+	if !launcher.HasCommand(exe) && !fileExists(exe) {
+		fmt.Fprintln(os.Stderr, "swaydesk: falta swaynotify")
+		os.Exit(1)
+	}
+	// Se ejecuta en la misma terminal: el diálogo necesita el TTY.
+	if err := launcher.ExecCommand(exe, append([]string{"reply"}, args...)...); err != nil {
+		fmt.Fprintf(os.Stderr, "swaydesk: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func notifyTest(cfg *config.Config) {
+	// Tres avisos de muestra: uno informativo, un chat con respuesta rápida y
+	// una descarga con progreso, para ver de un vistazo todo lo que dibuja el
+	// daemon.
+	now := time.Now()
+	_ = notifySend(notify.Notification{
+		App: "Chat de prueba", Summary: "Marta", Sender: "Marta",
+		Body: "¿Comemos a las dos?", Urgency: notify.Normal, Progress: -1,
+		InlineReply: true, ReplyPlaceholder: "Responder a Marta…",
+		Actions: []notify.Action{{Key: "inline-reply", Label: "Responder"}},
+		Icon:    "mail-unread", Timeout: 20000,
+	})
+	_ = notifySend(notify.Notification{
+		App: "swaydesk", Summary: "Descarga completada",
+		Body: "archlinux-2026.10.01-x86_64.iso", Urgency: notify.Low,
+		Icon: "folder-download", Progress: 100, Created: now,
+	})
 	n := notify.Notification{
 		App: "swaydesk", Summary: "Notificaciones funcionando",
 		Body:    "Este aviso lo dibuja <b>swaynotify</b> con el tema activo.",

@@ -44,8 +44,13 @@ type Snapshot struct {
 
 	Recording bool
 	Media     string
-	Theme     string
-	Updates   int
+	// Notifications es cuántas hay en pantalla; NotifDND, el modo no molestar.
+	Notifications int
+	NotifDND      bool
+	// NotifReplies, cuántas de ellas admiten respuesta rápida.
+	NotifReplies int
+	Theme        string
+	Updates      int
 }
 
 // Options configura el aspecto de la barra.
@@ -68,7 +73,7 @@ type Options struct {
 }
 
 // DefaultModules es la lista de módulos de la derecha por defecto.
-var DefaultModules = []string{"media", "recording", "cpu", "ram", "volume", "network", "battery", "clock"}
+var DefaultModules = []string{"media", "recording", "notify", "cpu", "ram", "volume", "network", "battery", "clock"}
 
 // item es un fragmento de texto con su color dentro de una isla.
 type item struct {
@@ -76,6 +81,21 @@ type item struct {
 	fg    RGBA
 	kind  int // 0 texto, 1 pastilla, 2 separador
 	extra string
+	// click, si no está vacío, marca el elemento como zona pulsable con ese
+	// nombre (por ejemplo "notify").
+	click string
+}
+
+// Region es una zona pulsable de la barra, en píxeles del lienzo.
+type Region struct {
+	Name string
+	X, Y int
+	W, H int
+}
+
+// Contains indica si un punto cae dentro de la región.
+func (r Region) Contains(x, y int) bool {
+	return x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H
 }
 
 const (
@@ -90,6 +110,21 @@ type Renderer struct {
 	Theme ui.Palette
 	face  *font.Face
 	scale int
+	// regions acumula las zonas pulsables del último Render, en píxeles.
+	regions []Region
+}
+
+// Regions devuelve las zonas pulsables del último Render.
+func (r *Renderer) Regions() []Region { return r.regions }
+
+// RegionAt devuelve la zona pulsable que contiene el punto, si hay alguna.
+func (r *Renderer) RegionAt(x, y int) (Region, bool) {
+	for _, reg := range r.regions {
+		if reg.Contains(x, y) {
+			return reg, true
+		}
+	}
+	return Region{}, false
 }
 
 // New crea un renderizador con la fuente del sistema si está disponible.
@@ -169,6 +204,7 @@ func (r *Renderer) Render(s Snapshot, width int) *Canvas {
 		width = 80
 	}
 	_, _, fg, muted, accent, accent2, ok, warn, errc := r.colors()
+	r.regions = r.regions[:0]
 	c := NewCanvas(width, r.Opt.Height)
 
 	left := r.leftItems(s, fg, muted, accent, accent2)
@@ -327,6 +363,19 @@ func (r *Renderer) drawItems(c *Canvas, x int, items []item, fg, muted, accent R
 	for i, it := range items {
 		if i > 0 {
 			x += r.itemGap()
+		}
+		if it.click != "" {
+			h := r.Opt.Height - 2*r.Opt.Margin
+			if h <= 0 {
+				h = r.Opt.Height
+			}
+			r.regions = append(r.regions, Region{
+				Name: it.click,
+				X:    x - 3,
+				Y:    r.Opt.Margin,
+				W:    r.itemWidth(it) + 6,
+				H:    h,
+			})
 		}
 		switch it.kind {
 		case itemGap:
@@ -539,6 +588,24 @@ func (r *Renderer) rightItems(s Snapshot, fg, muted, accent, ok, warn, errc RGBA
 			if s.Updates > 0 {
 				add(fmt.Sprintf("%d", s.Updates), "act.", accent)
 			}
+		case "notify":
+			// Indicador del centro de notificaciones: al pulsarlo se abre.
+			// Con avisos en pantalla es una pastilla con el número; el «+»
+			// avisa de que alguna tarjeta admite respuesta rápida.
+			it := item{text: "avisos", fg: muted, click: "notify"}
+			switch {
+			case s.NotifDND:
+				it.text, it.fg = "dnd", warn
+				if s.Notifications > 0 {
+					it.text = fmt.Sprintf("dnd %d", s.Notifications)
+				}
+			case s.Notifications > 0:
+				it.text, it.fg, it.kind = fmt.Sprintf("%d", s.Notifications), accent, itemPill
+				if s.NotifReplies > 0 {
+					it.text += "+"
+				}
+			}
+			items = append(items, it)
 		case "title":
 			plain(truncate(s.Title, 28), fg)
 		case "clock":

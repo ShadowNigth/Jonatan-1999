@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/bar"
 	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/host"
+	"github.com/ShadowNigth/swaydesk/internal/launcher"
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 	"github.com/ShadowNigth/swaydesk/internal/wayland"
 )
@@ -51,6 +53,25 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		return err
 	}
 
+	// Ratón: la barra solo tiene una zona pulsable, el indicador de
+	// notificaciones, que abre el centro en una terminal flotante.
+	clicks := make(chan string, 4)
+	if p, err := wayland.NewPointer(conn, wayland.PointerHandler{
+		Button: func(x, y float64, button uint32, pressed bool) {
+			if !pressed || button != 0x110 {
+				return
+			}
+			if reg, ok := r.RegionAt(int(x), int(y)); ok {
+				select {
+				case clicks <- reg.Name:
+				default:
+				}
+			}
+		},
+	}); err == nil {
+		defer p.Close()
+	}
+
 	stop := make(chan struct{}, 1)
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
@@ -76,8 +97,9 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 			canvas = canvas.ScaleCanvas(scale)
 		}
 		// Se evita repintar si nada cambió (menos CPU y parpadeos).
-		key := fmt.Sprintf("%d|%s|%s|%s|%.0f|%.0f|%d|%v|%d",
-			w, snap.Clock, snap.Title, snap.AppID, snap.CPU, snap.RAM, snap.Volumen, snap.Muted, len(snap.Workspaces))
+		key := fmt.Sprintf("%d|%s|%s|%s|%.0f|%.0f|%d|%v|%d|%d|%v|%d",
+			w, snap.Clock, snap.Title, snap.AppID, snap.CPU, snap.RAM, snap.Volumen, snap.Muted,
+			len(snap.Workspaces), snap.Notifications, snap.NotifDND, snap.NotifReplies)
 		if key == last {
 			return nil
 		}
@@ -99,6 +121,8 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 			return nil
 		case <-events:
 			_ = draw()
+		case name := <-clicks:
+			handleClick(cfg, name)
 		case <-tick.C:
 			if panel.NeedsResize() {
 				_ = panel.Resize(2)
@@ -110,6 +134,28 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		// Se procesan los eventos pendientes del compositor sin bloquear.
 		_ = panel.Dispatch(0)
 	}
+}
+
+// handleClick ejecuta la acción de una zona pulsable de la barra.
+func handleClick(cfg *config.Config, name string) {
+	switch name {
+	case "notify":
+		// El centro necesita teclado: se abre en una terminal flotante.
+		exe := "swaydesk"
+		if self, err := os.Executable(); err == nil {
+			if hermano := filepath.Join(filepath.Dir(self), "swaydesk"); fileExists(hermano) {
+				exe = hermano
+			}
+		}
+		_ = launcher.LaunchTerminal(cfg.Terminal, "swaydesk-notify", "Notificaciones", 84, 24,
+			[]string{exe, "notifications", "center"})
+	}
+}
+
+// fileExists indica si existe la ruta.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // watchSway se suscribe a los cambios de workspaces y de foco en sway para
