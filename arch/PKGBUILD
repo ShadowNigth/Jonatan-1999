@@ -1,0 +1,39 @@
+# Maintainer: KitsuneDE Contributors
+pkgname=kitsune-de
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Entorno de escritorio híbrido Tiling/Flotante estilo Anime para Arch Linux escrito en Go"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ShadowNigth/Jonatan-1999"
+license=('MIT')
+depends=('glibc')
+makedepends=('go')
+optdepends=(
+  'cage: Compositor Wayland ligero para sesión Kiosk nativa en SDDM/Greetd'
+  'chromium: Motor gráfico para modo sesión de escritorio completa'
+  'hyprland: Compositor Wayland compatible con los dotfiles generados por kitsune-ctl'
+  'waybar: Barra superior compatible con los temas exportados'
+  'kitty: Emulador de terminal GPU compatible con las paletas anime'
+  'swww: Demonio de wallpapers animados en Wayland'
+  'ttf-jetbrains-mono-nerd: Fuente recomendada con iconos Nerd Font'
+)
+source=()
+sha256sums=()
+
+build() {
+  cd "${startdir}/.."
+  export CGO_ENABLED=0
+  go build -trimpath -ldflags="-s -w" -o "${srcdir}/kitsune-de" ./cmd/kitsune-de
+  go build -trimpath -ldflags="-s -w" -o "${srcdir}/kitsune-ctl" ./cmd/kitsune-ctl
+}
+
+package() {
+  install -Dm755 "${srcdir}/kitsune-de" "${pkgdir}/usr/bin/kitsune-de"
+  install -Dm755 "${srcdir}/kitsune-ctl" "${pkgdir}/usr/bin/kitsune-ctl"
+  install -Dm755 "${startdir}/kitsune-session" "${pkgdir}/usr/bin/kitsune-session"
+  install -Dm644 "${startdir}/kitsune-de.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-de.desktop"
+  install -Dm644 "${startdir}/kitsune-de-x11.desktop" "${pkgdir}/usr/share/xsessions/kitsune-de-x11.desktop"
+
+  install -d "${pkgdir}/usr/share/kitsune-de/wallpapers"
+  install -Dm644 "${startdir}/../internal/ui/static/wallpapers/"*.jpg "${pkgdir}/usr/share/kitsune-de/wallpapers/"
+}

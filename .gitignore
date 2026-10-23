@@ -1,0 +1,18 @@
+# Compiled Go binaries
+/build/
+/bin/
+/kitsune-de
+/kitsune-ctl
+*.exe
+*.out
+
+# Exported dotfiles & runtime state
+/dotfiles-export/
+/dotfiles-arch/
+state.json
+
+# Arch makepkg build artifacts & release bundles
+/arch/pkg/
+/arch/src/
+/arch/*.pkg.tar.*
+*.zip

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Lanzador de sesión nativa KitsuneDE para SDDM / Greetd / LightDM / GDM / startx en Arch Linux
+set -euo pipefail
+
+export KITSUNE_PORT="${KITSUNE_PORT:-18080}"
+export KITSUNE_URL="http://127.0.0.1:${KITSUNE_PORT}"
+
+mkdir -p "${HOME}/.config/kitsune-de"
+
+# Iniciar el motor Go de KitsuneDE en segundo plano
+kitsune-de --addr "127.0.0.1:${KITSUNE_PORT}" --workdir "${HOME}" &
+DE_PID=$!
+trap 'kill "${DE_PID}" 2>/dev/null || true' EXIT INT TERM
+
+sleep 0.4
+
+# Si no hay sesión Wayland/X11 activa, arrancar mediante Cage (compositor Wayland kiosk)
+if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
+  if command -v cage >/dev/null 2>&1; then
+    if command -v chromium >/dev/null 2>&1; then
+      exec cage -s -- chromium --kiosk --app="${KITSUNE_URL}" --no-first-run
+    elif command -v firefox >/dev/null 2>&1; then
+      exec cage -s -- firefox --kiosk "${KITSUNE_URL}"
+    fi
+  fi
+fi
+
+# Dentro de Wayland o X11 existente
+for browser in chromium brave google-chrome-stable; do
+  if command -v "${browser}" >/dev/null 2>&1; then
+    "${browser}" --kiosk --app="${KITSUNE_URL}" --no-first-run
+    exit 0
+  fi
+done
+
+if command -v firefox >/dev/null 2>&1; then
+  firefox --kiosk "${KITSUNE_URL}"
+  exit 0
+fi
+
+wait "${DE_PID}"

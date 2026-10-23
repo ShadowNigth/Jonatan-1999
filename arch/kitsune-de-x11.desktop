@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=KitsuneDE (Anime X11)
+Comment=Escritorio estilo Anime para Arch Linux impulsado por Go (X11)
+Exec=/usr/bin/kitsune-session
+Type=Application
+DesktopNames=KitsuneDE

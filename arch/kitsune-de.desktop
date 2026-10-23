@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=KitsuneDE (Anime Wayland)
+Comment=Escritorio estilo Anime para Arch Linux impulsado por Go
+Exec=/usr/bin/kitsune-session
+Type=Application
+DesktopNames=KitsuneDE
