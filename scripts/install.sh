@@ -5,10 +5,22 @@
 #   PREFIX=/usr/local sudo ./scripts/install.sh
 #   ./scripts/install.sh --deps       # instala además las dependencias con pacman
 #   ./scripts/install.sh --no-config  # no escribe la configuración
+#
+# Instalación en un paso, sin clonar a mano (clona en un directorio temporal):
+#   curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scripts/install.sh | bash -s -- --deps
+#
+# Variables: SWAYDESK_REPO (URL del repositorio), SWAYDESK_BRANCH (rama o
+# etiqueta), PREFIX (destino de los binarios).
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Directorio del código: cuando el script se ejecuta desde una copia local es
+# el propio repositorio; cuando llega por una tubería (curl | bash) no hay
+# árbol y se clona uno más abajo.
+SELF="${BASH_SOURCE[0]:-}"
+REPO_DIR="$(cd "$(dirname "$SELF")/.." 2>/dev/null && pwd || pwd)"
+REPO_URL="${SWAYDESK_REPO:-https://github.com/ShadowNigth/Jonatan-1999.git}"
+REPO_BRANCH="${SWAYDESK_BRANCH:-}"
 PREFIX="${PREFIX:-$HOME/.local}"
 WITH_DEPS=0
 WITH_CONFIG=1
@@ -20,7 +32,14 @@ for arg in "$@"; do
     --no-config) WITH_CONFIG=0 ;;
     --force) FORCE=1 ;;
     -h|--help)
-      sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+      # Cabecera del archivo, quitando la almohadilla inicial.
+      if [[ -n "$SELF" && -r "$SELF" ]]; then
+        sed -n '2,13p' "$SELF" | sed 's/^# \{0,1\}//'
+      else
+        printf 'swaydesk · instalador para Arch Linux + sway\n\n'
+        printf '  curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scripts/install.sh | bash -s -- [--deps] [--no-config] [--force]\n\n'
+        printf 'Variables: SWAYDESK_REPO, SWAYDESK_BRANCH, PREFIX\n'
+      fi
       exit 0 ;;
     *) echo "opción desconocida: $arg" >&2; exit 2 ;;
   esac
@@ -30,6 +49,27 @@ info() { printf '\033[1;34m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
+# ── Código fuente ─────────────────────────────────────────────────────────
+TMP_DIR=""
+cleanup() { [[ -n "$TMP_DIR" ]] && rm -rf "$TMP_DIR"; }
+trap cleanup EXIT
+
+if [[ ! -f "$REPO_DIR/go.mod" || ! -f "$REPO_DIR/Makefile" || ! -d "$REPO_DIR/cmd/swaydesk" ]]; then
+  command -v git >/dev/null || die "git no está instalado. Instálalo con: sudo pacman -S git"
+  TMP_DIR="$(mktemp -d)"
+  info "Clonando $REPO_URL${REPO_BRANCH:+ (rama $REPO_BRANCH)}"
+  if [[ -n "$REPO_BRANCH" ]]; then
+    git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$TMP_DIR/swaydesk" \
+      || die "no se pudo clonar $REPO_URL ($REPO_BRANCH)"
+  else
+    git clone --depth 1 "$REPO_URL" "$TMP_DIR/swaydesk" \
+      || die "no se pudo clonar $REPO_URL"
+  fi
+  REPO_DIR="$TMP_DIR/swaydesk"
+else
+  info "Usando el código de $REPO_DIR"
+fi
+
 # ── Comprobaciones ────────────────────────────────────────────────────────
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
@@ -37,6 +77,8 @@ if [[ -f /etc/os-release ]]; then
 fi
 
 command -v go >/dev/null || die "Go no está instalado. Instálalo con: sudo pacman -S go"
+command -v make >/dev/null || die "make no está instalado. Instálalo con: sudo pacman -S base-devel"
+[[ -f "$REPO_DIR/go.mod" ]] || die "no se encuentra el código fuente de swaydesk (go.mod)"
 info "Go $(go version | awk '{print $3}')"
 
 # ── Dependencias ──────────────────────────────────────────────────────────

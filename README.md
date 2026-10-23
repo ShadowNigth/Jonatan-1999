@@ -6,10 +6,13 @@
 
 Lanzador de aplicaciones, panel de control, portapapeles, barra de estado, temas
 adaptativos, fondos animados (GIF y *live wallpapers*) y sesión — todo en
-**seis binarios estáticos**, sin dependencias externas de Go y sin un solo
+**siete binarios estáticos**, sin dependencias externas de Go y sin un solo
 script de shell.
 
 ![Lanzador de aplicaciones](docs/screenshot-menu.png)
+
+**[github.com/ShadowNigth/Jonatan-1999](https://github.com/ShadowNigth/Jonatan-1999)** ·
+`git clone https://github.com/ShadowNigth/Jonatan-1999.git`
 
 </div>
 
@@ -167,17 +170,41 @@ terceros.
 
 ## Instalación en Arch Linux
 
-### Opción 1: instalador automático
+### Opción 1: instalador automático (recomendado)
+
+Clona el repositorio y ejecuta el instalador, que compila los siete binarios,
+los instala en `~/.local/bin`, genera la configuración y avisa de lo que falte:
 
 ```bash
-git clone https://github.com/ShadowNigth/swaydesk.git
-cd swaydesk
-./scripts/install.sh --deps     # instala dependencias con pacman y compila
+git clone https://github.com/ShadowNigth/Jonatan-1999.git
+cd Jonatan-1999
+./scripts/install.sh --deps     # --deps instala las dependencias con pacman
 ```
 
-El script compila, instala en `~/.local/bin`, genera la configuración y avisa de
-lo que falte. Con `PREFIX=/usr/local sudo ./scripts/install.sh` instala en el
-sistema.
+O en un solo paso, sin clonar a mano (el instalador se clona a sí mismo en un
+directorio temporal y lo borra al terminar):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scripts/install.sh \
+  | bash -s -- --deps
+```
+
+| Opción | Efecto |
+| --- | --- |
+| `--deps` | instala las dependencias recomendadas con `pacman` |
+| `--no-config` | no escribe la configuración del escritorio |
+| `--force` | sobrescribe la configuración existente (con copia `*.bak-<fecha>`) |
+
+Variables de entorno: `PREFIX` (destino; por defecto `~/.local`),
+`SWAYDESK_REPO` (otra URL de repositorio) y `SWAYDESK_BRANCH` (rama o etiqueta).
+
+```bash
+PREFIX=/usr/local sudo -E ./scripts/install.sh   # instalación en el sistema
+SWAYDESK_BRANCH=v1.0.0 ./scripts/install.sh      # una versión concreta
+```
+
+Si `~/.local/bin` no está en el `PATH`, el script te dice la línea exacta que
+hay que añadir al `~/.bashrc`/`~/.zshrc`.
 
 ### Opción 2: manual
 
@@ -194,6 +221,25 @@ Comprueba el resultado con:
 
 ```bash
 swaydesk doctor
+```
+
+### Actualizar
+
+```bash
+cd Jonatan-1999
+git pull --ff-only                # o: PREFIX=… SWAYDESK_BRANCH=… para otra rama
+./scripts/install.sh --no-config  # reconstruye y reinstala sin tocar la config
+```
+
+El instalador conserva tu `~/.config/swaydesk/config.toml` y tus temas salvo que
+le pases `--force`; después basta `swaymsg reload` (o reiniciar la sesión) para
+que la barra, las notificaciones y el fondo usen los binarios nuevos.
+
+### Desinstalar
+
+```bash
+make uninstall            # borra los binarios de ~/.local/bin
+rm -rf ~/.config/swaydesk ~/.cache/swaydesk   # config y caché (opcional)
 ```
 
 ### Dependencias

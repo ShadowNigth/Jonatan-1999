@@ -2,24 +2,19 @@
 pkgname=swaydesk
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="Escritorio completo para sway en Go: lanzador, panel, portapapeles, temas y fondos animados"
+pkgdesc="Escritorio completo para sway en Go: lanzador, panel, portapapeles, barra, notificaciones, OSD, temas y fondos animados"
 arch=('x86_64' 'aarch64')
-url="https://github.com/ShadowNigth/swaydesk"
+url="https://github.com/ShadowNigth/Jonatan-1999"
 license=('MIT')
 depends=('sway')
 makedepends=('go')
 optdepends=(
-  'waybar: barra de estado alternativa (swaydesk trae la suya: swaybar)'
-  'mako: daemon de notificaciones alternativo (swaydesk trae el suyo: swaynotify)'
   'dbus: bus de sesión (necesario para swaynotify)'
-  'kbd: fuentes de consola PSF para swaybar y swaynotify'
+  'kbd: fuentes de consola PSF para swaybar, swaynotify y swayosd'
   'foot: terminal por defecto'
-  'mako: notificaciones'
   'swaylock: bloqueo de pantalla'
-  'swayidle: bloqueo por inactividad'
+  'swayidle: bloqueo por inactividad y apagado de pantalla'
   'grim: capturas de pantalla'
-  'ffmpeg: fondos de pantalla de vídeo (mp4, webm)'
-  'swayfx: desenfoque y esquinas redondeadas'
   'slurp: selección de región para capturas'
   'wl-clipboard: portapapeles'
   'cliphist: historial del portapapeles'
@@ -27,7 +22,11 @@ optdepends=(
   'playerctl: control de reproducción'
   'wireplumber: volumen del sistema (wpctl) para el OSD de volumen'
   'pulseaudio-utils: alternativa a wpctl para el volumen (pactl)'
-  'brightnessctl: brillo de pantalla'
+  'ffmpeg: fondos de pantalla de vídeo (mp4, webm)'
+  'swayfx: desenfoque y esquinas redondeadas'
+  'chromium: navegador por defecto'
+  'waybar: barra de estado alternativa (swaydesk trae la suya: swaybar)'
+  'mako: daemon de notificaciones alternativo (swaydesk trae el suyo: swaynotify)'
 )
 source=("$pkgname-$pkgver.tar.gz")
 sha256sums=('SKIP')
