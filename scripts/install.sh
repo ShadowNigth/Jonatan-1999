@@ -66,6 +66,14 @@ if [[ ! -f "$REPO_DIR/go.mod" || ! -f "$REPO_DIR/Makefile" || ! -d "$REPO_DIR/cm
       || die "no se pudo clonar $REPO_URL"
   fi
   REPO_DIR="$TMP_DIR/swaydesk"
+  if [[ ! -f "$REPO_DIR/go.mod" ]]; then
+    BRANCH_HINT="main"
+    [[ -n "$REPO_BRANCH" ]] && BRANCH_HINT="$REPO_BRANCH"
+    die "la rama '$BRANCH_HINT' de $REPO_URL no contiene el código (¿solo el README?).
+   Indica la rama del proyecto, por ejemplo:
+     SWAYDESK_BRANCH=arena/5224a2d1-jonatan-1999 … | bash -s -- --deps
+   o clona con: git clone -b <rama> $REPO_URL"
+  fi
 else
   info "Usando el código de $REPO_DIR"
 fi
