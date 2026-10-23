@@ -240,6 +240,23 @@ Si los binarios viven en `~/.local/bin`, la configuración generada los usa con
 **ruta absoluta** (`swaydesk init` la resuelve al escribir), así que los atajos
 funcionan aunque sway no herede tu `PATH`.
 
+Los atajos que lanzan programas que no tienes instalados se marcan igual
+(`thunar`, `brightnessctl`…): al final del listado sale un resumen con los que
+faltan. `swaydesk init` prueba alternativas antes de escribir el archivo: si no
+tienes `thunar` usa `nautilus`, `dolphin`, `nemo`, `pcmanfm`, `xdg-open`…; para
+la terminal y el navegador hace lo mismo.
+
+> **Cuidado con los respaldos**: `swaydesk init --force` deja copias
+> `*.bak-<fecha>` junto a los archivos. Si están dentro de
+> `~/.config/sway/config.d/`, un `include …/config.d/*` las cargaría y volverían
+> a aparecer atajos viejos y teclas duplicadas. La plantilla ya usa
+> `include ~/.config/sway/config.d/*.conf`, pero si vienes de una versión
+> anterior bórralas una vez:
+>
+> ```bash
+> rm -f ~/.config/sway/config.d/*.bak-* ~/.config/sway/*.bak-*
+> ```
+
 Para regenerar solo la configuración de sway sin tocar tu `config.toml` ni el
 resto de archivos:
 

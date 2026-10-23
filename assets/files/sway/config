@@ -296,5 +296,6 @@ exec_always --no-startup-id $swaydesk apply
 #    El script comprueba qué programas están instalados antes de lanzarlos.
 exec_always --no-startup-id ~/.config/swaydesk/autostart.sh
 
-# Overrides del usuario
-include ~/.config/sway/config.d/*
+# Overrides del usuario. Solo *.conf: así los respaldos (*.conf.bak-*) no se
+# cargan por error y no reaparecen atajos viejos ni directivas duplicadas.
+include ~/.config/sway/config.d/*.conf

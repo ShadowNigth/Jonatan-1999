@@ -816,7 +816,30 @@ func cmdKeys(args []string) {
 		fmt.Printf("  %s\n", ui.Dim("ningún atajo coincide con el filtro"))
 	}
 	if bad > 0 {
-		fmt.Printf("\n  %s\n", ui.Dim("corrige las rutas con: swaydesk init --force --only sway   ·   recarga: swaymsg reload"))
+		// Programas que faltan y teclas repetidas, en dos listas cortas.
+		faltan := map[string]bool{}
+		repetidas := 0
+		for _, b := range binds {
+			if b.Missing != "" {
+				faltan[b.Missing] = true
+			} else if strings.Contains(b.Error, "repetida") {
+				repetidas++
+			}
+		}
+		if len(faltan) > 0 {
+			nombres := make([]string, 0, len(faltan))
+			for p := range faltan {
+				nombres = append(nombres, p)
+			}
+			sort.Strings(nombres)
+			fmt.Printf("\n  %s %s\n", ui.Style{Fg: p.Warn}.Render("programas que faltan:"), strings.Join(nombres, ", "))
+			fmt.Printf("  %s\n", ui.Dim("instálalos (p. ej. sudo pacman -S "+strings.Split(nombres[0], " ")[0]+") o cambia la app con: swaydesk config"))
+		}
+		if repetidas > 0 {
+			fmt.Printf("  %s %d atajos comparten tecla: deliberado en un override o sobra uno\n",
+				ui.Style{Fg: p.Warn}.Render("teclas repetidas:"), repetidas)
+		}
+		fmt.Printf("\n  %s\n", ui.Dim("regenera la configuración con: swaydesk init --force --only sway   ·   recarga: swaymsg reload"))
 	}
 	fmt.Println()
 }

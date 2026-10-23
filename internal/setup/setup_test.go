@@ -349,3 +349,46 @@ func TestInstallOnlySwayConservaConfig(t *testing.T) {
 		t.Fatalf("no se reescribió sway/config: %+v", res)
 	}
 }
+
+func TestPickProgram(t *testing.T) {
+	// El valor configurado manda si existe (/bin/sh está siempre).
+	if got := pickProgram("/bin/sh", []string{"nada"}); got != "/bin/sh" {
+		t.Fatalf("debería conservar el configurado: %q", got)
+	}
+	// Si no existe, se cae al primer candidato disponible.
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "mi-gestor")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	if got := pickProgram("no-existe-jamas", []string{"tampoco", "mi-gestor"}); got != "mi-gestor" {
+		t.Fatalf("no se eligió el candidato instalado: %q", got)
+	}
+	// Sin candidatos disponibles se conserva el valor (y keys lo señalará).
+	if got := pickProgram("no-existe-jamas", []string{"tampoco"}); got != "no-existe-jamas" {
+		t.Fatalf("valor = %q", got)
+	}
+	// Un valor con argumentos se comprueba por su binario.
+	if got := pickProgram("/bin/sh -e ranger", nil); got != "/bin/sh -e ranger" {
+		t.Fatalf("con argumentos: %q", got)
+	}
+	if binName("foot -e ranger") != "foot" || binName("") != "" {
+		t.Fatal("binName mal")
+	}
+}
+
+// Los respaldos dentro de config.d no deben volver a cargarse en sway.
+func TestSwayIncludeSoloConf(t *testing.T) {
+	files, err := Render(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sway := files["sway/config"]
+	if !strings.Contains(sway, "include ~/.config/sway/config.d/*.conf") {
+		t.Fatal("el include debe filtrar *.conf para no cargar los .bak")
+	}
+	if strings.Contains(sway, "config.d/*\n") || strings.Contains(sway, "config.d/* ") {
+		t.Fatal("queda un include sin filtro de extensión")
+	}
+}

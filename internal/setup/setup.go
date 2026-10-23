@@ -160,11 +160,11 @@ func templateData(cfg *config.Config) map[string]string {
 		"LOCK_FONT_SIZE":     itoa(fontSize + 5),
 		"LOCK_CLOCK_SIZE":    itoa(fontSize*4 + 4),
 
-		"TERMINAL":        cfg.Terminal,
+		"TERMINAL":        pickProgram(cfg.Terminal, terminalCandidates),
+		"BROWSER":         pickProgram(cfg.Browser, browserCandidates),
+		"FILES":           pickProgram(cfg.FileManager, filesCandidates),
 		"LAUNCHER":        cfg.Launcher,
-		"BROWSER":         cfg.Browser,
-		"FILES":           cfg.FileManager,
-		"EDITOR":          cfg.Editor,
+		"EDITOR":          pickProgram(cfg.Editor, editorCandidates),
 		"KEYBOARD_LAYOUT": cfg.KeyboardLayout,
 		// Rutas absolutas de los binarios propios. Si ~/.local/bin no está en
 		// el PATH de la sesión (lo normal al arrancar sway desde un TTY o un
@@ -220,6 +220,48 @@ func alphaHex(v, def float64) string {
 		a = 255
 	}
 	return fmt.Sprintf("%02x", a)
+}
+
+// Programas que se prueban cuando el configurado no está instalado. Es lo que
+// evita atajos muertos: si no tienes thunar, se usa el gestor que sí exista.
+var (
+	terminalCandidates = []string{"foot", "kitty", "alacritty", "wezterm", "ghostty", "xterm", "st"}
+	browserCandidates  = []string{"chromium", "google-chrome-stable", "brave", "firefox", "epiphany", "qutebrowser"}
+	filesCandidates    = []string{"thunar", "nautilus", "dolphin", "nemo", "pcmanfm", "caja", "xdg-open"}
+	editorCandidates   = []string{"nvim", "vim", "vi", "nano", "micro", "helix"}
+)
+
+// pickProgram devuelve el programa configurado si existe; si no, el primero de
+// los candidatos que esté instalado (o el configurado, para no dejarlo vacío).
+func pickProgram(want string, candidates []string) string {
+	want = strings.TrimSpace(want)
+	if want == "" {
+		for _, c := range candidates {
+			if _, err := exec.LookPath(c); err == nil {
+				return c
+			}
+		}
+		return ""
+	}
+	if _, err := exec.LookPath(binName(want)); err == nil {
+		return want
+	}
+	// El valor puede traer argumentos ("foot -e ranger"): solo el binario.
+	for _, c := range candidates {
+		if _, err := exec.LookPath(c); err == nil {
+			return c
+		}
+	}
+	return want
+}
+
+// binName devuelve el ejecutable de una orden con argumentos.
+func binName(cmd string) string {
+	fields := strings.Fields(cmd)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }
 
 // binPath devuelve la ruta absoluta de un binario de swaydesk, o su nombre si

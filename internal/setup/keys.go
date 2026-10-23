@@ -27,6 +27,8 @@ type Binding struct {
 	// Error describe un problema detectado (variable sin definir, programa que
 	// no existe, tecla repetida…).
 	Error string
+	// Missing es el programa que falta, si el problema es ese.
+	Missing string
 }
 
 // ParseBindings extrae y expande los atajos de una configuración de sway.
@@ -200,6 +202,9 @@ func CheckBindings(bs []Binding) int {
 		b := &bs[i]
 		if b.Error == "" && b.Exec != "" && !ProgramAvailable(b.Exec) {
 			b.Error = fmt.Sprintf("no se encuentra el programa %q", b.Exec)
+			if b.Missing == "" {
+				b.Missing = b.Exec
+			}
 		}
 		if b.Error != "" {
 			bad++
