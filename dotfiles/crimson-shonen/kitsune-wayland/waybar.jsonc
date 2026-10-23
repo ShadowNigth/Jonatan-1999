@@ -1,0 +1,56 @@
+// 🦊 Kitsune Go Wayland — Barra Superior Estilo Waybar (Workspaces Kanji 一 二 三 四 五)
+{
+  "layer": "top",
+  "position": "top",
+  "height": 42,
+  "margin-top": 10,
+  "margin-left": 12,
+  "margin-right": 12,
+  "spacing": 7,
+
+  "modules-left": [
+    "custom/rofi",
+    "custom/workspaces",
+    "custom/layout",
+    "custom/apps"
+  ],
+  "modules-center": [
+    "custom/synth",
+    "clock"
+  ],
+  "modules-right": [
+    "custom/theme",
+    "cpu",
+    "memory",
+    "custom/notifications",
+    "custom/lock"
+  ],
+
+  "custom/rofi": {
+    "format": "󰣇  Kitsune Go",
+    "on-click": "kitsune-ctl open rofi",
+    "tooltip-format": "Abrir Lanzador Rofi (Alt+Space)"
+  },
+  "custom/workspaces": {
+    "format": "一  二  三  四  五",
+    "tooltip-format": "Espacios de trabajo Kanji (Alt+1..5)"
+  },
+  "custom/layout": {
+    "format": "🗂️ TABBED",
+    "on-click": "kitsune-ctl layout toggle",
+    "on-click-right": "kitsune-ctl layout tabbed",
+    "tooltip-format": "Modo Tabbed / Tiling / Flotante"
+  },
+  "custom/apps": {
+    "format": "🎨 Studio  📊 Btop++  📁 Yazi  📝 Nvim",
+    "tooltip-format": "Suite integrada en pestañas Kitsune Go Wayland"
+  },
+  "clock": {
+    "format": "󰥔  {:%H:%M  •  %d %b}"
+  },
+  "custom/theme": {
+    "format": "🌸 Crimson Shonen",
+    "on-click": "kitsune-ctl theme next",
+    "tooltip-format": "Cambiar tema Anime en vivo"
+  }
+}

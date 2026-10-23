@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Kitsune Rice Studio
+Comment=Estudio de Temas Anime, Blur y Bordes Luminosos para Kitsune Go Wayland
+Exec=chromium --ozone-platform-hint=auto --app=http://127.0.0.1:18080
+Icon=preferences-desktop-theme
+Terminal=false
+Type=Application
+Categories=Settings;DesktopSettings;GTK;
+Keywords=anime;wayland;kitsune;theme;blur;

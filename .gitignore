@@ -1,0 +1,20 @@
+# Compiled Go binaries
+/build/
+/bin/
+/kitsune-de
+/kitsune-ctl
+*.exe
+*.out
+
+# Scratch exports & runtime state
+/dotfiles-export/
+/dotfiles-arch/
+/dotfiles-kitsune-wayland/
+state.json
+
+# Arch makepkg build artifacts & scratch zips
+/arch/pkg/
+/arch/src/
+/arch/*.pkg.tar.*
+/*.zip
+!release/kitsune-go-wayland-arch-linux.zip

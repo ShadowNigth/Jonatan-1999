@@ -1,0 +1,10 @@
+/* 🦊 Kitsune Go Wayland — GTK4 Dark Anime Palette (Midnight Evangelion) */
+@define-color accent_color #39ff14;
+@define-color accent_bg_color #39ff14;
+@define-color accent_fg_color #090812;
+@define-color window_bg_color #10081c;
+@define-color window_fg_color #f0fdf4;
+@define-color view_bg_color #190e2c;
+@define-color view_fg_color #f0fdf4;
+@define-color headerbar_bg_color #190e2c;
+@define-color headerbar_fg_color #f0fdf4;

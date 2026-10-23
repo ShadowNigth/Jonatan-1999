@@ -1,0 +1,21 @@
+/* 🦊 Kitsune Go Wayland — Waybar Top Bar Stylesheet (Midnight Evangelion) */
+* {
+  font-family: "JetBrainsMono Nerd Font", "Inter", "Noto Sans CJK JP", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+window#waybar {
+  background: rgba(11, 9, 22, 0.78);
+  color: #f0fdf4;
+  border-radius: 12px;
+  border: 2px solid #39ff14;
+  backdrop-filter: blur(18px);
+}
+
+#workspaces button.active {
+  background: linear-gradient(135deg, #39ff14, #ff9e00);
+  color: #090812;
+  font-weight: 800;
+  border-radius: 7px;
+}

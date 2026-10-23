@@ -1,0 +1,15 @@
+# 🦊 Kitsune Go Wayland — Tema Oficial Yazi File Manager (Crimson Shonen • 紅蓮の刃 // 月蝕)
+[manager]
+cwd = { fg = "#ff1e42", bold = true }
+hovered = { fg = "#090812", bg = "#ff1e42", bold = true }
+preview_hovered = { underline = true }
+find_keyword = { fg = "#ff7b54", bold = true }
+marker_selected = { fg = "#4ade80", bg = "#4ade80" }
+border_symbol = "│"
+border_style = { fg = "#ff1e42" }
+
+[status]
+separator_open = ""
+separator_close = ""
+mode_normal = { fg = "#090812", bg = "#ff1e42", bold = true }
+mode_select = { fg = "#090812", bg = "#ff7b54", bold = true }

@@ -1,0 +1,62 @@
+/* 🦊 Kitsune Go Wayland — Lanzador Rofi (Crimson Shonen • 紅蓮の刃 // 月蝕) */
+configuration {
+  modi: "drun,run";
+  show-icons: true;
+  icon-theme: "Papirus-Dark";
+  display-drun: "󰣇  Kitsune Go ❯";
+  drun-display-format: "{name}";
+  font: "JetBrainsMono Nerd Font 11";
+}
+
+* {
+  bg: #09090dEA;
+  bg-alt: #131118F2;
+  fg: #f8fafc;
+  fg-muted: #94a3b8;
+  accent: #ff1e42;
+  secondary: #ff7b54;
+  background-color: transparent;
+  text-color: @fg;
+}
+
+window {
+  width: 620px;
+  background-color: @bg;
+  border: 2px;
+  border-color: @accent;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+inputbar {
+  children: [prompt, entry];
+  background-color: @bg-alt;
+  border-radius: 10px;
+  padding: 11px 14px;
+  spacing: 10px;
+  border: 1px;
+  border-color: @secondary;
+}
+
+prompt {
+  text-color: @accent;
+}
+
+listview {
+  columns: 2;
+  lines: 7;
+  spacing: 8px;
+  margin: 14px 0 0 0;
+}
+
+element {
+  padding: 10px 12px;
+  border-radius: 9px;
+}
+
+element selected.normal {
+  background-color: @bg-alt;
+  border: 1px;
+  border-color: @accent;
+  text-color: @accent;
+}

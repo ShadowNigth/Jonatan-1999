@@ -1,0 +1,10 @@
+/* 🦊 Kitsune Go Wayland — GTK4 Dark Anime Palette (Crimson Shonen) */
+@define-color accent_color #ff1e42;
+@define-color accent_bg_color #ff1e42;
+@define-color accent_fg_color #090812;
+@define-color window_bg_color #09090d;
+@define-color window_fg_color #f8fafc;
+@define-color view_bg_color #131118;
+@define-color view_fg_color #f8fafc;
+@define-color headerbar_bg_color #131118;
+@define-color headerbar_fg_color #f8fafc;

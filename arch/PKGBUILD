@@ -1,0 +1,56 @@
+# Maintainer: Kitsune Go Wayland Contributors
+pkgname=kitsune-go-wayland
+pkgver=2.0.1
+pkgrel=1
+pkgdesc="Escritorio Anime Tabbed puro en Go para Wayland (Waybar Kanji, Rofi, Rice Studio, Btop++, Yazi y Neovim Go — sin Sway ni Dock)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ShadowNigth/Jonatan-1999"
+license=('MIT')
+provides=('kitsune-de')
+conflicts=('kitsune-de')
+depends=(
+  'glibc'
+  'bash'
+  'dbus'
+  'polkit'
+  'mesa'
+  'cage'
+  'weston'
+  'chromium'
+  'xorg-xwayland'
+  'ttf-jetbrains-mono-nerd'
+  'noto-fonts-cjk'
+  'noto-fonts-emoji'
+)
+makedepends=('go')
+optdepends=(
+  'btop: Monitor de recursos Btop++ sincronizado con la paleta Anime'
+  'yazi: Gestor de archivos Yazi sincronizado con la paleta Anime'
+  'neovim: Editor modal Neovim Go Studio'
+  'kitty: Emulador de terminal GPU'
+  'openbox: Soporte de pantalla completa para la sesión X11 de respaldo'
+  'papirus-icon-theme: Tema de iconos oscuro'
+  'bibata-cursor-theme-bin: Cursor Bibata-Modern-Ice (AUR)'
+)
+source=()
+sha256sums=()
+
+build() {
+  cd "${startdir}/.."
+  export CGO_ENABLED=0
+  go build -trimpath -ldflags="-s -w" -o "${srcdir}/kitsune-de" ./cmd/kitsune-de
+  go build -trimpath -ldflags="-s -w" -o "${srcdir}/kitsune-ctl" ./cmd/kitsune-ctl
+}
+
+package() {
+  install -Dm755 "${srcdir}/kitsune-de" "${pkgdir}/usr/bin/kitsune-de"
+  install -Dm755 "${srcdir}/kitsune-ctl" "${pkgdir}/usr/bin/kitsune-ctl"
+  install -Dm755 "${startdir}/kitsune-session" "${pkgdir}/usr/bin/kitsune-session"
+
+  install -Dm644 "${startdir}/kitsune-de.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-de.desktop"
+  install -Dm644 "${startdir}/kitsune-de-x11.desktop" "${pkgdir}/usr/share/xsessions/kitsune-de-x11.desktop"
+  install -Dm644 "${startdir}/kitsune-studio.desktop" "${pkgdir}/usr/share/applications/kitsune-studio.desktop"
+
+  install -d "${pkgdir}/usr/share/kitsune-de/wallpapers"
+  install -Dm644 "${startdir}/../internal/ui/static/wallpapers/"*.jpg "${pkgdir}/usr/share/kitsune-de/wallpapers/"
+}

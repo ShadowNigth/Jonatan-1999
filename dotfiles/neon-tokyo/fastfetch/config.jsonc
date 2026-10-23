@@ -1,0 +1,27 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "kitty",
+    "source": "~/.config/kitsune-de/wallpapers/kitsune-avatar.jpg",
+    "width": 26,
+    "padding": { "top": 1, "left": 2 }
+  },
+  "display": {
+    "separator": " ❯ ",
+    "color": { "keys": "#00f0ff", "title": "#ff2a85" }
+  },
+  "modules": [
+    "title",
+    "separator",
+    { "type": "os", "key": "󰣇 Distro" },
+    { "type": "kernel", "key": " Kernel" },
+    { "type": "wm", "key": "🦊 Wayland DE", "format": "Kitsune Go Wayland (Tabbed • No Dock)" },
+    { "type": "custom", "key": "🌸 Tema Anime", "format": "Cyberpunk Neon Tokyo (ネオ東京 // 2099)" },
+    { "type": "shell", "key": " Shell" },
+    { "type": "terminal", "key": " Terminal" },
+    { "type": "cpu", "key": "󰻠 CPU" },
+    { "type": "memory", "key": "󰍛 Memoria" },
+    "break",
+    "colors"
+  ]
+}

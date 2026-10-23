@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kitsune Go Wayland // Escritorio Anime Tabbed en Go para Arch Linux</title>
+  <link rel="stylesheet" href="/css/desktop.css" />
+</head>
+<body class="booting">
+  <!-- Wallpaper Layers for smooth cross-fade -->
+  <div id="wallpaper-layer" class="wallpaper-layer"></div>
+  <div id="wallpaper-vignette" class="wallpaper-vignette"></div>
+
+  <!-- Ambient Anime Particle Canvas (Rain / Sakura / Embers / NERV HUD) -->
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- Subtle Desktop Background Widget (visible on empty workspaces / floating mode) -->
+  <div id="eww-widget" class="eww-widget">
+    <div class="eww-jp" id="eww-jp">ネオ東京 // 2099</div>
+    <div class="eww-clock" id="eww-clock">00:00</div>
+    <div class="eww-sub" id="eww-sub">Arch Linux • Kitsune Go Wayland • Modo Tabbed</div>
+    <div class="eww-shortcuts">
+      <span><kbd>Alt+Space</kbd> Rofi</span>
+      <span><kbd>Alt+Tab</kbd> Siguiente Pestaña</span>
+      <span><kbd>Alt+Enter</kbd> Kitty</span>
+      <span><kbd>Alt+W</kbd> Tabbed</span>
+      <span><kbd>Alt+1..5</kbd> Workspaces</span>
+    </div>
+  </div>
+
+  <!-- Top Waybar (with Kanji Workspaces 一 二 三 四 五, Rofi Launcher & Live Telemetry) -->
+  <header id="waybar" class="waybar">
+    <div class="waybar-left">
+      <button id="btn-rofi" class="wb-pill wb-arch" title="Abrir Lanzador Rofi (Alt+Space)">
+        <svg class="arch-svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+          <path d="M12 2c-.88 2.16-1.42 3.57-2.4 5.66.6.64 1.34 1.38 2.53 2.22-1.28-.53-2.16-1.06-2.81-1.61-1.25 2.61-3.21 6.33-7.32 13.73 3.16-1.82 5.61-2.94 7.9-3.37-.1-.42-.15-.88-.15-1.36 0-2.1 1.15-3.8 2.56-3.8 1.42 0 2.56 1.7 2.56 3.8 0 .48-.05.94-.15 1.36 2.27.43 4.73 1.55 7.88 3.37-.62-1.15-1.18-2.18-1.71-3.17-.84-.65-1.71-1.49-3.49-2.4 1.22.32 2.1.69 2.78 1.1C15.17 8.18 14.37 6.3 12 2z"/>
+        </svg>
+        <span>Kitsune Go</span>
+      </button>
+
+      <div id="wb-workspaces" class="wb-workspaces" role="tablist" aria-label="Espacios de trabajo Kanji">
+        <button class="ws-btn active" data-ws="1" title="Workspace 1 (Alt+1)">一</button>
+        <button class="ws-btn" data-ws="2" title="Workspace 2 (Alt+2)">二</button>
+        <button class="ws-btn" data-ws="3" title="Workspace 3 (Alt+3)">三</button>
+        <button class="ws-btn" data-ws="4" title="Workspace 4 (Alt+4)">四</button>
+        <button class="ws-btn" data-ws="5" title="Workspace 5 (Alt+5)">五</button>
+      </div>
+
+      <button id="btn-layout" class="wb-pill wb-layout" title="Alternar modo Tabbed / Tiling / Flotante / Monocle (Alt+T)">
+        <span class="wb-dot"></span>
+        <span id="wb-layout-label">TABBED</span>
+      </button>
+
+      <div id="wb-active-win" class="wb-pill wb-win-title">
+        <span class="wb-win-icon">🦊</span>
+        <span id="wb-win-text">Kitsune Rice Studio</span>
+      </div>
+    </div>
+
+    <div class="waybar-center">
+      <button id="btn-mini-radio" class="wb-pill wb-radio" title="Reproducir/Pausar Kitsune Anime Synth">
+        <span class="eq-bars" id="wb-eq">
+          <i></i><i></i><i></i>
+        </span>
+        <span id="wb-radio-label">Synth Off</span>
+      </button>
+      <div class="wb-pill wb-clock" id="wb-clock" title="Hora local del sistema">
+        <span id="wb-clock-text">--:--</span>
+      </div>
+    </div>
+
+    <div class="waybar-right">
+      <button id="btn-quick-theme" class="wb-pill wb-theme" title="Cambiar tema Anime en vivo">
+        <span>🌸</span>
+        <span id="wb-theme-label">Cyberpunk Neon Tokyo</span>
+      </button>
+
+      <button id="btn-wb-sysmon" class="wb-pill wb-telemetry" title="Abrir Btop++ Monitor">
+        <span class="tel-item">CPU <strong id="wb-cpu">0%</strong></span>
+        <span class="tel-sep">•</span>
+        <span class="tel-item">RAM <strong id="wb-ram">0%</strong></span>
+      </button>
+
+      <button id="btn-notif-drawer" class="wb-pill wb-icon-btn" title="Centro de Control &amp; Notificaciones">
+        <span>🔔</span>
+        <span id="notif-badge" class="notif-badge hidden">0</span>
+      </button>
+
+      <button id="btn-lock" class="wb-pill wb-icon-btn" title="Bloquear pantalla Anime (Alt+L)">
+        <span>🔒</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Full-Height Workspace Stage (No Bottom Dock — Pure Tabbed Wayland Desktop) -->
+  <main id="desktop-stage" class="desktop-stage" aria-label="Área de escritorio Kitsune Go Wayland">
+    <div id="kitsune-tabbar" class="kitsune-tabbar" role="tablist" aria-label="Pestañas Kitsune Go Wayland"></div>
+  </main>
+
+  <!-- Rofi Wayland Anime Launcher Modal -->
+  <div id="rofi-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Lanzador Rofi">
+    <div class="rofi-modal">
+      <div class="rofi-header">
+        <span class="rofi-prompt">󰣇  rofi ❯</span>
+        <input id="rofi-input" type="text" placeholder="Buscar app, tema anime o acción (rice, btop, yazi, nvim, sakura, eva)..." autocomplete="off" />
+        <kbd class="rofi-esc">ESC</kbd>
+      </div>
+      <div id="rofi-list" class="rofi-list"></div>
+    </div>
+  </div>
+
+  <!-- Notification Toast Container & Side Control Drawer -->
+  <div id="toast-stack" class="toast-stack"></div>
+
+  <aside id="swaync-drawer" class="swaync-drawer hidden" aria-label="Panel de control y notificaciones">
+    <div class="swaync-top">
+      <div class="swaync-profile">
+        <img src="/wallpapers/kitsune-avatar.jpg" alt="Kitsune Avatar" class="swaync-avatar" />
+        <div>
+          <div class="swaync-user" id="nc-user">kitsune@arch</div>
+          <div class="swaync-host" id="nc-uptime">Kitsune Go Wayland</div>
+        </div>
+      </div>
+      <button id="btn-clear-notifs" class="nc-mini-btn">Limpiar</button>
+    </div>
+
+    <div class="swaync-toggles">
+      <button class="nc-toggle active" id="nc-btn-tabbed">🗂️ Tabbed</button>
+      <button class="nc-toggle active" id="nc-btn-particles">✨ Partículas</button>
+      <button class="nc-toggle active" id="nc-btn-blur">💧 Cristal Blur</button>
+      <button class="nc-toggle active" id="nc-btn-glow">🌟 Bordes Glow</button>
+    </div>
+
+    <div class="swaync-section-title">Notificaciones Recientes</div>
+    <div id="swaync-list" class="swaync-list"></div>
+  </aside>
+
+  <!-- Right-Click Desktop Context Menu -->
+  <div id="ctx-menu" class="ctx-menu hidden">
+    <button data-ctx="open:settings"><span>🎨</span> Kitsune Rice Studio</button>
+    <button data-ctx="open:sysmon"><span>📊</span> Btop++ Monitor</button>
+    <button data-ctx="open:files"><span>📁</span> Yazi File Manager</button>
+    <button data-ctx="open:nvim"><span>📝</span> Neovim Go Studio</button>
+    <button data-ctx="open:terminal"><span>&gt;_</span> Nueva Terminal Kitty</button>
+    <button data-ctx="open:rofi"><span>󰣇</span> Abrir Lanzador Rofi</button>
+    <div class="ctx-sep"></div>
+    <button data-ctx="action:next-theme"><span>🌸</span> Siguiente Tema Anime</button>
+    <button data-ctx="action:toggle-layout"><span>🗂️</span> Alternar Modo Tabbed / Tiling</button>
+    <button data-ctx="action:lock"><span>🔒</span> Bloquear Pantalla</button>
+  </div>
+
+  <!-- Kitsune Go Wayland Anime Lockscreen -->
+  <div id="lockscreen" class="lockscreen hidden">
+    <div class="lock-card">
+      <div class="lock-ring">
+        <img src="/wallpapers/kitsune-avatar.jpg" alt="Kitsune Profile" />
+      </div>
+      <div class="lock-time" id="lock-time">00:00</div>
+      <div class="lock-date" id="lock-date">Jueves, 22 de Octubre</div>
+      <div class="lock-jp" id="lock-jp">狐 Kitsune Go Wayland // Arch Linux</div>
+      <form id="lock-form" class="lock-form">
+        <input id="lock-pass" type="password" placeholder="Pulsa Enter o haz clic para desbloquear..." autocomplete="off" />
+        <button type="submit">Desbloquear ❯</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/audio.js"></script>
+  <script src="/js/wm.js"></script>
+  <script src="/js/apps.js"></script>
+  <script src="/js/desktop.js"></script>
+</body>
+</html>

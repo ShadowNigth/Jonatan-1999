@@ -1,0 +1,62 @@
+/* 🦊 Kitsune Go Wayland — Lanzador Rofi (Cyberpunk Neon Tokyo • ネオ東京 // 2099) */
+configuration {
+  modi: "drun,run";
+  show-icons: true;
+  icon-theme: "Papirus-Dark";
+  display-drun: "󰣇  Kitsune Go ❯";
+  drun-display-format: "{name}";
+  font: "JetBrainsMono Nerd Font 11";
+}
+
+* {
+  bg: #0b0916EA;
+  bg-alt: #131026F2;
+  fg: #eef6ff;
+  fg-muted: #8f9bb8;
+  accent: #00f0ff;
+  secondary: #ff2a85;
+  background-color: transparent;
+  text-color: @fg;
+}
+
+window {
+  width: 620px;
+  background-color: @bg;
+  border: 2px;
+  border-color: @accent;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+inputbar {
+  children: [prompt, entry];
+  background-color: @bg-alt;
+  border-radius: 10px;
+  padding: 11px 14px;
+  spacing: 10px;
+  border: 1px;
+  border-color: @secondary;
+}
+
+prompt {
+  text-color: @accent;
+}
+
+listview {
+  columns: 2;
+  lines: 7;
+  spacing: 8px;
+  margin: 14px 0 0 0;
+}
+
+element {
+  padding: 10px 12px;
+  border-radius: 9px;
+}
+
+element selected.normal {
+  background-color: @bg-alt;
+  border: 1px;
+  border-color: @accent;
+  text-color: @accent;
+}

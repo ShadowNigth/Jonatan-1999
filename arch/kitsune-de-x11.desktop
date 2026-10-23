@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Kitsune Go
+Comment=Escritorio Anime Tabbed Kitsune Go (Modo X11 de compatibilidad)
+Exec=/usr/bin/kitsune-session
+TryExec=/usr/bin/kitsune-session
+Type=Application
+DesktopNames=KitsuneGoWayland

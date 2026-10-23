@@ -1,0 +1,62 @@
+/* 🦊 Kitsune Go Wayland — Lanzador Rofi (Sakura Catppuccin • 桜ローファイ // 宵) */
+configuration {
+  modi: "drun,run";
+  show-icons: true;
+  icon-theme: "Papirus-Dark";
+  display-drun: "󰣇  Kitsune Go ❯";
+  drun-display-format: "{name}";
+  font: "JetBrainsMono Nerd Font 11";
+}
+
+* {
+  bg: #181825EA;
+  bg-alt: #1e1e2eF2;
+  fg: #cdd6f4;
+  fg-muted: #9399b2;
+  accent: #f5c2e7;
+  secondary: #cba6f7;
+  background-color: transparent;
+  text-color: @fg;
+}
+
+window {
+  width: 620px;
+  background-color: @bg;
+  border: 2px;
+  border-color: @accent;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+inputbar {
+  children: [prompt, entry];
+  background-color: @bg-alt;
+  border-radius: 10px;
+  padding: 11px 14px;
+  spacing: 10px;
+  border: 1px;
+  border-color: @secondary;
+}
+
+prompt {
+  text-color: @accent;
+}
+
+listview {
+  columns: 2;
+  lines: 7;
+  spacing: 8px;
+  margin: 14px 0 0 0;
+}
+
+element {
+  padding: 10px 12px;
+  border-radius: 9px;
+}
+
+element selected.normal {
+  background-color: @bg-alt;
+  border: 1px;
+  border-color: @accent;
+  text-color: @accent;
+}
