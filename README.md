@@ -181,30 +181,24 @@ cd Jonatan-1999
 ./scripts/install.sh --deps     # --deps instala las dependencias con pacman
 ```
 
-Si el clon por defecto te trae solo el `README.md`, añade la rama:
-`git clone -b arena/5224a2d1-jonatan-1999 https://github.com/ShadowNigth/Jonatan-1999.git`.
-
 O en un solo paso, sin clonar a mano (el instalador se clona a sí mismo en un
 directorio temporal y lo borra al terminar):
 
 ```bash
-# mientras el proyecto vive en la rama del PR (main solo tiene el README)
-curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/arena/5224a2d1-jonatan-1999/scripts/install.sh \
-  | SWAYDESK_BRANCH=arena/5224a2d1-jonatan-1999 bash -s -- --deps
-
-# una vez fusionado en main
 curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scripts/install.sh \
   | bash -s -- --deps
 ```
 
-> **Si `curl` devuelve «404 Not Found»** es porque el código todavía no está en
-> `main` (esa rama solo tiene el README del perfil): usa la primera variante o
-> clona la rama a mano:
->
-> ```bash
-> git clone -b arena/5224a2d1-jonatan-1999 https://github.com/ShadowNigth/Jonatan-1999.git
-> cd Jonatan-1999 && ./scripts/install.sh --deps
-> ```
+Para instalar otra rama o etiqueta, se le pasa al instalador:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scripts/install.sh \
+  | SWAYDESK_BRANCH=v1.0.0 bash -s -- --deps
+```
+
+> Si `curl` responde «404 Not Found», comprueba que la rama indicada en la URL
+> contiene `scripts/install.sh`; puedes clonar y ejecutar el script en local con
+> `git clone -b <rama> https://github.com/ShadowNigth/Jonatan-1999.git`.
 
 | Opción | Efecto |
 | --- | --- |
