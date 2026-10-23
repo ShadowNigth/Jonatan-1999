@@ -55,6 +55,13 @@ if have xdg-desktop-portal-wlr; then
     quiet /usr/lib/xdg-desktop-portal-wlr
 fi
 
+# --- Fondo animado (GIF, vídeo o escena) -----------------------------------
+# El demonio dibuja detrás de las ventanas con wlr-layer-shell; si no hay
+# compositor compatible o el fondo es estático, no hace nada.
+if have swaydesk; then
+    quiet swaydesk wallpaper daemon
+fi
+
 # --- Fondo de pantalla de reserva (si no lo pone sway) ---------------------
 if have swaybg && [ -n "$SWAYDESK_WALLPAPER" ] && [ -f "$SWAYDESK_WALLPAPER" ]; then
     quiet swaybg -m fill -i "$SWAYDESK_WALLPAPER"

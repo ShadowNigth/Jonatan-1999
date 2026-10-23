@@ -27,12 +27,28 @@ cmd/swaymenu     lanzador: busca, puntúa y lanza
 cmd/swayctl      panel de control: 5 pestañas y acciones sobre sway
 cmd/swayclip     portapapeles: lista, filtra, copia, borra
 
+internal/wayland cliente Wayland puro: conexión, registry, xdg-shell, shm y
+                 wlr-layer-shell (capa background para el fondo animado)
+internal/wallpaper motor de fondos de pantalla
+  scenes.go      11 escenas procedurales sobre un Canvas RGB
+  gif.go         carga de GIF animado (fotogramas ya compuestos)
+  video.go       decodificación con ffmpeg → tramas RGB24 en memoria
+  render.go      protocolos kitty y sixel, PNG, escalado y recorte
+  engine.go      Spec/Engine: una sola API para escena, imagen, GIF y vídeo
+  run.go         reproducción en terminal y demonio sobre layer-shell
+  daemon.go      PID, arranque/parada y tamaño de la salida vía IPC
+internal/gallery selectores compartidos (galería de temas y de fondos)
+internal/adaptive paletas derivadas de imágenes: cuantización, HSL, contraste
+
 internal/ui      toolkit TUI (lo más grande del proyecto)
   width.go       ancho de celdas (CJK, emoji, combinantes), truncado, wrap
   style.go       colores 24-bit → 256, estilos, bordes, JoinHorizontal
   term.go        modo crudo, pantalla alternativa, tamaño, dibujado de frames
   input.go       decodificación de teclas y secuencias de escape
-  theme.go       8 paletas + iconos Nerd Font / Unicode
+  theme.go       tema, iconos Nerd Font / Unicode
+  palettes.go    40+ paletas por categoría con registro dinámico
+  decor.go       degradados, muestras, ventana de ejemplo, cajas
+  imageview.go   imágenes en terminal (kitty/sixel/medios bloques)
   fuzzy.go       emparejamiento difuso con puntuación
   panel.go       marcos con título y pie, pistas de teclado, scrollbar
   select.go      lista seleccionable con filtro y modo múltiple
@@ -159,12 +175,15 @@ que lo usado ayer gana a lo usado cien veces hace un mes.
 | TUI en lugar de GTK/Qt | Coherente con sway, rápido en cualquier hardware, se puede probar en un pty. |
 | Plantillas embebidas con `embed` | El binario es autosuficiente: se puede instalar sin el código fuente. |
 | `syscall` directo para modo crudo | Evita `golang.org/x/term`; el struct `Termios` de Linux es estable. |
-| Sin modo demonio | Waybar consulta bajo demanda; nada que reiniciar ni supervisar. |
+| Fondo animado en un demonio aparte | Es el único proceso que necesita Wayland nativo; si el compositor no lo soporta, sway sigue mostrando un fotograma estático. |
+| Opacidad en las plantillas, no por IPC | sway no permite cambiar el alpha de una ventana ya abierta; escribir `for_window` al generar la configuración es lo único fiable. |
+| Escenas procedurales en vez de vídeos de regalo | Sin binarios pesados en el repositorio y adaptadas a la paleta activa. Los GIF y vídeos del usuario se reproducen igual. |
+| `blur`/`rounding` solo en swayfx | Sway no implementa desenfoque ni esquinas; se detecta el compositor y las líneas quedan comentadas si no aplica. |
 
 ## Pruebas
 
 ```bash
-go test ./...          # 49 funciones de prueba, más de 150 comprobaciones
+go test ./...          # incluye decenas de miles de comprobaciones internas
 go test -race ./...    # IPC y bucle de teclado concurrentes
 ```
 
@@ -181,3 +200,10 @@ Cobertura destacada:
   instalación con respaldos y `apply` sobre directorio vacío.
 - `launcher`: `.desktop` (localización, `NoDisplay`, `Hidden`), `Exec` con
   comillas y códigos `%f`, historial persistente y recortado, `PATH`.
+- `wayland`: cabeceras de mensaje, alineación a 4 bytes de strings, decodificación
+  de eventos, descriptores y detección de compositor sin servidor.
+- `wallpaper`: las 11 escenas (tamaño, búfer y no-negro), `ParseSpec` con sus
+  formatos y errores, ciclo de vida del motor para escena e imagen, GIF animado
+  de dos fotogramas, protocolos kitty (troceado) y sixel, vista previa y escalado.
+- `adaptive`: paleta generada desde una imagen tris-color, colores válidos,
+  gradiente, guardado en TOML y error con archivo inexistente.

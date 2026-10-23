@@ -1,0 +1,188 @@
+package wallpaper
+
+import (
+	"fmt"
+	"image"
+	"image/gif"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// Still es una imagen fija ya cargada.
+type Still struct {
+	Path string
+	Img  image.Image
+	W, H int
+}
+
+// LoadStill abre una imagen (PNG/JPEG/GIF) y devuelve su primer fotograma.
+func LoadStill(path string) (*Still, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	img, _, err := image.Decode(f)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+	}
+	b := img.Bounds()
+	return &Still{Path: path, Img: img, W: b.Dx(), H: b.Dy()}, nil
+}
+
+// GIF es un GIF animado cargado en memoria, listo para dibujar.
+type GIF struct {
+	Path   string
+	frames []*image.RGBA
+	delays []time.Duration
+	W, H   int
+	total  time.Duration
+	// Loop indica si el GIF debe repetirse al terminar (siempre true por ahora).
+	Loop bool
+}
+
+// LoadGIF carga y decodifica un GIF animado.
+//
+// Los fotogramas se componen siguiendo el método de disposición del estándar,
+// de modo que los fotogramas parciales (los que solo contienen la zona que
+// cambia) se dibujan correctamente.
+func LoadGIF(path string) (*GIF, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	g, err := gif.DecodeAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+	}
+	if len(g.Image) == 0 {
+		return nil, fmt.Errorf("el gif no tiene fotogramas: %s", path)
+	}
+	width, height := g.Config.Width, g.Config.Height
+	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
+	frames := make([]*image.RGBA, 0, len(g.Image))
+	delays := make([]time.Duration, 0, len(g.Image))
+
+	var prev *image.RGBA
+	for i, frame := range g.Image {
+		if i > 0 && prev != nil {
+			disposal := byte(0)
+			if i-1 < len(g.Disposal) {
+				disposal = g.Disposal[i-1]
+			}
+			switch disposal {
+			case gif.DisposalBackground:
+				// Rellenar con el color de fondo del fotograma anterior.
+				b := g.Image[i-1].Bounds()
+				var fillImage = image.NewUniform(g.Image[i-1].Palette[0])
+				if len(g.Image[i-1].Palette) > 0 {
+					for y := b.Min.Y; y < b.Max.Y; y++ {
+						for x := b.Min.X; x < b.Max.X; x++ {
+							canvas.Set(x, y, fillImage)
+						}
+					}
+				}
+			case gif.DisposalPrevious:
+				copy(canvas.Pix, prev.Pix)
+			}
+		}
+		drawOver(canvas, frame)
+		snapshot := image.NewRGBA(canvas.Bounds())
+		copy(snapshot.Pix, canvas.Pix)
+		frames = append(frames, snapshot)
+		prev = snapshot
+
+		d := time.Duration(0)
+		if i < len(g.Delay) {
+			d = time.Duration(g.Delay[i]) * 10 * time.Millisecond
+		}
+		if d <= 0 {
+			d = 100 * time.Millisecond
+		}
+		delays = append(delays, d)
+	}
+	total := time.Duration(0)
+	for _, d := range delays {
+		total += d
+	}
+	return &GIF{Path: path, frames: frames, delays: delays, W: width, H: height, total: total, Loop: true}, nil
+}
+
+// drawOver compone un fotograma parcial sobre el lienzo respetando su paleta y
+// el índice de transparencia.
+func drawOver(dst *image.RGBA, src *image.Paletted) {
+	b := src.Bounds()
+	ti := transparencyIndex(src)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			idx := int(src.ColorIndexAt(x, y))
+			if idx == ti {
+				continue
+			}
+			dst.Set(x, y, src.At(x, y))
+		}
+	}
+}
+
+// transparencyIndex busca el índice transparente en la paleta del fotograma.
+func transparencyIndex(src *image.Paletted) int {
+	for i, c := range src.Palette {
+		if _, _, _, a := c.RGBA(); a == 0 {
+			return i
+		}
+	}
+	return -1
+}
+
+// FrameAt devuelve el fotograma y su duración para un instante de tiempo.
+func (g *GIF) FrameAt(t time.Duration) (image.Image, time.Duration) {
+	if len(g.frames) == 0 {
+		return nil, time.Second
+	}
+	if g.total <= 0 {
+		return g.frames[0], time.Second
+	}
+	t = t % g.total
+	for i, d := range g.delays {
+		if t < d {
+			return g.frames[i], d
+		}
+		t -= d
+	}
+	return g.frames[len(g.frames)-1], g.delays[len(g.delays)-1]
+}
+
+// Frame devuelve el fotograma i (con ajuste circular).
+func (g *GIF) Frame(i int) image.Image {
+	if len(g.frames) == 0 {
+		return nil
+	}
+	return g.frames[((i%len(g.frames))+len(g.frames))%len(g.frames)]
+}
+
+// Count devuelve el número de fotogramas.
+func (g *GIF) Count() int { return len(g.frames) }
+
+// Duration devuelve la duración total del bucle.
+func (g *GIF) Duration() time.Duration { return g.total }
+
+// IsAnimated indica si el GIF tiene más de un fotograma.
+func (g *GIF) IsAnimated() bool { return len(g.frames) > 1 }
+
+// IsGIF indica si la ruta parece un GIF por su extensión.
+func IsGIF(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".gif")
+}
+
+// Supported extiende la comprobación a los formatos que Go decodifica de serie.
+func Supported(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".bmp",
+		".mp4", ".webm", ".mkv", ".mov":
+		return true
+	}
+	return false
+}

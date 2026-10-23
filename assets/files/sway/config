@@ -11,7 +11,8 @@ set $term {{TERMINAL}}
 set $menu {{LAUNCHER}}
 set $menu_all swaymenu --float --commands
 set $power swaymenu --power
-set $themes swaymenu --themes
+set $themes swaydesk theme --gallery
+set $wall swaydesk wallpaper --gallery
 set $ctl swayctl
 set $clip swayclip
 set $lock swaylock -f -c '{{THEME_BG_HEX}}'
@@ -43,8 +44,12 @@ focused_border_color {{THEME_ACCENT_HEX}}
 urgent_border_color {{THEME_ERR_HEX}}
 hide_edge_borders smart
 
-gaps inner 6
-gaps outer 8
+# Esquinas y desenfoque: se activan solos en swayfx; en sway puro quedan comentados.
+{{FX_ROUNDING_LINE}}
+{{FX_BLUR_LINE}}
+
+gaps inner {{GAPS_INNER}}
+gaps outer {{GAPS_OUTER}}
 smart_gaps on
 smart_borders on
 
@@ -56,8 +61,9 @@ mouse_warping output
 focus_wrapping yes
 
 client.focused          {{THEME_ACCENT_HEX}} {{THEME_ACCENT_HEX}} {{THEME_BG_HEX}} {{THEME_ACCENT_HEX}} {{THEME_ACCENT_HEX}}
-client.focused_inactive {{THEME_BG_SEL_HEX}}  {{THEME_BG_SEL_HEX}}  {{THEME_FG_HEX}} {{THEME_BG_SEL_HEX}}  {{THEME_BG_SEL_HEX}}
-client.unfocused        {{THEME_BG_ALT_HEX}}  {{THEME_BG_ALT_HEX}}  {{THEME_FG_DIM_HEX}} {{THEME_BG_ALT_HEX}} {{THEME_BG_ALT_HEX}}
+# Los bordes admiten alfa (#RRGGBBAA): ventanas sin foco más discretas.
+client.focused_inactive {{THEME_BG_SEL_HEX}}{{INACTIVE_ALPHA_HEX}}  {{THEME_BG_SEL_HEX}}  {{THEME_FG_HEX}} {{THEME_BG_SEL_HEX}}  {{THEME_BG_SEL_HEX}}
+client.unfocused        {{THEME_BG_ALT_HEX}}{{BAR_ALPHA_HEX}}  {{THEME_BG_ALT_HEX}}  {{THEME_FG_DIM_HEX}} {{THEME_BG_ALT_HEX}} {{THEME_BG_ALT_HEX}}
 client.urgent           {{THEME_ERR_HEX}}     {{THEME_ERR_HEX}}     {{THEME_BG_HEX}} {{THEME_ERR_HEX}}     {{THEME_ERR_HEX}}
 
 ### Ventanas flotantes de swaydesk #########################################
@@ -66,7 +72,32 @@ for_window [app_id="^swaydesk-menu$"] floating enable, border pixel 2, resize se
 for_window [app_id="^swaydesk-ctl$"] floating enable, border pixel 2, resize set 1080 680, move position center
 for_window [app_id="^swaydesk-clip$"] floating enable, border pixel 2, resize set 820 520, move position center
 for_window [app_id="^swaydesk-run$"] floating enable, border pixel 2, resize set 900 560, move position center
+for_window [app_id="^swaydesk-themes$"] floating enable, border pixel 2, resize set 1040 700, move position center
+for_window [app_id="^swaydesk-wallpapers$"] floating enable, border pixel 2, resize set 1180 740, move position center
 for_window [app_id="^swaydesk-dialog$"] floating enable, border pixel 2, resize set 560 220, move position center
+
+### Translucidez por aplicación ############################################
+# El fondo animado se ve a través de las ventanas compatibles.
+for_window [app_id="foot"] opacity {{TERM_OPACITY}}
+for_window [app_id="org.wezfurlong.wezterm"] opacity {{TERM_OPACITY}}
+for_window [app_id="Alacritty"] opacity {{TERM_OPACITY}}
+for_window [app_id="kitty"] opacity {{TERM_OPACITY}}
+for_window [class="Thunar"] opacity {{INACTIVE_OPACITY}}
+for_window [class="org.gnome.Nautilus" title=".*"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="pavucontrol"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="com.github.hluk.copyq"] opacity {{INACTIVE_OPACITY}}
+for_window [class="Pavucontrol"] opacity {{INACTIVE_OPACITY}}
+for_window [class="Code"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="code"] opacity {{INACTIVE_OPACITY}}
+for_window [class="Spotify"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="imv"] opacity {{INACTIVE_OPACITY}}
+# Ventanas flotantes propias de swaydesk: siempre translúcidas.
+for_window [app_id="^swaydesk-menu$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-ctl$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-clip$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-run$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-themes$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-wallpapers$"] opacity {{TERM_OPACITY}}
 
 ### Atajos de teclado ######################################################
 
@@ -81,6 +112,8 @@ bindsym $mod+Shift+Return exec $term -e $editor
 # swaydesk
 bindsym $mod+p exec $power
 bindsym $mod+t exec $themes
+bindsym $mod+Shift+t exec $themes
+bindsym $mod+Shift+w exec $wall
 bindsym $mod+c exec --no-startup-id $clip
 bindsym $mod+i exec --no-startup-id $ctl
 bindsym $mod+Shift+l exec $lock

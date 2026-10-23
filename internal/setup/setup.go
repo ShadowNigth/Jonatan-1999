@@ -120,6 +120,20 @@ func templateData(cfg *config.Config) map[string]string {
 		"THEME_ERR_HEX":     string(p.Err),
 		"THEME_BORDER_HEX":  string(p.Border),
 
+		"TERM_OPACITY":       opacity(cfg.TerminalOpacity, 0.94),
+		"TERM_ALPHA_HEX":     alphaHex(cfg.TerminalOpacity, 0.94),
+		"BAR_OPACITY":        opacity(cfg.BarOpacity, 0.86),
+		"BAR_ALPHA_HEX":      alphaHex(cfg.BarOpacity, 0.86),
+		"ACTIVE_OPACITY":     opacity(cfg.ActiveOpacity, 1.0),
+		"ACTIVE_ALPHA_HEX":   alphaHex(cfg.ActiveOpacity, 1.0),
+		"INACTIVE_OPACITY":   opacity(cfg.InactiveOpacity, 0.94),
+		"INACTIVE_ALPHA_HEX": alphaHex(cfg.InactiveOpacity, 0.94),
+		"GAPS_INNER":         itoa(defaultInt(cfg.GapsInner, 6)),
+		"GAPS_OUTER":         itoa(defaultInt(cfg.GapsOuter, 8)),
+		"ROUNDING":           itoa(defaultInt(cfg.Rounding, 12)),
+		"FX_ROUNDING_LINE":   fxRounding(cfg),
+		"FX_BLUR_LINE":       fxBlur(cfg),
+
 		"FONT":               font,
 		"FONT_SIZE":          itoa(fontSize - 1),
 		"TERM_FONT_SIZE":     itoa(fontSize),
@@ -154,6 +168,61 @@ func templateData(cfg *config.Config) map[string]string {
 }
 
 func itoa(n int) string { return fmt.Sprintf("%d", n) }
+
+func defaultInt(v, def int) int {
+	if v <= 0 {
+		return def
+	}
+	return v
+}
+
+// opacity normaliza un valor 0..1 y lo formatea para foot/waybar/sway.
+func opacity(v, def float64) string {
+	if v <= 0 || v > 1 {
+		v = def
+	}
+	return fmt.Sprintf("%.2f", v)
+}
+
+// alphaHex devuelve el sufijo hexadecimal de alfa para colores #RRGGBBAA.
+func alphaHex(v, def float64) string {
+	s := opacity(v, def)
+	var f float64
+	fmt.Sscanf(s, "%f", &f)
+	a := int(f*255 + 0.5)
+	if a < 0 {
+		a = 0
+	}
+	if a > 255 {
+		a = 255
+	}
+	return fmt.Sprintf("%02x", a)
+}
+
+// IsSwayfx indica si el compositor es swayfx (sway con blur y esquinas).
+func IsSwayfx() bool {
+	out, err := exec.Command("sway", "--version").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(out)), "swayfx")
+}
+
+// fxRounding genera la línea de esquinas redondeadas solo en swayfx.
+func fxRounding(cfg *config.Config) string {
+	if !IsSwayfx() {
+		return "# esquinas redondeadas: requiere swayfx (corner_radius)"
+	}
+	return fmt.Sprintf("corner_radius %d", defaultInt(cfg.Rounding, 12))
+}
+
+// fxBlur genera la línea de desenfoque de fondo solo en swayfx.
+func fxBlur(cfg *config.Config) string {
+	if !IsSwayfx() || !cfg.Blur {
+		return "# desenfoque de fondo: requiere swayfx (blur enable)"
+	}
+	return "blur enable\nblur_radius 6\nblur_saturation 1.1"
+}
 
 // replaceTokens sustituye todos los marcadores {{CLAVE}} del texto.
 func replaceTokens(text string, data map[string]string) string {

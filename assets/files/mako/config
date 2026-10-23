@@ -2,10 +2,10 @@
 # Paleta generada a partir del tema activo: {{THEME_NAME}}
 
 font={{FONT}} {{NOTIF_FONT_SIZE}}
-background-color={{THEME_BG_HEX}}ee
+background-color={{THEME_BG_HEX}}{{TERM_ALPHA_HEX}}
 text-color={{THEME_FG_HEX}}
-border-color={{THEME_ACCENT_HEX}}
-progress-color=over {{THEME_BG_SEL_HEX}}ff
+border-color={{THEME_ACCENT_HEX}}{{ACTIVE_ALPHA_HEX}}
+progress-color=over {{THEME_BG_SEL_HEX}}{{BAR_ALPHA_HEX}}
 border-size=2
 border-radius=12
 padding=12

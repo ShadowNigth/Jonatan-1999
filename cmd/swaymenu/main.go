@@ -14,6 +14,7 @@ import (
 	"github.com/ShadowNigth/swaydesk/internal/actions"
 	"github.com/ShadowNigth/swaydesk/internal/calc"
 	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/gallery"
 	"github.com/ShadowNigth/swaydesk/internal/launcher"
 	"github.com/ShadowNigth/swaydesk/internal/setup"
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
@@ -59,6 +60,11 @@ func main() {
 		return
 	}
 	if *themes {
+		// Desde sway no hay terminal: se relanza en una ventana flotante.
+		if !ui.IsInteractive() {
+			runFloating(cfg, 96, 34)
+			return
+		}
 		runThemePicker(theme, cfg)
 		return
 	}
@@ -409,11 +415,12 @@ func runPowerMenu(theme *ui.Theme, cfg *config.Config) {
 }
 
 func runThemePicker(theme *ui.Theme, cfg *config.Config) {
-	name, ok, err := actions.ThemePicker(theme, cfg.Theme)
-	if err != nil || !ok || name == "" {
+	// Se usa la misma galería que `swaydesk theme --gallery`.
+	res, err := gallery.ThemeGallery(cfg.Theme, cfg.NerdFont)
+	if err != nil || !res.Applied || res.Key == "" {
 		return
 	}
-	if err := applyTheme(name); err != nil {
+	if err := applyTheme(res.Key); err != nil {
 		actions.Notification("swaydesk", err.Error(), "critical")
 	}
 }

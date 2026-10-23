@@ -33,6 +33,26 @@ type Config struct {
 	Height int
 	Border string
 
+	// Fondo de pantalla animado
+	WallpaperKind     string // scene, image, gif, video, none
+	WallpaperName     string // nombre de la escena
+	WallpaperPath     string // ruta del archivo
+	WallpaperMode     string // fill, fit, stretch, center, tile
+	WallpaperFPS      int
+	WallpaperProto    string // auto, kitty, sixel, ansi
+	WallpaperAdaptive bool
+	WallpaperDir      string
+
+	// Efectos de escritorio
+	TerminalOpacity float64
+	BarOpacity      float64
+	ActiveOpacity   float64
+	InactiveOpacity float64
+	Blur            bool
+	GapsInner       int
+	GapsOuter       int
+	Rounding        int
+
 	// Comportamiento
 	HistorySize  int
 	ShowHidden   bool
@@ -74,10 +94,27 @@ func Default() *Config {
 		HistorySize:    200,
 		ShowHidden:     true,
 		ConfirmPower:   true,
-		Dir:            cfgDir,
-		Path:           filepath.Join(cfgDir, "config.toml"),
-		Cache:          cache,
-		values:         map[string]any{},
+
+		// Fondo animado y efectos por defecto: translúcido pero legible.
+		WallpaperKind:     "scene",
+		WallpaperMode:     "fill",
+		WallpaperFPS:      30,
+		WallpaperProto:    "auto",
+		WallpaperAdaptive: false,
+		WallpaperDir:      filepath.Join(home, "Imágenes", "Fondos"),
+		TerminalOpacity:   0.94,
+		BarOpacity:        0.86,
+		ActiveOpacity:     1.0,
+		InactiveOpacity:   0.94,
+		Blur:              false,
+		GapsInner:         6,
+		GapsOuter:         8,
+		Rounding:          12,
+
+		Dir:    cfgDir,
+		Path:   filepath.Join(cfgDir, "config.toml"),
+		Cache:  cache,
+		values: map[string]any{},
 	}
 }
 
@@ -136,6 +173,20 @@ func (c *Config) apply() {
 			}
 		}
 	}
+	flo := func(key string, dst *float64) {
+		if v, ok := c.values[key]; ok {
+			switch n := v.(type) {
+			case float64:
+				if n >= 0 && n <= 1 {
+					*dst = n
+				}
+			case int:
+				if n >= 0 && n <= 1 {
+					*dst = float64(n)
+				}
+			}
+		}
+	}
 	bl := func(key string, dst *bool) {
 		if v, ok := c.values[key]; ok {
 			if b, ok := v.(bool); ok {
@@ -157,6 +208,22 @@ func (c *Config) apply() {
 	num("ui.bar_font_size", &c.BarFontSize)
 	str("input.keyboard_layout", &c.KeyboardLayout)
 	num("ui.width", &c.Width)
+	str("wallpaper.kind", &c.WallpaperKind)
+	str("wallpaper.name", &c.WallpaperName)
+	str("wallpaper.path", &c.WallpaperPath)
+	str("wallpaper.mode", &c.WallpaperMode)
+	str("wallpaper.dir", &c.WallpaperDir)
+	str("wallpaper.protocol", &c.WallpaperProto)
+	num("wallpaper.fps", &c.WallpaperFPS)
+	bl("wallpaper.adaptive", &c.WallpaperAdaptive)
+	num("effects.gaps_inner", &c.GapsInner)
+	num("effects.gaps_outer", &c.GapsOuter)
+	num("effects.rounding", &c.Rounding)
+	bl("effects.blur", &c.Blur)
+	flo("effects.terminal_opacity", &c.TerminalOpacity)
+	flo("effects.bar_opacity", &c.BarOpacity)
+	flo("effects.active_opacity", &c.ActiveOpacity)
+	flo("effects.inactive_opacity", &c.InactiveOpacity)
 	num("ui.height", &c.Height)
 	str("ui.border", &c.Border)
 	num("launcher.history_size", &c.HistorySize)
@@ -281,7 +348,38 @@ show_hidden = %t
 [input]
 # Distribución del teclado: latam, us, es, de, fr...
 keyboard_layout = %q
-`, c.KeyboardLayout)
+
+[wallpaper]
+# tipo: scene (animado procedural), image, gif, video, none
+kind = %q
+# escena animada: petals, snow, stars, rain, aurora, wave, city, embers, grid, meadow, bubbles
+name = %q
+# ruta para image/gif/video
+path = %q
+mode = %q
+fps = %d
+# protocolo de dibujado: auto, kitty, sixel, ansi
+protocol = %q
+# generar una paleta adaptada al fondo
+adaptive = %t
+# carpeta donde se buscan fondos
+dir = %q
+
+[effects]
+# transparencia de las ventanas (0 = opaco, 1 = invisible)
+terminal_opacity = %.2f
+bar_opacity = %.2f
+active_opacity = %.2f
+inactive_opacity = %.2f
+blur = %t
+gaps_inner = %d
+gaps_outer = %d
+rounding = %d
+`, c.KeyboardLayout,
+		c.WallpaperKind, c.WallpaperName, c.WallpaperPath, c.WallpaperMode,
+		c.WallpaperFPS, c.WallpaperProto, c.WallpaperAdaptive, c.WallpaperDir,
+		c.TerminalOpacity, c.BarOpacity, c.ActiveOpacity, c.InactiveOpacity,
+		c.Blur, c.GapsInner, c.GapsOuter, c.Rounding)
 }
 
 func paletteNames() []string {

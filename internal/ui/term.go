@@ -170,3 +170,9 @@ func (t *Terminal) MoveTo(row, col int) {
 
 // Clear limpia la pantalla y lleva el cursor a casa.
 func (t *Terminal) Clear() { t.Write("\x1b[H\x1b[2J") }
+
+// IsInteractive indica si la entrada estándar es un terminal (para saber si
+// hay que relanzar los selectores en una ventana flotante).
+func IsInteractive() bool {
+	return NewTerminal().IsTTY()
+}

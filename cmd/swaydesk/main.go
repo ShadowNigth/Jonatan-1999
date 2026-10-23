@@ -16,12 +16,15 @@ import (
 	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/actions"
+	"github.com/ShadowNigth/swaydesk/internal/adaptive"
 	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/gallery"
 	"github.com/ShadowNigth/swaydesk/internal/host"
 	"github.com/ShadowNigth/swaydesk/internal/launcher"
 	"github.com/ShadowNigth/swaydesk/internal/setup"
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 	"github.com/ShadowNigth/swaydesk/internal/ui"
+	"github.com/ShadowNigth/swaydesk/internal/wallpaper"
 )
 
 // Version es la versión de swaydesk.
@@ -83,8 +86,10 @@ Configuración
   init [--force] [--only sway|waybar|foot|mako|swaylock]
         Escribe la configuración del escritorio en ~/.config
   apply          Regenera los archivos del tema activo y recarga waybar/sway
-  theme [nombre] Lista las paletas disponibles o cambia la activa
-  config         Muestra las rutas y los valores de configuración
+  theme [nombre]              Lista las paletas o cambia la activa
+  theme --gallery             Galería interactiva de temas (con vista previa)
+  theme --from-wallpaper      Deriva un tema a partir de los colores del fondo
+  config                      Muestra las rutas y los valores de configuración
 
 Sesión
   status [--json|--module M]  Estado del escritorio (sway, CPU, RAM, batería...)
@@ -92,7 +97,10 @@ Sesión
   notify <título> [cuerpo]    Envía una notificación de escritorio
   volume <up|down|mute>       Controla el volumen
   screenshot [region|full]    Captura de pantalla con grim
-  wallpaper <imagen> [modo]   Fondo de pantalla (y lo guarda en config.d)
+  wallpaper <fondo> [modo]    Fondo estático o animado (ver "swaydesk wallpaper help")
+  wallpaper --gallery         Selector de fondos con vista previa animada
+  wallpaper daemon | --stop   Inicia/detiene el fondo animado (live wallpaper)
+  wallpaper --scenes [--json] Escenas animadas disponibles
   lock                        Bloquea la pantalla
   reload                      Recarga la configuración de sway
   power [acción]              Menú de energía (lock, suspend, logout, reboot, poweroff)
@@ -101,6 +109,9 @@ Sesión
 Ejemplos:
   swaydesk init --force && swaymsg reload
   swaydesk theme gruvbox
+  swaydesk theme --gallery
+  swaydesk wallpaper set scene:petals && swaydesk wallpaper daemon
+  swaydesk wallpaper set ~/Imágenes/lofi.gif --live
   swaydesk status --module clock
 
 Atajos por defecto (Super = Mod4):
@@ -109,6 +120,7 @@ Atajos por defecto (Super = Mod4):
   Super+c       portapapeles    Super+i       panel de control
   Super+Shift+l bloquear        Super+q       cerrar ventana
   Super+r       redimensionar    Super+w       pestañas
+  Super+Shift+w fondos           Super+Shift+t galería de temas
 `)
 }
 
@@ -124,6 +136,23 @@ func flagValue(args []string, def string) string {
 		return args[0]
 	}
 	return def
+}
+
+// relaunchInTerminal relanza swaydesk dentro de una ventana flotante cuando no
+// hay terminal interactiva (por ejemplo, al invocarlo desde sway).
+func relaunchInTerminal(cfg *config.Config, appID string, w, h int, args []string) bool {
+	if ui.IsInteractive() {
+		return false
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		must(err)
+	}
+	if err := launcher.LaunchTerminal(cfg.Terminal, appID, "swaydesk", w, h, append([]string{exe}, args...)); err != nil {
+		fmt.Fprintf(os.Stderr, "swaydesk: %v\n", err)
+		return true
+	}
+	return true
 }
 
 // configDir devuelve ~/.config o $XDG_CONFIG_HOME.
@@ -224,39 +253,142 @@ func cmdApply(args []string) {
 func cmdTheme(args []string) {
 	cfg, err := config.Load()
 	must(err)
+	th := ui.NewTheme(cfg.Theme, cfg.NerdFont)
+
+	// Subcomandos nuevos: galería interactiva y tema derivado del fondo.
+	for _, a := range args {
+		switch a {
+		case "--from-wallpaper", "--wallpaper", "-w":
+			must(themeFromWallpaper(cfg, th))
+			return
+		case "--gallery", "-g", "--pick":
+			must(themeGallery(cfg, th))
+			return
+		case "--json":
+			printThemesJSON()
+			return
+		}
+	}
 	if len(args) == 0 {
-		th := ui.NewTheme(cfg.Theme, cfg.NerdFont)
-		fmt.Println(ui.Bold("Paletas disponibles:"))
-		for _, name := range ui.PaletteNames() {
+		printThemeList(cfg, th)
+		return
+	}
+	name := strings.ToLower(args[0])
+	if !ui.IsPalette(name) {
+		fmt.Fprintf(os.Stderr, "swaydesk: paleta desconocida %q\n", name)
+		fmt.Fprintf(os.Stderr, "disponibles: %s\n", strings.Join(ui.PaletteNames(), ", "))
+		os.Exit(1)
+	}
+	p := ui.PaletteByName(name)
+	must(applyTheme(cfg, name))
+	fmt.Printf("%s Tema cambiado a %s %s\n", ui.Style{Fg: th.Palette.Ok}.Render("✔"),
+		ui.Style{Fg: ui.PaletteByName(name).Accent, Bg: ui.PaletteByName(name).Bg}.B().Render(p.Name),
+		ui.Dim("· "+p.Category))
+}
+
+// applyTheme guarda el tema y regenera todos los archivos del escritorio.
+func applyTheme(cfg *config.Config, name string) error {
+	if err := cfg.SaveTheme(name); err != nil {
+		return err
+	}
+	if _, err := setup.Apply(cfg, configDir()); err != nil {
+		return err
+	}
+	// Si el fondo es "theme" se relanza el demonio para usar la escena nueva.
+	if cfg.WallpaperKind == "scene" && wallpaper.RunningPID(cfg.Cache) != 0 {
+		wallpaper.StopDaemon(cfg.Cache)
+		_ = startWallpaperDaemon(cfg)
+	}
+	return nil
+}
+
+func printThemeList(cfg *config.Config, th *ui.Theme) {
+	fmt.Println(ui.Bold("Paletas disponibles:"))
+	for _, cat := range ui.PaletteCategories() {
+		fmt.Printf("\n  %s\n", ui.Style{Fg: th.Palette.Accent}.B().Render(strings.ToUpper(cat)))
+		for _, meta := range ui.PaletteList(cat) {
+			name := meta.Key
 			p := ui.PaletteByName(name)
 			mark := " "
 			if name == cfg.Theme {
-				mark = ui.Style{Fg: th.Palette.Ok}.Render("●")
+				mark = ui.Style{Fg: p.Ok}.Render("●")
 			}
 			swatch := ""
 			for _, c := range []ui.Color{p.Bg, p.BgAlt, p.BgSel, p.Accent, p.Accent2, p.Ok, p.Warn, p.Err} {
 				swatch += ui.Style{Fg: c, Bg: c}.Render("  ")
 			}
-			fmt.Printf(" %s %-12s %-18s %s\n", mark, name, p.Name, swatch)
+			scene := ""
+			if p.Scene != "" {
+				scene = ui.Dim("◍ " + p.Scene)
+			}
+			fmt.Printf(" %s %s %s %s %s\n", mark, ui.PadRight(name, 13), ui.PadRight(p.Name, 18), swatch, scene)
 		}
-		fmt.Println()
-		fmt.Println(ui.Dim("Cambiar tema: swaydesk theme <nombre>   ·   menú interactivo: swaymenu --themes"))
-		return
 	}
-	name := strings.ToLower(args[0])
-	if _, ok := ui.BuiltinPalettes[name]; !ok {
-		fmt.Fprintf(os.Stderr, "swaydesk: paleta desconocida %q\n", name)
-		fmt.Fprintf(os.Stderr, "disponibles: %s\n", strings.Join(ui.PaletteNames(), ", "))
-		os.Exit(1)
+	fmt.Println()
+	fmt.Println(ui.Dim("Cambiar:   swaydesk theme <nombre>"))
+	fmt.Println(ui.Dim("Galería:   swaydesk theme --gallery"))
+	fmt.Println(ui.Dim("Adaptativo: swaydesk theme --from-wallpaper"))
+}
+
+func printThemesJSON() {
+	type entry struct {
+		Key      string `json:"key"`
+		Name     string `json:"name"`
+		Category string `json:"category"`
+		Scene    string `json:"scene,omitempty"`
+		Light    bool   `json:"light"`
+		Adaptive bool   `json:"adaptive,omitempty"`
 	}
-	must(cfg.SaveTheme(name))
-	rest, err := setup.Apply(cfg, configDir())
-	must(err)
-	th := ui.NewTheme(name, cfg.NerdFont)
-	fmt.Printf("%s Tema cambiado a %s\n", ui.Style{Fg: th.Palette.Ok}.Render("✔"), th.Palette.Name)
-	for _, r := range rest {
-		fmt.Printf("  %s\n", ui.Dim(r.Path))
+	var out []entry
+	for _, name := range ui.PaletteNames() {
+		p := ui.PaletteByName(name)
+		out = append(out, entry{name, p.Name, p.Category, p.Scene, p.Light, p.Adaptive})
 	}
+	data, _ := json.MarshalIndent(out, "", "  ")
+	fmt.Println(string(data))
+}
+
+func themeGallery(cfg *config.Config, th *ui.Theme) error {
+	if relaunchInTerminal(cfg, "swaydesk-themes", 92, 32, []string{"theme", "--gallery"}) {
+		return nil
+	}
+	res, err := gallery.ThemeGallery(cfg.Theme, cfg.NerdFont)
+	if err != nil {
+		return err
+	}
+	if !res.Applied {
+		return nil
+	}
+	if err := applyTheme(cfg, res.Key); err != nil {
+		return err
+	}
+	fmt.Printf("%s Tema cambiado a %s\n", ui.Style{Fg: th.Palette.Ok}.Render("✔"),
+		ui.Style{Fg: ui.PaletteByName(res.Key).Accent}.B().Render(ui.PaletteByName(res.Key).Name))
+	return nil
+}
+
+// themeFromWallpaper deriva un tema de los colores dominantes del fondo.
+func themeFromWallpaper(cfg *config.Config, th *ui.Theme) error {
+	path := cfg.WallpaperPath
+	if path == "" {
+		fmt.Println("No hay una imagen de fondo configurada.")
+		fmt.Printf("  %s\n", ui.Dim("Prueba: swaydesk wallpaper set ~/Imágenes/fondo.png --scenes"))
+		return nil
+	}
+	pal, err := adaptive.FromFile(path, "")
+	if err != nil {
+		return err
+	}
+	ui.RegisterPalette("adaptativo", pal)
+	if err := adaptive.Save(pal, filepath.Join(cfg.Dir, "themes", "adaptativo.toml")); err != nil {
+		return err
+	}
+	if err := applyTheme(cfg, "adaptativo"); err != nil {
+		return err
+	}
+	fmt.Printf("%s Tema adaptativo desde %s\n", ui.Style{Fg: th.Palette.Ok}.Render("✔"), filepath.Base(path))
+	fmt.Printf("  %s\n", gallery.DescribeTheme(pal))
+	return nil
 }
 
 // ───────────────────────── status ─────────────────────────
@@ -456,6 +588,25 @@ func printStatus(d *statusData, cfg *config.Config) {
 	row("  red", dst)
 	fmt.Println()
 	fmt.Printf("  %s %s\n\n", label.Render("tema"), d.Theme)
+
+	kind := cfg.WallpaperKind
+	if kind == "" {
+		kind = "scene"
+	}
+	what := cfg.WallpaperName
+	if what == "" {
+		what = cfg.WallpaperPath
+	}
+	if what == "" {
+		what = "(según el tema)"
+	}
+	daemon := "detenido"
+	if wallpaper.RunningPID(cfg.Cache) != 0 {
+		daemon = "activo"
+	}
+	fmt.Printf("  %s %s %s\n", label.Render("fondo"), ui.Style{Fg: p.Accent}.Render(kind+":"+what),
+		ui.Dim("· demonio "+daemon))
+	fmt.Println()
 }
 
 func moduleOutput(name string, d *statusData, cfg *config.Config) string {
@@ -545,6 +696,12 @@ func cmdDoctor(args []string) {
 		{name: "portal wlr", required: false, ok: launcher.HasCommand("xdg-desktop-portal-wlr") ||
 			fileExists("/usr/lib/xdg-desktop-portal-wlr"),
 			detail: "compartir pantalla", fix: "sudo pacman -S xdg-desktop-portal-wlr"},
+		{name: "ffmpeg", required: false, ok: launcher.HasCommand("ffmpeg"),
+			detail: "fondos de vídeo (mp4, webm)", fix: "sudo pacman -S ffmpeg"},
+		{name: "wlr-layer-shell", required: false, ok: wallpaper.DetectDisplayServer().LayerShell,
+			detail: "fondo animado detrás de las ventanas", fix: "usa sway (incluye wlr-layer-shell)"},
+		{name: "swayfx", required: false, ok: setup.IsSwayfx(),
+			detail: "desenfoque y esquinas redondeadas", fix: "opcional: swayfx en el AUR"},
 	}
 
 	okMark := ui.Style{Fg: th.Palette.Ok}.B().Render("✔")
@@ -753,106 +910,4 @@ func bar(value, total float64, width int, th *ui.Theme, color ui.Color) string {
 	fill := ui.Style{Fg: color}.Render(strings.Repeat("█", filled))
 	rest := ui.Style{Fg: th.Palette.BgSel}.Render(strings.Repeat("░", width-filled))
 	return fill + rest
-}
-
-// ───────────────────────── wallpaper ─────────────────────────
-
-// cmdWallpaper aplica un fondo de pantalla a todas las salidas y lo guarda en
-// un archivo dentro de config.d para que se restaure al recargar sway.
-func cmdWallpaper(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "uso: swaydesk wallpaper <imagen> [fill|fit|stretch|center|tile]")
-		fmt.Fprintln(os.Stderr, "     swaydesk wallpaper --list")
-		os.Exit(2)
-	}
-	if args[0] == "--list" || args[0] == "-l" {
-		listWallpapers()
-		return
-	}
-	path := args[0]
-	mode := "fill"
-	if len(args) > 1 {
-		mode = args[1]
-	}
-	switch mode {
-	case "fill", "fit", "stretch", "center", "tile":
-	default:
-		fmt.Fprintf(os.Stderr, "swaydesk: modo de fondo inválido %q\n", mode)
-		os.Exit(2)
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		must(err)
-	}
-	if _, err := os.Stat(abs); err != nil {
-		fmt.Fprintf(os.Stderr, "swaydesk: no se puede leer %s: %v\n", abs, err)
-		os.Exit(1)
-	}
-
-	// 1. Aplicar en caliente mediante IPC (sway dibuja el fondo él mismo).
-	applied := false
-	if c, err := swayipc.Dial(); err == nil {
-		err = c.CommandOK(fmt.Sprintf(`output * bg "%s" %s`, abs, mode))
-		c.Close()
-		if err == nil {
-			applied = true
-		}
-	}
-	// 2. Alternativa: swaybg en segundo plano.
-	if !applied && launcher.HasCommand("swaybg") {
-		must(launcher.StartDetached("swaybg", "-m", mode, "-i", abs))
-		applied = true
-	}
-	if !applied {
-		fmt.Fprintln(os.Stderr, "swaydesk: no hay sesión de sway activa; el fondo se guardará igualmente")
-	}
-
-	// 3. Persistir el ajuste.
-	confDir := filepath.Join(configDir(), "sway", "config.d")
-	must(os.MkdirAll(confDir, 0o755))
-	conf := fmt.Sprintf("# Fondo de pantalla establecido con `swaydesk wallpaper`\noutput * bg \"%s\" %s\n", abs, mode)
-	must(os.WriteFile(filepath.Join(confDir, "50-wallpaper.conf"), []byte(conf), 0o644))
-
-	th := ui.NewTheme("catppuccin", false)
-	fmt.Printf("%s fondo aplicado: %s %s\n", ui.Style{Fg: th.Palette.Ok}.Render("✔"),
-		abs, ui.Dim("("+mode+")"))
-}
-
-// listWallpapers muestra las imágenes de los directorios habituales.
-func listWallpapers() {
-	home, _ := os.UserHomeDir()
-	dirs := []string{
-		filepath.Join(home, "Imágenes", "Fondos"),
-		filepath.Join(home, "Imágenes"),
-		filepath.Join(home, "Pictures", "Wallpapers"),
-		filepath.Join(home, "Pictures"),
-		"/usr/share/backgrounds",
-	}
-	exts := map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".webp": true, ".bmp": true}
-	seen := map[string]bool{}
-	fmt.Println(ui.Bold("Fondos de pantalla encontrados:"))
-	found := 0
-	for _, dir := range dirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if e.IsDir() || !exts[strings.ToLower(filepath.Ext(e.Name()))] {
-				continue
-			}
-			path := filepath.Join(dir, e.Name())
-			if seen[path] {
-				continue
-			}
-			seen[path] = true
-			found++
-			fmt.Printf("  %s\n", path)
-		}
-	}
-	if found == 0 {
-		fmt.Println(ui.Dim("  no se encontraron imágenes en ~/Imágenes ni /usr/share/backgrounds"))
-	}
-	fmt.Println()
-	fmt.Println(ui.Dim("Aplicar: swaydesk wallpaper <ruta> [fill|fit|stretch|center|tile]"))
 }

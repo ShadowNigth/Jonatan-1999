@@ -5,8 +5,9 @@
 **Un escritorio completo para Arch Linux + sway, escrito en Go.**
 
 Lanzador de aplicaciones, panel de control, portapapeles, barra de estado, temas
-y sesión — todo en **cuatro binarios estáticos**, sin dependencias externas de Go
-y sin un solo script de shell.
+adaptativos, fondos animados (GIF y *live wallpapers*) y sesión — todo en
+**cuatro binarios estáticos**, sin dependencias externas de Go y sin un solo
+script de shell.
 
 ![Lanzador de aplicaciones](docs/screenshot-menu.png)
 
@@ -51,9 +52,29 @@ terceros.
   cambio de tema en vivo y chuleta de atajos.
 - **Portapapeles** con soporte de `cliphist`, `clipman` o `wl-paste`, búsqueda,
   vista previa y borrado de entradas.
-- **8 paletas de color** (Catppuccin, Tokyo Night, Nord, Gruvbox, Dracula,
-  Kanagawa, Rosé Pine, Everforest) aplicadas de forma coherente a sway, waybar,
-  foot, mako, swaylock y a las propias TUI.
+- **40+ paletas de color** con estética **anime** (Sakura, Miku, Asuka, Rei,
+  Zero Two, Neon Tokyo, Cyberpunk, Vaporwave, Ghibli, Hoshizora, Oni, Mecha…),
+  además de las clásicas (Catppuccin, Tokyo Night, Nord, Gruvbox, Dracula,
+  Kanagawa, Rosé Pine, Everforest), aplicadas de forma coherente a sway,
+  waybar, foot, mako, swaylock y a las propias TUI.
+- **Galería de temas** (`Super+t`): selector a pantalla completa con vista
+  previa real del tema — degradados, muestras de color, ventana de ejemplo y
+  fondo animado — filtro difuso y navegación por categorías.
+- **Temas adaptativos**: `swaydesk theme --from-wallpaper` extrae los colores
+  dominantes de tu fondo (cuantización + HSL + contraste WCAG) y genera una
+  paleta completa que se guarda en `~/.config/swaydesk/themes/`.
+- **Fondos animados de verdad**: 11 escenas procedurales (pétalos de sakura,
+  nieve, estrellas, lluvia de neón, aurora, olas, ciudad cyberpunk, brasas,
+  rejilla synthwave, pradera, burbujas) y reproducción de **GIF animados**,
+  **imágenes** y **vídeos** (`mp4`, `webm`, `mkv` — incluidos los de Wallpaper
+  Engine) con un demonio propio que dibuja en una capa
+  `wlr-layer-shell` detrás de las ventanas. Cliente Wayland implementado a mano,
+  sin librerías.
+- **Selector de fondos** (`Super+Shift+w`): galería con vista previa animada en
+  vivo, metadatos (duración, tamaño, tipo) y exploración de tus carpetas.
+- **Translucidez en todo el escritorio**: opacidad configurable para terminal,
+  barra, notificaciones, ventanas activas e inactivas, reglas `for_window` para
+  decenas de aplicaciones y desenfoque/esquinas cuando el compositor es swayfx.
 - **Generador de configuración**: `swaydesk init` escribe una configuración
   completa y comentada de sway, waybar, foot, mako y swaylock, adaptada a tu
   hardware, tu terminal y tu fuente (detecta Nerd Fonts automáticamente).
@@ -73,6 +94,14 @@ terceros.
 | Cambio de tema | Calculadora |
 |---|---|
 | ![Temas](docs/screenshot-temas.png) | ![Calculadora](docs/screenshot-calculadora.png) |
+
+| Galería de temas (vista previa en vivo) | Selector de fondos animados |
+|---|---|
+| ![Galería de temas](docs/screenshot-galeria-temas.png) | ![Selector de fondos](docs/screenshot-selector-fondos.png) |
+
+| Escenas animadas disponibles | Paletas por categoría |
+|---|---|
+| ![Escenas](docs/screenshot-escenas.png) | ![Paletas](docs/screenshot-paletas.png) |
 
 | Ventanas | Atajos |
 |---|---|
@@ -115,7 +144,7 @@ swaydesk doctor
 
 | Obligatorio | Recomendado | Opcional |
 |---|---|---|
-| `sway`, `go` (solo para compilar) | `waybar`, `foot`, `mako`, `swaylock`, `grim`, `slurp`, `wl-clipboard`, `cliphist`, `swayidle` | `pavucontrol`, `playerctl`, `brightnessctl`, `nm-connection-editor`, `wf-recorder` |
+| `sway`, `go` (solo para compilar) | `waybar`, `foot`, `mako`, `swaylock`, `grim`, `slurp`, `wl-clipboard`, `cliphist`, `swayidle` | `pavucontrol`, `playerctl`, `brightnessctl`, `nm-connection-editor`, `wf-recorder`, `ffmpeg` (vídeos de fondo), `swayfx` (blur y esquinas) |
 
 Ninguna de las recomendadas es necesaria para que `swaydesk` funcione: cada
 acción comprueba si su binario existe y se oculta del menú si no está.
@@ -129,9 +158,20 @@ swaydesk · escritorio para Arch Linux + sway, escrito en Go
 
 Configuración
   init [--force] [--only sway|waybar|foot|mako]   Escribe la configuración
-  apply            Regenera los archivos del tema y recarga waybar/sway
-  theme [nombre]   Lista o cambia la paleta activa
-  config           Rutas y valores actuales
+  apply                     Regenera los archivos del tema y recarga waybar/sway
+  theme [nombre]            Lista o cambia la paleta activa
+  theme --gallery           Galería interactiva de temas con vista previa
+  theme --from-wallpaper    Tema adaptativo a partir del fondo actual
+  config                    Rutas y valores actuales
+
+Fondos de pantalla
+  wallpaper list [--json]   Escenas animadas y archivos encontrados
+  wallpaper set <fondo>     scene:petals · gif:x.gif · image:x.png · video:x.mp4
+  wallpaper gallery         Selector interactivo con vista previa animada
+  wallpaper daemon|--stop   Demonio de fondo animado (live wallpaper)
+  wallpaper play [fondo]    Reproduce el fondo a pantalla completa en la terminal
+  wallpaper adaptive [img]  Genera y aplica un tema desde los colores del fondo
+  wallpaper mode <modo>     fill · fit · stretch · center · tile
 
 Sesión
   status [--json] [--module M]   Estado (sway, CPU, RAM, disco, batería…)
@@ -139,7 +179,6 @@ Sesión
   notify <título> [cuerpo]       Notificación de escritorio
   volume <up|down|mute>          Volumen
   screenshot [region|full]       Captura con grim
-  wallpaper <imagen> [modo]      Fondo de pantalla (se guarda en config.d)
   lock | reload | power [acción] Sesión y energía
 ```
 
@@ -150,7 +189,8 @@ Sesión
 | `Super+Return` | Terminal | `Super+d` | Lanzador |
 | `Super+Shift+d` | Lanzador + comandos | `Super+b` | Navegador |
 | `Super+i` | Panel de control | `Super+c` | Portapapeles |
-| `Super+p` | Menú de energía | `Super+t` | Cambiar tema |
+| `Super+p` | Menú de energía | `Super+t` | Galería de temas |
+| `Super+Shift+t` | Galería de temas | `Super+Shift+w` | Selector de fondos |
 | `Super+Shift+l` | Bloquear | `Print` | Captura de pantalla |
 | `Super+q` | Cerrar ventana | `Super+f` | Pantalla completa |
 | `Super+h/j/k/l` | Foco | `Super+Shift+hjkl` | Mover ventana |
@@ -216,6 +256,26 @@ border = "rounded"         # rounded, square, double, thick, ascii
 
 [input]
 keyboard_layout = "latam"
+
+[wallpaper]
+kind = "scene"             # scene · image · gif · video · none
+name = "petals"            # escena procedural (ver "swaydesk wallpaper list")
+path = ""                  # ruta para image/gif/video
+mode = "fill"              # fill · fit · stretch · center · tile
+fps = 30
+protocol = "auto"          # auto · kitty · sixel · ansi (para la vista en terminal)
+adaptive = false           # genera un tema desde los colores del fondo
+dir = "~/Imágenes/Fondos"  # carpeta que explora el selector
+
+[effects]
+terminal_opacity = 0.94    # foot
+bar_opacity = 0.86         # waybar
+active_opacity = 1.00
+inactive_opacity = 0.94
+blur = false               # solo swayfx
+gaps_inner = 6
+gaps_outer = 8
+rounding = 12              # solo swayfx
 ```
 
 Cambiar de tema en caliente:
@@ -227,6 +287,15 @@ swaydesk theme gruvbox     # o Super+t / swaymenu --themes
 Esto reescribe `waybar/style.css`, `foot/foot.ini`, `mako/config`,
 `swaylock/config`, los colores de borde de sway (vía IPC) y avisa a waybar con
 `SIGUSR2`. Nada se reinicia.
+
+Fondos animados:
+
+```bash
+swaydesk wallpaper set scene:petals --live   # escena procedural + demonio
+swaydesk wallpaper set ~/Imágenes/lofi.gif --live
+swaydesk wallpaper set ~/Vídeos/4k.mp4 --live   # necesita ffmpeg
+swaydesk theme --from-wallpaper             # paleta derivada del fondo
+```
 
 Más detalles en [`docs/PERSONALIZACION.md`](docs/PERSONALIZACION.md).
 
@@ -242,7 +311,11 @@ cmd/
   swayclip/     historial del portapapeles
 internal/
   swayipc/      cliente IPC de sway escrito desde cero (protocolo i3-ipc)
-  ui/           toolkit TUI: estilos, colores, entrada, paneles, listas
+  wayland/      cliente Wayland puro: xdg-shell, shm y wlr-layer-shell
+  wallpaper/    motor de fondos: escenas, GIF, vídeo, protocolos kitty/sixel
+  gallery/      selectores compartidos: galería de temas y de fondos
+  adaptive/     paletas derivadas de imágenes (cuantización + HSL + contraste)
+  ui/           toolkit TUI: estilos, colores, entrada, paneles, listas, decoración
   host/         métricas del sistema desde /proc y /sys
   launcher/     .desktop, PATH, terminales, historial
   actions/      energía, sesión, capturas, menús
@@ -273,9 +346,11 @@ make dist      # binarios estáticos para amd64 y arm64
 ```
 
 El proyecto no tiene dependencias: `go.mod` solo declara el módulo. Las pruebas
-(49 funciones, más de 150 comprobaciones) cubren el protocolo IPC con un servidor
-de sway simulado, el parser TOML, la búsqueda difusa, el cálculo, las plantillas
-y el sistema de layout del toolkit.
+cubren el protocolo IPC con un servidor de sway simulado, el **protocolo
+Wayland** (codificación de mensajes, alineación, secuencias kitty y sixel), el
+**motor de fondos** (las 11 escenas, GIF animados, imágenes y vídeos), las
+**paletas adaptativas**, el parser TOML, la búsqueda difusa, el cálculo, las
+plantillas y el sistema de layout del toolkit.
 
 ## Solución de problemas
 
@@ -286,6 +361,8 @@ y el sistema de layout del toolkit.
 | Cuadraditos en la barra | No hay Nerd Font instalada. Instala `ttf-jetbrains-mono-nerd` o pon `nerd_font = false`. |
 | Waybar no cambia de color | Comprueba que waybar corre con el `style.css` generado: `pkill -SIGUSR2 waybar`. |
 | `swaydesk init` no sobrescribe | Es intencionado: usa `--force` (crea respaldos `.bak-<fecha>`). |
+| El fondo animado no aparece | Necesita un compositor con `wlr-layer-shell` (sway lo tiene). Comprueba `swaydesk wallpaper status` y que el demonio esté activo. |
+| Un vídeo no se reproduce | Instala `ffmpeg`; sin él los `.mp4`/`.webm` no se pueden decodificar. |
 | El teclado escribe mal los símbolos | Ajusta `[input] keyboard_layout` (`latam`, `us`, `es`, `de`…) y recarga sway. |
 
 ## Desinstalar

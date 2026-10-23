@@ -40,7 +40,7 @@ window#waybar.hidden {
 .modules-left,
 .modules-center,
 .modules-right {
-    background: @bg;
+    background: alpha(@bg, {{BAR_OPACITY}});
     border: 1px solid @border;
     border-radius: 12px;
     margin: 6px 8px 0 8px;
@@ -52,8 +52,8 @@ window#waybar.hidden {
 }
 
 tooltip {
-    background: @bg;
-    border: 1px solid @border;
+    background: alpha(@bg, {{BAR_OPACITY}});
+    border: 1px solid alpha(@border, 0.6);
     border-radius: 10px;
 }
 
