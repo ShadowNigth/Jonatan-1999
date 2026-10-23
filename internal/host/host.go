@@ -447,6 +447,39 @@ func (c *Collector) audio() (int, bool) {
 	return c.volVal, c.volMute
 }
 
+// Audio devuelve el volumen del altavoz por defecto (0-100+), si está
+// silenciado y si se pudo consultar. Lo usan el OSD y la barra.
+func Audio() (int, bool, bool) { return queryAudio() }
+
+// AudioDevice intenta dar un nombre legible del altavoz por defecto, para el
+// OSD («Auriculares», «Altavoces»…). Devuelve "" si no se puede saber.
+func AudioDevice() string {
+	if HasCommand("wpctl") {
+		out, err := Exec(400*time.Millisecond, "wpctl", "inspect", "@DEFAULT_AUDIO_SINK@")
+		if err == nil {
+			for _, line := range strings.Split(out, "\n") {
+				l := strings.TrimSpace(line)
+				for _, key := range []string{"node.description =", "node.nick ="} {
+					if strings.HasPrefix(l, key) {
+						name := strings.Trim(strings.TrimSpace(l[len(key):]), "\"")
+						if name != "" && !strings.EqualFold(name, "default") {
+							return name
+						}
+					}
+				}
+			}
+		}
+	}
+	if HasCommand("pactl") {
+		if out, err := Exec(400*time.Millisecond, "pactl", "get-default-sink"); err == nil {
+			if name := strings.TrimSpace(out); name != "" {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
 func queryAudio() (int, bool, bool) {
 	if HasCommand("wpctl") {
 		if out, err := Exec(500*time.Millisecond, "wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"); err == nil {

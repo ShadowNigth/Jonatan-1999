@@ -31,6 +31,7 @@ terceros.
 | `swaydesk` | CLI central: instala la configuración, aplica temas, diagnostica, controla la sesión |
 | `swaybar` | Barra de estado propia dibujada en píxeles sobre `wlr-layer-shell` (sustituye a waybar) |
 | `swaynotify` | Daemon de notificaciones: habla `org.freedesktop.Notifications` por D-Bus y dibuja las tarjetas en píxeles (sustituye a mako) |
+| `swayosd` | Avisos en pantalla: el nivel de volumen aparece unos instantes en una tarjeta flotante con fundido |
 
 ```
 ╭── swaydesk · lanzador ─────────────────────────────────────────────╮
@@ -119,9 +120,9 @@ terceros.
 |---|---|
 | ![Barra](docs/screenshot-barra.png) | ![Arranque](docs/screenshot-arranque.png) |
 
-| Notificaciones propias | Portapapeles |
+| Notificaciones propias | Aviso de volumen (OSD) |
 |---|---|
-| ![Notificaciones](docs/screenshot-notificaciones.png) | ![Portapapeles](docs/screenshot-portapapeles.png) |
+| ![Notificaciones](docs/screenshot-notificaciones.png) | ![OSD de volumen](docs/screenshot-osd.png) |
 
 | Galería de temas (vista previa en vivo) | Selector de fondos animados |
 |---|---|
@@ -209,7 +210,8 @@ Sesión
   status [--json] [--module M]   Estado (sway, CPU, RAM, disco, batería…)
   doctor                         Diagnóstico de dependencias y configuración
   notify <título> [cuerpo]       Notificación de escritorio
-  volume <up|down|mute>          Volumen
+  volume <up|down|mute>          Volumen (con aviso en pantalla si hay swayosd)
+  osd [show|preview|volume …]    Avisos en pantalla: estado, repetir, PNG
   screenshot [region|full]       Captura con grim
   lock | reload | power [acción] Sesión y energía
 
@@ -230,6 +232,20 @@ Barra propia
   bar preview [--width N]    Vista previa en PNG
   bar modules cpu ram clock  Elige los módulos de la derecha
 ```
+
+### Avisos en pantalla (OSD de volumen)
+
+```bash
+swaydesk volume up            # sube y muestra el aviso
+swayosd volume down           # lo mismo, sin pasar por swaydesk
+swayosd show                  # solo mostrar el volumen actual
+swayosd watch                 # vigilar y avisar de cualquier cambio
+swaydesk osd                  # configuración y volumen actual
+```
+
+El aviso es una tarjeta redondeada sobre las ventanas con la etiqueta
+`VOLUMEN`, el porcentaje en grande y una barra segmentada; se va solo con un
+fundido. `swaydesk osd preview osd.png` genera la imagen sin sesión gráfica.
 
 ### Atajos por defecto
 
@@ -386,6 +402,20 @@ enabled = true             # animación al iniciar sesión
 style = "sakura"           # sakura · neon · matrix · minimal
 duration_ms = 2600         # 0 = automática
 logo = true                # logotipo grande en bloques
+
+[osd]
+enabled = true             # aviso flotante con el nivel de volumen
+position = "bottom-center" # bottom-right, bottom-left, top-center, center
+width = 320                # ancho de la tarjeta
+margin = 72                # separación con el borde inferior
+padding = 16
+radius = 18
+opacity = 0.95
+timeout_ms = 1400          # cuánto se queda en pantalla
+fade_ms = 140              # fundido de entrada y salida (0 = sin animación)
+segments = 24              # marcas de la barra de nivel
+font = ""                  # fuente PSF (vacío = automática)
+font_scale = 0             # 0 = el doble de la barra, para leerse de reojo
 
 [effects]
 terminal_opacity = 0.94    # foot

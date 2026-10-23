@@ -42,6 +42,14 @@ elif have mako; then
     fi
 fi
 
+# --- Avisos en pantalla (volumen) ------------------------------------------
+# swayosd vigila el volumen y muestra una tarjeta flotante con el nivel cada
+# vez que cambia (teclas multimedia, auriculares, cualquier programa).
+# Desactívalo con osd.enabled = false en config.toml.
+if have swayosd && swaydesk osd-enabled >/dev/null 2>&1; then
+    quiet swayosd watch
+fi
+
 # --- Bloqueo y ahorro de energía -------------------------------------------
 # 10 min: bloquear · 15 min: apagar pantalla · al suspender: bloquear
 if have swayidle; then

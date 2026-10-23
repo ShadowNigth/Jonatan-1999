@@ -25,6 +25,8 @@ optdepends=(
   'cliphist: historial del portapapeles'
   'ttf-jetbrains-mono-nerd: iconos de la barra'
   'playerctl: control de reproducción'
+  'wireplumber: volumen del sistema (wpctl) para el OSD de volumen'
+  'pulseaudio-utils: alternativa a wpctl para el volumen (pactl)'
   'brightnessctl: brillo de pantalla'
 )
 source=("$pkgname-$pkgver.tar.gz")
@@ -33,14 +35,14 @@ sha256sums=('SKIP')
 build() {
   cd "$pkgname-$pkgver"
   export CGO_ENABLED=0
-  for bin in swaydesk swaymenu swayctl swayclip; do
+  for bin in swaydesk swaymenu swayctl swayclip swaybar swaynotify swayosd; do
     go build -trimpath -ldflags="-s -w" -o "build/$bin" "./cmd/$bin"
   done
 }
 
 package() {
   cd "$pkgname-$pkgver"
-  for bin in swaydesk swaymenu swayctl swayclip; do
+  for bin in swaydesk swaymenu swayctl swayclip swaybar swaynotify swayosd; do
     install -Dm755 "build/$bin" "$pkgdir/usr/bin/$bin"
   done
 

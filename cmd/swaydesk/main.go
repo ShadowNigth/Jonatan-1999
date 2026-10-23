@@ -82,6 +82,14 @@ func main() {
 			return
 		}
 		os.Exit(1)
+	case "osd", "avisos":
+		cmdOSD(args)
+	case "osd-enabled", "avisos-activos":
+		// Para scripts: código 0 si los avisos en pantalla están activados.
+		if cfg, err := config.Load(); err == nil && cfg.OSDEnabled {
+			return
+		}
+		os.Exit(1)
 	case "version", "-v", "--version":
 		fmt.Printf("swaydesk %s (go %s, %s/%s)\n", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	case "help", "-h", "--help":
@@ -114,7 +122,8 @@ Sesión
   notify <título> [cuerpo]    Envía una notificación de escritorio
   notifications [status|dnd|history|clear|preview|test]
                               Daemon de notificaciones propio (swaynotify)
-  volume <up|down|mute>       Controla el volumen
+  volume <up|down|mute>       Controla el volumen (con aviso en pantalla)
+  osd [show|preview|volume]   Avisos en pantalla (swayosd): volumen
   screenshot [region|full]    Captura de pantalla con grim
   wallpaper <fondo> [modo]    Fondo estático o animado (ver "swaydesk wallpaper help")
   wallpaper --gallery         Selector de fondos con vista previa animada
@@ -745,6 +754,10 @@ func cmdDoctor(args []string) {
 			ok:     launcher.HasCommand("swaynotify") && cfg.NotifyEnabled && hasNotifyDaemon(),
 			detail: "notificaciones de swaydesk (D-Bus, sin mako)",
 			fix:    "make build && make install; reinicia la sesión"},
+		{name: "swayosd (propio)", required: false,
+			ok:     launcher.HasCommand("swayosd") && cfg.OSDEnabled,
+			detail: "aviso en pantalla del volumen",
+			fix:    "make build && make install; reinicia la sesión"},
 		{name: "bus de sesión (D-Bus)", required: false, ok: dbus.SessionAvailable(),
 			detail: "necesario para las notificaciones", fix: "arranca la sesión con dbus"},
 		{name: "swayfx", required: false, ok: setup.IsSwayfx(),
@@ -849,6 +862,17 @@ func cmdNotify(args []string) {
 
 func cmdVolume(args []string) {
 	what := flagValue(args, "mute")
+	// Con swayosd instalado, el propio cambio dibuja el aviso en pantalla.
+	if launcher.HasCommand("swayosd") {
+		orden := map[string]string{"up": "up", "+": "up", "raise": "up",
+			"down": "down", "-": "down", "lower": "down",
+			"mute": "mute", "toggle": "mute"}[what]
+		if orden != "" {
+			if err := launcher.ExecCommand("swayosd", "volume", orden); err == nil {
+				return
+			}
+		}
+	}
 	switch what {
 	case "up", "+", "raise":
 		must(actions.Volume(5, false))

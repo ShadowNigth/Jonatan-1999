@@ -68,7 +68,7 @@ cd "$REPO_DIR"
 make build
 
 info "Instalando en $PREFIX/bin"
-for bin in swaydesk swaymenu swayctl swayclip swaybar swaynotify; do
+for bin in swaydesk swaymenu swayctl swayclip swaybar swaynotify swayosd; do
   install -Dm755 "$REPO_DIR/bin/$bin" "$PREFIX/bin/$bin"
 done
 

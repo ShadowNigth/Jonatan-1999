@@ -28,6 +28,7 @@ cmd/swayctl      panel de control: 5 pestañas y acciones sobre sway
 cmd/swayclip     portapapeles: lista, filtra, copia, borra
 cmd/swaybar      barra de estado: CLI, recogida de datos y bucle de dibujo
 cmd/swaynotify   daemon de notificaciones: D-Bus, capa overlay y entrada
+cmd/swayosd      avisos en pantalla (volumen) con fundido, en capa overlay
 
 internal/wayland cliente Wayland puro: conexión, registry, xdg-shell, shm y
                  wlr-layer-shell (capa background para el fondo animado)
@@ -48,6 +49,10 @@ internal/bar     barra de estado dibujada en píxeles
                  texto, escalado y composición sobre el fondo
   render.go      Snapshot de datos → tres islas (izquierda/centro/derecha) con
                  separadores, colores del tema y recorte según el espacio
+internal/osd     avisos en pantalla (OSD)
+  osd.go         estado del aviso: valor, silencio, dispositivo, claves
+  render.go      tarjeta con etiqueta, valor grande y barra segmentada,
+                 con alfa variable para los fundidos
 internal/notify  notificaciones de escritorio
   notify.go      modelo, caducidad, modo «no molestar» e historial en JSON
   render.go      tarjetas en píxeles: urgencias, acciones, progreso y cuenta atrás
@@ -108,6 +113,30 @@ sway IPC ──eventos──▶ cmd/swaybar/run.go ──Snapshot──▶ inter
   se usa la fuente 5×7 embebida; así la barra funciona en una instalación limpia.
 - **Degradación**: si con todos los módulos el centro no cabe, se quita el
   reproductor y después el título antes que solapar islas.
+
+## Los avisos en pantalla
+
+```
+wpctl / pactl / amixer            swayosd
+        │  estado del altavoz         │
+        ▼                             ▼
+   internal/host ──── Audio ──── internal/osd.Renderer
+                                      │
+                                      ▼
+                             wl_surface (capa overlay)
+```
+
+- **Un proceso por aviso**: `swayosd show` dibuja el aviso, espera
+  `timeout_ms` y termina; así el aviso desaparece solo aunque la sesión esté
+  cargada, sin dejar una superficie viva toda la jornada.
+- **`swayosd watch`** es el único proceso permanente: consulta el altavoz por
+  defecto cada 300 ms y, cuando cambia el valor, lanza el aviso. Cubre los
+  cambios de las teclas multimedia, de los auriculares Bluetooth y de
+  cualquier aplicación.
+- **Fundido sin estado**: la animación son fotogramas con alfa creciente o
+  decreciente sobre la misma tarjeta; `fade_ms = 0` la desactiva.
+- **Clic pasante**: la región de entrada de la superficie está vacía, así que
+  el aviso no intercepta nunca el ratón.
 
 ## Las notificaciones
 
@@ -273,6 +302,10 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
   líneas y el layout de las tarjetas (sin solapes, transparencia fuera de
   ellas, acciones que no caben). Incluye una prueba de extremo a extremo con
   un cliente y el servicio hablando D-Bus de verdad.
+- **`internal/osd`** — acotado del valor, relleno de la barra (el 100% llena;
+  por encima cambia de color), textos del aviso, tamaños según la escala y
+  fundido: con alfa 0 no queda ni un píxel encendido y con alfa intermedia el
+  fondo es menos opaco que a plena intensidad.
 - **`internal/bar`** — colores, composición alfa, esquinas redondeadas,
   medidas de texto, elección de variantes cuando falta espacio y zonas
   pulsables (el indicador de notificaciones se publica como `Region` y

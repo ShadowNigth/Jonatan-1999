@@ -469,6 +469,65 @@ con `SetDND`, `ToggleDND`, `GetStatus`, `ListHistory`, `CloseAll`,
 - Si un aviso llega con `replaces_id`, se actualiza la tarjeta en el sitio en
   lugar de apilar otra (barras de progreso que se refrescan, por ejemplo).
 
+## 8d. Avisos en pantalla (`swayosd`)
+
+El nivel de volumen aparece en una **tarjeta flotante** sobre las ventanas
+—etiqueta, porcentaje en grande y barra segmentada— que se va sola con un
+fundido de entrada y salida. No hace falta que ninguna aplicación (Spotify,
+Chromium, mpv…) haga nada: el aviso lo dibuja el escritorio.
+
+```toml
+[osd]
+enabled = true             # false = sin avisos (el volumen sigue funcionando)
+position = "bottom-center" # bottom-right, bottom-left, top-center, center
+width = 320                # ancho de la tarjeta en píxeles
+margin = 72                # separación con el borde de la pantalla
+padding = 16               # relleno interior
+radius = 18                # esquinas redondeadas
+opacity = 0.95             # transparencia del fondo
+timeout_ms = 1400          # cuánto tiempo se queda en pantalla
+fade_ms = 140              # fundido de entrada y salida (0 = sin animación)
+segments = 24              # marcas de la barra de nivel
+font = ""                  # fuente PSF (vacío = automática)
+font_scale = 0             # 0 = el doble que la barra, para leerse de reojo
+```
+
+### Cómo se dispara
+
+```bash
+swaydesk volume up            # sube 5% y muestra el aviso
+swaydesk volume down
+swaydesk volume mute
+swayosd volume up             # lo mismo, sin pasar por swaydesk
+swayosd volume mute --step 3  # pasos más finos
+swayosd show                  # solo mostrar el volumen actual
+swayosd watch                 # vigilar y avisar de cualquier cambio
+swaydesk osd                  # configuración y volumen actual
+swaydesk osd preview osd.png  # PNG del aviso, sin sesión gráfica
+```
+
+Los atajos `XF86AudioRaiseVolume`, `XF86AudioLowerVolume` y `XF86AudioMute`
+llaman a `swaydesk volume …`, que usa `swayosd` cuando está instalado. Si
+quieres reaccionar a cambios que no vengan de esos atajos —auriculares
+Bluetooth, otro programa, `pactl` a mano— el autostart deja `swayosd watch`
+en marcha: vigila el volumen del altavoz por defecto y lanza el aviso cuando
+cambie, venga de donde venga.
+
+### Detalles que conviene saber
+
+- La lectura del volumen usa `wpctl` (PipeWire), luego `pactl` y luego
+  `amixer`; con ninguno de los tres el aviso no puede mostrarse, pero el
+  escritorio sigue funcionando.
+- El nombre del dispositivo sale de `wpctl inspect`/`pactl get-default-sink` y
+  se recorta si no cabe; si no se puede averiguar, la tarjeta ocupa una línea
+  menos.
+- Por encima del 100% la barra se llena y cambia a color de aviso (volumen
+  amplificado); silenciado, la barra queda vacía y una raya la cruza.
+- La superficie es una capa `overlay` con la **región de entrada vacía**: el
+  aviso nunca se come un clic de lo que haya debajo.
+- El fundido se hace dibujando varios fotogramas con alfa creciente; con
+  `fade_ms = 0` aparece y desaparece de golpe (menos repintados).
+
 ## 8b. Barra de estado (waybar)
 
 `waybar/config.json` y `waybar/style.css` son plantillas. Los módulos de sistema

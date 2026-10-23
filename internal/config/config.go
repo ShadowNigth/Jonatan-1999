@@ -85,6 +85,20 @@ type Config struct {
 	NotifyFont         string
 	NotifyFontScale    int
 
+	// Avisos en pantalla (swayosd)
+	OSDEnabled   bool
+	OSDPosition  string // bottom-center, bottom-right, bottom-left, center, top-center
+	OSDWidth     int
+	OSDMargin    int
+	OSDPadding   int
+	OSDRadius    int
+	OSDOpacity   float64
+	OSDTimeout   int // milisegundos que se queda en pantalla
+	OSDFade      int // milisegundos de fundido de entrada y salida
+	OSDSegments  int // marcas de la barra de nivel
+	OSDFont      string
+	OSDFontScale int
+
 	// Efectos de escritorio
 	TerminalOpacity float64
 	BarOpacity      float64
@@ -183,6 +197,18 @@ func Default() *Config {
 		NotifyMaxLines:     3,
 		NotifyDND:          false,
 		NotifyFontScale:    0,
+
+		OSDEnabled:   true,
+		OSDPosition:  "bottom-center",
+		OSDWidth:     320,
+		OSDMargin:    72,
+		OSDPadding:   16,
+		OSDRadius:    18,
+		OSDOpacity:   0.95,
+		OSDTimeout:   1400,
+		OSDFade:      140,
+		OSDSegments:  24,
+		OSDFontScale: 0,
 
 		BootEnabled:  true,
 		BootStyle:    "sakura",
@@ -345,6 +371,30 @@ func (c *Config) apply() {
 	if v, ok := c.values["notify.font_scale"]; ok {
 		if n, ok := v.(int); ok && n >= 0 {
 			c.NotifyFontScale = n
+		}
+	}
+	bl("osd.enabled", &c.OSDEnabled)
+	str("osd.position", &c.OSDPosition)
+	num("osd.width", &c.OSDWidth)
+	num("osd.margin", &c.OSDMargin)
+	num("osd.padding", &c.OSDPadding)
+	if v, ok := c.values["osd.radius"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.OSDRadius = n
+		}
+	}
+	flo("osd.opacity", &c.OSDOpacity)
+	num("osd.timeout_ms", &c.OSDTimeout)
+	if v, ok := c.values["osd.fade_ms"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.OSDFade = n
+		}
+	}
+	num("osd.segments", &c.OSDSegments)
+	str("osd.font", &c.OSDFont)
+	if v, ok := c.values["osd.font_scale"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.OSDFontScale = n
 		}
 	}
 	bl("boot.enabled", &c.BootEnabled)
@@ -568,6 +618,29 @@ duration_ms = %d
 # dibujar el logotipo grande
 logo = %t
 
+[osd]
+# aviso flotante con el nivel de volumen (swayosd)
+enabled = %t
+# bottom-center, bottom-right, bottom-left, top-center o center
+position = %q
+# ancho de la tarjeta en píxeles lógicos
+width = %d
+# separación con el borde de la pantalla
+margin = %d
+padding = %d
+radius = %d
+opacity = %.2f
+# cuánto tiempo se queda en pantalla (milisegundos)
+timeout_ms = %d
+# fundido de entrada y salida (milisegundos, 0 = sin animación)
+fade_ms = %d
+# marcas de la barra de nivel
+segments = %d
+# fuente PSF de consola (vacío = la mejor disponible del sistema)
+font = %q
+# escala de la fuente (0 = automática: el doble para leerse de reojo)
+font_scale = %d
+
 [effects]
 # transparencia de las ventanas (0 = opaco, 1 = invisible)
 terminal_opacity = %.2f
@@ -589,6 +662,9 @@ rounding = %d
 		c.NotifyTimeout, c.NotifyCriticalTime, c.NotifyMaxVisible, c.NotifyHistory,
 		c.NotifyMaxLines, c.NotifyDND, c.NotifyFont, c.NotifyFontScale,
 		c.BootEnabled, c.BootStyle, c.BootDuration, c.BootLogo,
+		c.OSDEnabled, c.OSDPosition, c.OSDWidth, c.OSDMargin, c.OSDPadding,
+		c.OSDRadius, c.OSDOpacity, c.OSDTimeout, c.OSDFade, c.OSDSegments,
+		c.OSDFont, c.OSDFontScale,
 		c.TerminalOpacity, c.BarOpacity, c.ActiveOpacity, c.InactiveOpacity,
 		c.Blur, c.GapsInner, c.GapsOuter, c.Rounding)
 }

@@ -238,3 +238,62 @@ func TestLoadBootSection(t *testing.T) {
 		t.Fatalf("sección [boot] mal aplicada: %+v", cfg)
 	}
 }
+
+func TestOSDDefaults(t *testing.T) {
+	c := Default()
+	if !c.OSDEnabled {
+		t.Fatal("los avisos en pantalla deberían venir activados")
+	}
+	if c.OSDPosition != "bottom-center" {
+		t.Fatalf("posición por defecto = %q", c.OSDPosition)
+	}
+	if c.OSDWidth < 200 || c.OSDTimeout < 500 || c.OSDSegments < 8 {
+		t.Fatalf("valores del OSD poco razonables: %+v", c)
+	}
+	if c.OSDOpacity <= 0 || c.OSDOpacity > 1 {
+		t.Fatalf("opacidad del OSD = %v", c.OSDOpacity)
+	}
+	// El archivo generado trae la sección con sus valores.
+	text := DefaultFile(c)
+	for _, want := range []string{"[osd]", "position = \"bottom-center\"", "fade_ms = "} {
+		if !contains(text, want) {
+			t.Fatalf("falta %q en la configuración generada", want)
+		}
+	}
+}
+
+func TestLoadOSDSection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := "[osd]\nenabled = false\nposition = \"bottom-right\"\nwidth = 320\n" +
+		"margin = 40\npadding = 12\nradius = 8\nopacity = 0.8\ntimeout_ms = 900\n" +
+		"fade_ms = 0\nsegments = 12\nfont_scale = 3\n"
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OSDEnabled || cfg.OSDPosition != "bottom-right" || cfg.OSDWidth != 320 ||
+		cfg.OSDMargin != 40 || cfg.OSDPadding != 12 || cfg.OSDRadius != 8 ||
+		cfg.OSDTimeout != 900 || cfg.OSDFade != 0 || cfg.OSDSegments != 12 ||
+		cfg.OSDFontScale != 3 {
+		t.Fatalf("sección [osd] mal aplicada: %+v", cfg)
+	}
+	if cfg.OSDOpacity < 0.79 || cfg.OSDOpacity > 0.81 {
+		t.Fatalf("opacidad mal leída: %v", cfg.OSDOpacity)
+	}
+	// Valores negativos imposibles se descartan.
+	data = "[osd]\nradius = -5\nfade_ms = -10\n"
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OSDRadius < 0 || cfg.OSDFade < 0 {
+		t.Fatalf("se aceptaron valores negativos: radio %d, fundido %d", cfg.OSDRadius, cfg.OSDFade)
+	}
+}
