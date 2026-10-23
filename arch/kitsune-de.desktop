@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=KitsuneDE Full Anime Shell (Idéntico al Web)
-Comment=Escritorio Anime Wayland 100% idéntico al ejemplo web (partículas, audio, dock y animaciones)
+Name=Kitsune Go Wayland
+Comment=Escritorio Anime Tabbed en Go para Wayland (Waybar Kanji, Rofi, Blur y Bordes Luminosos — sin Dock inferior)
 Exec=/usr/bin/kitsune-session
 Type=Application
-DesktopNames=KitsuneDE
+DesktopNames=KitsuneGoWayland

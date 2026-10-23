@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// Theme defines a complete Anime visual and terminal color palette for KitsuneDE & Arch dotfiles.
+// Theme defines a complete Anime visual and terminal color palette for Kitsune Go Wayland.
 type Theme struct {
 	ID           string   `json:"id"`
 	Name         string   `json:"name"`
@@ -31,32 +31,32 @@ type Theme struct {
 	TermColors   []string `json:"termColors"`   // 8 standard ANSI colors
 }
 
-// DesktopSettings holds live configurable window manager & visual parameters.
+// DesktopSettings holds live configurable Kitsune Go Wayland window manager & visual parameters.
 type DesktopSettings struct {
 	ActiveTheme       string `json:"activeTheme"`
-	Compositor        string `json:"compositor"` // "swayfx", "sway", "hyprland"
-	LayoutMode        string `json:"layoutMode"` // "tiling", "tabbed", "floating", "monocle"
+	LayoutMode        string `json:"layoutMode"` // "tabbed" (default), "tiling", "floating", "monocle"
 	ActiveWorkspace   int    `json:"activeWorkspace"`
 	GapsIn            int    `json:"gapsIn"`
 	GapsOut           int    `json:"gapsOut"`
 	BorderSize        int    `json:"borderSize"`
 	BorderRadius      int    `json:"borderRadius"`
-	WindowOpacity     int    `json:"windowOpacity"` // percentage 70..100
+	BlurRadius        int    `json:"blurRadius"`    // live glass blur radius in px (0..36)
+	GlowIntensity     int    `json:"glowIntensity"` // live luminous border intensity 0..100
+	WindowOpacity     int    `json:"windowOpacity"` // percentage 65..100
 	BlurEnabled       bool   `json:"blurEnabled"`
 	ParticlesEnabled  bool   `json:"particlesEnabled"`
 	AnimationsEnabled bool   `json:"animationsEnabled"`
 	BorderGlow        bool   `json:"borderGlow"`
-	DockVisible       bool   `json:"dockVisible"`
 }
 
-// BuiltinThemes returns all built-in Anime Arch Rice themes.
+// BuiltinThemes returns all built-in Anime themes for Kitsune Go Wayland.
 func BuiltinThemes() []Theme {
 	return []Theme{
 		{
 			ID:           "neon-tokyo",
 			Name:         "Cyberpunk Neon Tokyo",
 			JapaneseName: "ネオ東京 // 2099",
-			Subtitle:     "Lluvia nocturna, neón cian/magenta y bordes brillantes estilo Edgerunners",
+			Subtitle:     "Lluvia nocturna neón cian y magenta",
 			Wallpaper:    "/wallpapers/neon-tokyo.jpg",
 			Avatar:       "/wallpapers/kitsune-avatar.jpg",
 			Primary:      "#00f0ff",
@@ -77,7 +77,7 @@ func BuiltinThemes() []Theme {
 			ID:           "sakura-lofi",
 			Name:         "Sakura Catppuccin",
 			JapaneseName: "桜ローファイ // 宵",
-			Subtitle:     "Pétalos de cerezo, rosa pastel y lavanda sobre Catppuccin Mocha acogedor",
+			Subtitle:     "Pétalos de cerezo animados y paleta Catppuccin Mocha",
 			Wallpaper:    "/wallpapers/sakura-lofi.jpg",
 			Avatar:       "/wallpapers/kitsune-avatar.jpg",
 			Primary:      "#f5c2e7",
@@ -98,7 +98,7 @@ func BuiltinThemes() []Theme {
 			ID:           "crimson-shonen",
 			Name:         "Crimson Shonen",
 			JapaneseName: "紅蓮の刃 // 月蝕",
-			Subtitle:     "Negro obsidiana, luna carmesí, brasas flotantes y contraste afilado",
+			Subtitle:     "Negro obsidiana, luna carmesí y brasas flotantes",
 			Wallpaper:    "/wallpapers/crimson-shonen.jpg",
 			Avatar:       "/wallpapers/kitsune-avatar.jpg",
 			Primary:      "#ff1e42",
@@ -119,7 +119,7 @@ func BuiltinThemes() []Theme {
 			ID:           "eva-midnight",
 			Name:         "Midnight Evangelion",
 			JapaneseName: "第3新東京市 // NERV",
-			Subtitle:     "Estética táctica mecha de los 90 con verde ácido EVA-01, ámbar y violeta",
+			Subtitle:     "Verde ácido EVA-01, ámbar táctico y violeta oscuro",
 			Wallpaper:    "/wallpapers/eva-midnight.jpg",
 			Avatar:       "/wallpapers/kitsune-avatar.jpg",
 			Primary:      "#39ff14",
@@ -139,23 +139,23 @@ func BuiltinThemes() []Theme {
 	}
 }
 
-// DefaultSettings returns the initial desktop settings.
+// DefaultSettings returns the initial Kitsune Go Wayland desktop settings (Tabbed mode, no bottom dock).
 func DefaultSettings() DesktopSettings {
 	return DesktopSettings{
 		ActiveTheme:       "neon-tokyo",
-		Compositor:        "swayfx",
-		LayoutMode:        "tiling",
+		LayoutMode:        "tabbed",
 		ActiveWorkspace:   1,
 		GapsIn:            8,
-		GapsOut:           14,
+		GapsOut:           12,
 		BorderSize:        2,
 		BorderRadius:      12,
-		WindowOpacity:     90,
+		BlurRadius:        18,
+		GlowIntensity:     72,
+		WindowOpacity:     92,
 		BlurEnabled:       true,
 		ParticlesEnabled:  true,
 		AnimationsEnabled: true,
 		BorderGlow:        true,
-		DockVisible:       true,
 	}
 }
 
@@ -192,7 +192,7 @@ func (s *Store) loadFromDisk() {
 	if err != nil {
 		return
 	}
-	var loaded DesktopSettings
+	loaded := DefaultSettings()
 	if err := json.Unmarshal(data, &loaded); err == nil {
 		if _, ok := s.themes[loaded.ActiveTheme]; ok {
 			s.settings = sanitizeSettings(loaded)
@@ -211,11 +211,8 @@ func (s *Store) persistLocked() {
 }
 
 func sanitizeSettings(cfg DesktopSettings) DesktopSettings {
-	if cfg.Compositor != "swayfx" && cfg.Compositor != "sway" && cfg.Compositor != "hyprland" {
-		cfg.Compositor = "swayfx"
-	}
-	if cfg.LayoutMode != "tiling" && cfg.LayoutMode != "tabbed" && cfg.LayoutMode != "floating" && cfg.LayoutMode != "monocle" {
-		cfg.LayoutMode = "tiling"
+	if cfg.LayoutMode != "tabbed" && cfg.LayoutMode != "tiling" && cfg.LayoutMode != "floating" && cfg.LayoutMode != "monocle" {
+		cfg.LayoutMode = "tabbed"
 	}
 	if cfg.ActiveWorkspace < 1 || cfg.ActiveWorkspace > 5 {
 		cfg.ActiveWorkspace = 1
@@ -230,8 +227,8 @@ func sanitizeSettings(cfg DesktopSettings) DesktopSettings {
 	} else if cfg.GapsOut > 48 {
 		cfg.GapsOut = 48
 	}
-	if cfg.BorderSize < 0 {
-		cfg.BorderSize = 0
+	if cfg.BorderSize < 1 {
+		cfg.BorderSize = 1
 	} else if cfg.BorderSize > 6 {
 		cfg.BorderSize = 6
 	}
@@ -239,6 +236,16 @@ func sanitizeSettings(cfg DesktopSettings) DesktopSettings {
 		cfg.BorderRadius = 0
 	} else if cfg.BorderRadius > 28 {
 		cfg.BorderRadius = 28
+	}
+	if cfg.BlurRadius < 0 {
+		cfg.BlurRadius = 0
+	} else if cfg.BlurRadius > 36 {
+		cfg.BlurRadius = 36
+	}
+	if cfg.GlowIntensity < 0 {
+		cfg.GlowIntensity = 0
+	} else if cfg.GlowIntensity > 100 {
+		cfg.GlowIntensity = 100
 	}
 	if cfg.WindowOpacity < 65 {
 		cfg.WindowOpacity = 65
@@ -306,41 +313,20 @@ func (s *Store) SetLayout(mode string) (DesktopSettings, error) {
 	defer s.mu.Unlock()
 	if mode == "toggle" {
 		switch s.settings.LayoutMode {
-		case "tiling":
-			mode = "tabbed"
 		case "tabbed":
+			mode = "tiling"
+		case "tiling":
 			mode = "floating"
 		case "floating":
 			mode = "monocle"
 		default:
-			mode = "tiling"
+			mode = "tabbed"
 		}
 	}
-	if mode != "tiling" && mode != "tabbed" && mode != "floating" && mode != "monocle" {
+	if mode != "tabbed" && mode != "tiling" && mode != "floating" && mode != "monocle" {
 		return s.settings, errors.New("modo de layout inválido: " + mode)
 	}
 	s.settings.LayoutMode = mode
-	s.persistLocked()
-	return s.settings, nil
-}
-
-func (s *Store) SetCompositor(comp string) (DesktopSettings, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if comp == "toggle" {
-		switch s.settings.Compositor {
-		case "swayfx":
-			comp = "sway"
-		case "sway":
-			comp = "hyprland"
-		default:
-			comp = "swayfx"
-		}
-	}
-	if comp != "swayfx" && comp != "sway" && comp != "hyprland" {
-		return s.settings, errors.New("compositor inválido (usa swayfx, sway o hyprland): " + comp)
-	}
-	s.settings.Compositor = comp
 	s.persistLocked()
 	return s.settings, nil
 }

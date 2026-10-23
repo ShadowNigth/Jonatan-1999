@@ -1,0 +1,15 @@
+# 🦊 Kitsune Go Wayland — Tema Oficial Yazi File Manager (Cyberpunk Neon Tokyo • ネオ東京 // 2099)
+[manager]
+cwd = { fg = "#00f0ff", bold = true }
+hovered = { fg = "#090812", bg = "#00f0ff", bold = true }
+preview_hovered = { underline = true }
+find_keyword = { fg = "#ff2a85", bold = true }
+marker_selected = { fg = "#00ffa3", bg = "#00ffa3" }
+border_symbol = "│"
+border_style = { fg = "#00f0ff" }
+
+[status]
+separator_open = ""
+separator_close = ""
+mode_normal = { fg = "#090812", bg = "#00f0ff", bold = true }
+mode_select = { fg = "#090812", bg = "#ff2a85", bold = true }

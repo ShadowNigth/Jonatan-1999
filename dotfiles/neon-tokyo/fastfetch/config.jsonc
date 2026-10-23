@@ -3,23 +3,24 @@
   "logo": {
     "type": "kitty",
     "source": "~/.config/kitsune-de/wallpapers/kitsune-avatar.jpg",
-    "width": 28
+    "width": 26,
+    "padding": { "top": 1, "left": 2 }
   },
   "display": {
-    "separator": "  ➜  ",
-    "color": "#00f0ff"
+    "separator": " ❯ ",
+    "color": { "keys": "#00f0ff", "title": "#ff2a85" }
   },
   "modules": [
     "title",
     "separator",
-    { "type": "os", "key": "󰣇 OS" },
-    { "type": "kernel", "key": "󰌽 Kernel" },
-    { "type": "wm", "key": "󰖲 WM", "format": "KitsuneDE + SwayFX (Go)" },
-    { "type": "theme", "key": "🎨 Rice", "format": "Cyberpunk Neon Tokyo" },
-    { "type": "uptime", "key": "󰥔 Uptime" },
-    { "type": "packages", "key": "󰏖 Packages" },
+    { "type": "os", "key": "󰣇 Distro" },
+    { "type": "kernel", "key": " Kernel" },
+    { "type": "wm", "key": "🦊 Wayland DE", "format": "Kitsune Go Wayland (Tabbed • No Dock)" },
+    { "type": "custom", "key": "🌸 Tema Anime", "format": "Cyberpunk Neon Tokyo (ネオ東京 // 2099)" },
+    { "type": "shell", "key": " Shell" },
+    { "type": "terminal", "key": " Terminal" },
     { "type": "cpu", "key": "󰻠 CPU" },
-    { "type": "memory", "key": "󰍛 Memory" },
+    { "type": "memory", "key": "󰍛 Memoria" },
     "break",
     "colors"
   ]

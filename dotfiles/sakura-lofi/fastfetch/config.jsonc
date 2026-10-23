@@ -3,23 +3,24 @@
   "logo": {
     "type": "kitty",
     "source": "~/.config/kitsune-de/wallpapers/kitsune-avatar.jpg",
-    "width": 28
+    "width": 26,
+    "padding": { "top": 1, "left": 2 }
   },
   "display": {
-    "separator": "  ➜  ",
-    "color": "#f5c2e7"
+    "separator": " ❯ ",
+    "color": { "keys": "#f5c2e7", "title": "#cba6f7" }
   },
   "modules": [
     "title",
     "separator",
-    { "type": "os", "key": "󰣇 OS" },
-    { "type": "kernel", "key": "󰌽 Kernel" },
-    { "type": "wm", "key": "󰖲 WM", "format": "KitsuneDE + SwayFX (Go)" },
-    { "type": "theme", "key": "🎨 Rice", "format": "Sakura Catppuccin" },
-    { "type": "uptime", "key": "󰥔 Uptime" },
-    { "type": "packages", "key": "󰏖 Packages" },
+    { "type": "os", "key": "󰣇 Distro" },
+    { "type": "kernel", "key": " Kernel" },
+    { "type": "wm", "key": "🦊 Wayland DE", "format": "Kitsune Go Wayland (Tabbed • No Dock)" },
+    { "type": "custom", "key": "🌸 Tema Anime", "format": "Sakura Catppuccin (桜ローファイ // 宵)" },
+    { "type": "shell", "key": " Shell" },
+    { "type": "terminal", "key": " Terminal" },
     { "type": "cpu", "key": "󰻠 CPU" },
-    { "type": "memory", "key": "󰍛 Memory" },
+    { "type": "memory", "key": "󰍛 Memoria" },
     "break",
     "colors"
   ]

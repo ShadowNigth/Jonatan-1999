@@ -1,0 +1,15 @@
+# 🦊 Kitsune Go Wayland — Tema Oficial Yazi File Manager (Midnight Evangelion • 第3新東京市 // NERV)
+[manager]
+cwd = { fg = "#39ff14", bold = true }
+hovered = { fg = "#090812", bg = "#39ff14", bold = true }
+preview_hovered = { underline = true }
+find_keyword = { fg = "#ff9e00", bold = true }
+marker_selected = { fg = "#39ff14", bg = "#39ff14" }
+border_symbol = "│"
+border_style = { fg = "#39ff14" }
+
+[status]
+separator_open = ""
+separator_close = ""
+mode_normal = { fg = "#090812", bg = "#39ff14", bold = true }
+mode_select = { fg = "#090812", bg = "#ff9e00", bold = true }

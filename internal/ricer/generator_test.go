@@ -9,42 +9,45 @@ import (
 	"github.com/ShadowNigth/Jonatan-1999/internal/config"
 )
 
-func TestGenerateSwayAndSwayFX(t *testing.T) {
+func TestGenerateKitsuneGoWayland(t *testing.T) {
 	store := config.NewStore("")
 	theme := store.ActiveTheme()
 	settings := store.Settings()
 
-	// 1. Default SwayFX Visual-Twin bundle
-	bundleFX := Generate(theme, settings)
-	if len(bundleFX.Files) != 17 {
-		t.Fatalf("expected 17 generated visual-twin dotfiles, got %d", len(bundleFX.Files))
+	bundle := Generate(theme, settings)
+	if bundle.Engine != "kitsune-go-wayland" {
+		t.Fatalf("expected engine 'kitsune-go-wayland', got %q", bundle.Engine)
 	}
-	swayFX := bundleFX.Files["swayfx/config"]
-	if !strings.Contains(swayFX, "corner_radius 12") ||
-		!strings.Contains(swayFX, `layer_effects "waybar"`) ||
-		!strings.Contains(swayFX, `layer_effects "gtk-layer-shell"`) {
-		t.Fatalf("swayfx/config missing SwayFX eye-candy directives: %s", swayFX)
-	}
-	wb := bundleFX.Files["waybar/config.jsonc"]
-	if !strings.Contains(wb, `"sway/workspaces"`) || !strings.Contains(wb, `"一"`) {
-		t.Fatalf("waybar/config.jsonc should use sway/workspaces with Kanji pills in SwayFX mode")
-	}
-	if _, ok := bundleFX.Files["nwg-dock/style.css"]; !ok {
-		t.Fatalf("expected nwg-dock/style.css for floating Anime Dock")
-	}
-	if _, ok := bundleFX.Files["gtk-4.0/gtk.css"]; !ok {
-		t.Fatalf("expected gtk-4.0/gtk.css for GTK4 anime styling")
+	if len(bundle.Files) != 11 {
+		t.Fatalf("expected 11 Kitsune Go Wayland dotfiles, got %d", len(bundle.Files))
 	}
 
-	// 2. Pure Sway bundle (no swayfx-effects include in sway/config)
-	settings.Compositor = "sway"
-	bundleSway := Generate(theme, settings)
-	swayPure := bundleSway.Files["sway/config"]
-	if strings.Contains(swayPure, "include ~/.config/sway/swayfx-effects.conf") {
-		t.Fatalf("pure sway/config must not include swayfx-effects.conf")
+	kw := bundle.Files["kitsune-wayland/config.toml"]
+	if !strings.Contains(kw, `default_layout = "tabbed"`) || !strings.Contains(kw, `dock_enabled = false`) {
+		t.Fatalf("kitsune-wayland/config.toml missing tabbed/no-dock settings: %s", kw)
 	}
-	if !strings.Contains(swayPure, "gaps inner 8") {
-		t.Fatalf("sway/config missing gaps inner 8")
+
+	// Ensure zero Sway / SwayFX / Hyprland files exist
+	for k := range bundle.Files {
+		if strings.HasPrefix(k, "sway") || strings.HasPrefix(k, "hypr") || strings.HasPrefix(k, "nwg-dock") {
+			t.Fatalf("unexpected legacy compositor/dock file generated: %s", k)
+		}
+	}
+
+	// Ensure Btop++, Yazi, Neovim, Waybar, and Rofi configs exist
+	required := []string{
+		"kitsune-wayland/waybar.jsonc",
+		"kitsune-wayland/waybar.css",
+		"rofi/config.rasi",
+		"btop/themes/kitsune.theme",
+		"yazi/theme.toml",
+		"nvim/init.lua",
+		"kitty/kitty.conf",
+	}
+	for _, k := range required {
+		if _, ok := bundle.Files[k]; !ok {
+			t.Fatalf("missing required file %s", k)
+		}
 	}
 
 	tmp := t.TempDir()
@@ -52,14 +55,10 @@ func TestGenerateSwayAndSwayFX(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExportToDir failed: %v", err)
 	}
-	if len(written) != len(bundleSway.Files) {
-		t.Fatalf("expected %d written files, got %d", len(bundleSway.Files), len(written))
+	if len(written) != len(bundle.Files) {
+		t.Fatalf("expected %d written files, got %d", len(bundle.Files), len(written))
 	}
-	dockScriptInfo, err := os.Stat(filepath.Join(tmp, "sway", "start-dock.sh"))
-	if err != nil {
-		t.Fatalf("expected sway/start-dock.sh on disk: %v", err)
-	}
-	if dockScriptInfo.Mode().Perm()&0o111 == 0 {
-		t.Fatalf("expected sway/start-dock.sh to be executable, got mode %v", dockScriptInfo.Mode())
+	if _, err := os.Stat(filepath.Join(tmp, "kitsune-wayland", "config.toml")); err != nil {
+		t.Fatalf("expected kitsune-wayland/config.toml on disk: %v", err)
 	}
 }

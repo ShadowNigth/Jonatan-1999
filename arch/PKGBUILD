@@ -1,29 +1,26 @@
-# Maintainer: KitsuneDE Contributors
-pkgname=kitsune-de
-pkgver=1.2.0
+# Maintainer: Kitsune Go Wayland Contributors
+pkgname=kitsune-go-wayland
+pkgver=2.0.0
 pkgrel=1
-pkgdesc="Escritorio Anime Visual-Twin en Go para Arch Linux, Sway y SwayFX (idéntico al ejemplo web)"
+pkgdesc="Escritorio Anime Tabbed puro en Go para Wayland (Waybar Kanji, Rofi, Rice Studio, Btop++, Yazi y Neovim Go — sin Sway ni Dock)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/ShadowNigth/Jonatan-1999"
 license=('MIT')
+provides=('kitsune-de')
+conflicts=('kitsune-de')
 depends=('glibc')
 makedepends=('go')
 optdepends=(
-  'swayfx: Compositor Anime con corner_radius, blur, shadow_color y layer_effects (AUR)'
-  'sway: Compositor Wayland oficial compatible vía $SWAYSOCK'
-  'waybar: Barra superior cristalina con píldoras Kanji y telemetría'
-  'nwg-dock: Dock inferior flotante estilo Anime Dock en Wayland'
-  'swww: Transiciones circulares animadas a 60 FPS para wallpapers'
-  'rofi-wayland: Lanzador de aplicaciones centrado con blur en SwayFX (AUR)'
-  'swaync: Centro de notificaciones Wayland con recarga CSS en caliente (AUR)'
-  'swaylock-effects-git: Pantalla de bloqueo con blur y anillo neón (AUR)'
-  'kitty: Terminal acelerada por GPU con recarga de paleta ANSI en vivo'
-  'cage: Compositor Wayland kiosco para sesión Full Anime Shell 100% idéntica al web'
-  'chromium: Motor Wayland GPU para Full Anime Shell y ventana Kitsune Rice Studio'
+  'cage: Servidor de pantalla Wayland minimalista para sesión nativa Kitsune Go Wayland'
+  'chromium: Renderizador GPU Ozone Wayland para cristal blur, bordes luminosos y partículas 60fps'
+  'btop: Monitor de recursos Btop++ sincronizado con la paleta Anime'
+  'yazi: Gestor de archivos Yazi sincronizado con la paleta Anime'
+  'neovim: Editor modal Neovim Go Studio'
+  'kitty: Emulador de terminal GPU'
   'ttf-jetbrains-mono-nerd: Tipografía principal con iconos Nerd Font'
-  'noto-fonts-cjk: Tipografía japonesa Kanji (壱 弐 参 四 伍 / ネオン東京)'
-  'noto-fonts-emoji: Emojis a color para Waybar, Rofi y notificaciones'
-  'papirus-icon-theme: Tema de iconos vectorial oscuro para Dock y Rofi'
+  'noto-fonts-cjk: Tipografía japonesa Kanji (一 二 三 四 五 / ネオ東京)'
+  'noto-fonts-emoji: Emojis a color'
+  'papirus-icon-theme: Tema de iconos oscuro'
   'bibata-cursor-theme-bin: Cursor Bibata-Modern-Ice (AUR)'
 )
 source=()
@@ -40,10 +37,7 @@ package() {
   install -Dm755 "${srcdir}/kitsune-de" "${pkgdir}/usr/bin/kitsune-de"
   install -Dm755 "${srcdir}/kitsune-ctl" "${pkgdir}/usr/bin/kitsune-ctl"
   install -Dm755 "${startdir}/kitsune-session" "${pkgdir}/usr/bin/kitsune-session"
-  install -Dm755 "${startdir}/kitsune-sway-session" "${pkgdir}/usr/bin/kitsune-sway-session"
 
-  install -Dm644 "${startdir}/kitsune-swayfx.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-swayfx.desktop"
-  install -Dm644 "${startdir}/kitsune-sway.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-sway.desktop"
   install -Dm644 "${startdir}/kitsune-de.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-de.desktop"
   install -Dm644 "${startdir}/kitsune-de-x11.desktop" "${pkgdir}/usr/share/xsessions/kitsune-de-x11.desktop"
   install -Dm644 "${startdir}/kitsune-studio.desktop" "${pkgdir}/usr/share/applications/kitsune-studio.desktop"

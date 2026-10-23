@@ -13,7 +13,6 @@ import (
 
 	"github.com/ShadowNigth/Jonatan-1999/internal/config"
 	"github.com/ShadowNigth/Jonatan-1999/internal/ricer"
-	"github.com/ShadowNigth/Jonatan-1999/internal/swayipc"
 	"github.com/ShadowNigth/Jonatan-1999/internal/sysinfo"
 	"github.com/ShadowNigth/Jonatan-1999/internal/ws"
 )
@@ -21,19 +20,17 @@ import (
 type Handler struct {
 	store     *config.Store
 	collector *sysinfo.Collector
-	sway      *swayipc.Client
 	hub       *ws.Hub
 	startDir  string
 }
 
-func NewHandler(store *config.Store, collector *sysinfo.Collector, sway *swayipc.Client, hub *ws.Hub, startDir string) *Handler {
+func NewHandler(store *config.Store, collector *sysinfo.Collector, hub *ws.Hub, startDir string) *Handler {
 	if startDir == "" {
 		startDir, _ = os.Getwd()
 	}
 	return &Handler{
 		store:     store,
 		collector: collector,
-		sway:      sway,
 		hub:       hub,
 		startDir:  startDir,
 	}
@@ -55,7 +52,7 @@ func (h *Handler) ServeWS(conn *ws.Conn) {
 	defer conn.Close()
 
 	cwd := h.startDir
-	welcome := h.renderFastfetch() + "\n\x1b[38;5;245mEscribe \x1b[1;36mhelp\x1b[0m\x1b[38;5;245m para ver comandos de Sway/SwayFX & KitsuneDE (\x1b[36mswaymsg\x1b[38;5;245m, \x1b[36mkitsune-ctl\x1b[38;5;245m, \x1b[36myay -S swayfx\x1b[38;5;245m).\x1b[0m\n"
+	welcome := h.renderFastfetch() + "\n\x1b[38;5;245mEscribe \x1b[1;36mhelp\x1b[0m\x1b[38;5;245m para ver comandos de \x1b[1;35mKitsune Go Wayland\x1b[0m\x1b[38;5;245m (\x1b[36mkitsune-ctl theme next\x1b[38;5;245m, \x1b[36mkitsune-ctl blur 22\x1b[38;5;245m, \x1b[36mkitsune-ctl glow 90\x1b[38;5;245m).\x1b[0m\n"
 	_ = conn.WriteJSON(serverMsg{
 		Type:   "output",
 		Output: welcome,
@@ -141,9 +138,6 @@ func (h *Handler) executeCommand(cwd, cmdLine string) (string, string) {
 	case "help", "ayuda":
 		return renderHelp(), cwd
 
-	case "swaymsg":
-		return h.handleSwayMsg(args), cwd
-
 	case "kitsune-ctl":
 		return h.handleKitsuneCtl(cwd, args), cwd
 
@@ -171,149 +165,9 @@ func (h *Handler) executeCommand(cwd, cmdLine string) (string, string) {
 	return text, cwd
 }
 
-func (h *Handler) handleSwayMsg(args []string) string {
-	// If running inside real Sway/SwayFX on Arch Linux, forward over $SWAYSOCK!
-	if h.sway != nil && h.sway.Available() {
-		if len(args) >= 2 && args[0] == "-t" {
-			switch args[1] {
-			case "get_version":
-				b, err := h.sway.Send(swayipc.MsgGetVersion, "")
-				if err == nil {
-					return string(b) + "\n"
-				}
-			case "get_workspaces":
-				b, err := h.sway.Send(swayipc.MsgGetWorkspaces, "")
-				if err == nil {
-					return string(b) + "\n"
-				}
-			}
-		} else if len(args) > 0 {
-			b, err := h.sway.RunCommand(strings.Join(args, " "))
-			if err == nil {
-				return string(b) + "\n"
-			}
-		}
-	}
-
-	// Interactive Sway / SwayFX IPC bridge in KitsuneDE
-	s := h.store.Settings()
-	if len(args) == 0 {
-		return "\x1b[1;36mswaymsg (KitsuneDE Go sway-ipc bridge)\x1b[0m\n" +
-			"  Prueba:\n" +
-			"    \x1b[33mswaymsg -t get_version\x1b[0m\n" +
-			"    \x1b[33mswaymsg -t get_workspaces\x1b[0m\n" +
-			"    \x1b[33mswaymsg corner_radius 18\x1b[0m         (SwayFX)\n" +
-			"    \x1b[33mswaymsg blur toggle\x1b[0m              (SwayFX)\n" +
-			"    \x1b[33mswaymsg gaps inner all set 12\x1b[0m    (Sway/SwayFX)\n" +
-			"    \x1b[33mswaymsg layout tabbed\x1b[0m            (Contenedor con pestañas Sway)\n"
-	}
-
-	if len(args) >= 2 && args[0] == "-t" {
-		switch args[1] {
-		case "get_version":
-			variant := "swayfx"
-			human := "swayfx version 0.4.0 (based on sway 1.10, KitsuneDE Go IPC)"
-			if s.Compositor == "sway" {
-				variant = "sway"
-				human = "sway version 1.10 (KitsuneDE Go IPC)"
-			}
-			out, _ := json.MarshalIndent(map[string]any{
-				"major":                   1,
-				"minor":                   10,
-				"patch":                   0,
-				"human_readable":          human,
-				"variant":                 variant,
-				"loaded_config_file_name": "~/.config/sway/config",
-			}, "", "  ")
-			return string(out) + "\n"
-
-		case "get_workspaces":
-			kanji := []string{"一", "二", "三", "四", "五"}
-			var list []map[string]any
-			for i := 1; i <= 5; i++ {
-				list = append(list, map[string]any{
-					"num":     i,
-					"name":    fmt.Sprintf("%d:%s", i, kanji[i-1]),
-					"focused": i == s.ActiveWorkspace,
-					"visible": i == s.ActiveWorkspace,
-					"layout":  s.LayoutMode,
-					"output":  "WL-1",
-				})
-			}
-			out, _ := json.MarshalIndent(list, "", "  ")
-			return string(out) + "\n"
-		}
-	}
-
-	joined := strings.ToLower(strings.Join(args, " "))
-	switch {
-	case strings.HasPrefix(joined, "corner_radius"):
-		n, _ := strconv.Atoi(args[len(args)-1])
-		s.BorderRadius = n
-		updated, _ := h.store.UpdateSettings(s)
-		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": updated, "theme": h.store.ActiveTheme()}})
-		return fmt.Sprintf("[{\"success\": true, \"swayfx\": \"corner_radius %d\"}]\n", updated.BorderRadius)
-
-	case strings.HasPrefix(joined, "blur"):
-		if strings.Contains(joined, "disable") {
-			s.BlurEnabled = false
-		} else if strings.Contains(joined, "enable") {
-			s.BlurEnabled = true
-		} else {
-			s.BlurEnabled = !s.BlurEnabled
-		}
-		updated, _ := h.store.UpdateSettings(s)
-		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": updated, "theme": h.store.ActiveTheme()}})
-		return fmt.Sprintf("[{\"success\": true, \"swayfx_blur\": %v}]\n", updated.BlurEnabled)
-
-	case strings.HasPrefix(joined, "gaps inner"):
-		n, _ := strconv.Atoi(args[len(args)-1])
-		s.GapsIn = n
-		updated, _ := h.store.UpdateSettings(s)
-		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": updated, "theme": h.store.ActiveTheme()}})
-		return fmt.Sprintf("[{\"success\": true, \"gaps_inner\": %d}]\n", updated.GapsIn)
-
-	case strings.HasPrefix(joined, "gaps outer"):
-		n, _ := strconv.Atoi(args[len(args)-1])
-		s.GapsOut = n
-		updated, _ := h.store.UpdateSettings(s)
-		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": updated, "theme": h.store.ActiveTheme()}})
-		return fmt.Sprintf("[{\"success\": true, \"gaps_outer\": %d}]\n", updated.GapsOut)
-
-	case strings.HasPrefix(joined, "layout"):
-		mode := "tiling"
-		if strings.Contains(joined, "tabbed") {
-			mode = "tabbed"
-		} else if strings.Contains(joined, "toggle") {
-			mode = "toggle"
-		}
-		updated, _ := h.store.SetLayout(mode)
-		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": updated, "theme": h.store.ActiveTheme()}})
-		return fmt.Sprintf("[{\"success\": true, \"layout\": %q}]\n", updated.LayoutMode)
-
-	case strings.HasPrefix(joined, "workspace"):
-		n, _ := strconv.Atoi(args[len(args)-1])
-		updated, err := h.store.SetWorkspace(n)
-		if err != nil {
-			return fmt.Sprintf("[{\"success\": false, \"error\": %q}]\n", err.Error())
-		}
-		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": updated, "theme": h.store.ActiveTheme()}})
-		return fmt.Sprintf("[{\"success\": true, \"workspace\": %d}]\n", updated.ActiveWorkspace)
-	}
-
-	return "[{\"success\": true}]\n"
-}
-
 func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
-	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
-		return "\x1b[1;36mKitsuneDE Control CLI (Go + Sway/SwayFX IPC)\x1b[0m\n" +
-			"  \x1b[33mkitsune-ctl status\x1b[0m                              Ver estado actual y compositor activo\n" +
-			"  \x1b[33mkitsune-ctl compositor <swayfx|sway|hyprland>\x1b[0m   Elegir perfil de compositor\n" +
-			"  \x1b[33mkitsune-ctl theme [list|next|set <id>]\x1b[0m          Gestionar temas anime\n" +
-			"  \x1b[33mkitsune-ctl layout <tiling|tabbed|floating|monocle|toggle>\x1b[0m\n" +
-			"  \x1b[33mkitsune-ctl workspace <1..5>\x1b[0m                    Cambiar al workspace 1..5\n" +
-			"  \x1b[33mkitsune-ctl notify <mensaje>\x1b[0m                    Enviar notificación estilo SwayNC\n" +
-			"  \x1b[33mkitsune-ctl export [directorio]\x1b[0m                 Exportar configs Sway/SwayFX/Waybar\n"
+	if len(args) == 0 || args[0] == "help" {
+		return renderHelp()
 	}
 
 	switch args[0] {
@@ -321,35 +175,21 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 		s := h.store.Settings()
 		t := h.store.ActiveTheme()
 		return fmt.Sprintf(
-			"\x1b[1;35m狐 KitsuneDE Daemon Status\x1b[0m\n"+
-				"  Compositor  : \x1b[1;36m%s\x1b[0m ($SWAYSOCK activo: %v)\n"+
-				"  Tema Activo : \x1b[1;36m%s\x1b[0m (%s)\n"+
-				"  Layout WM   : \x1b[1;32m%s\x1b[0m (gaps inner=%d, outer=%d, radius=%d)\n"+
-				"  Workspace   : \x1b[1;33m%d\x1b[0m\n",
-			strings.ToUpper(s.Compositor), h.sway != nil && h.sway.Available(),
-			t.Name, t.ID, s.LayoutMode, s.GapsIn, s.GapsOut, s.BorderRadius, s.ActiveWorkspace,
+			"\x1b[1;35m狐 Kitsune Go Wayland — Estado en Vivo\x1b[0m\n"+
+				"  Motor Wayland : \x1b[1;36mKitsune Go Wayland (Sin Dock inferior)\x1b[0m\n"+
+				"  Tema Activo   : \x1b[1;36m%s\x1b[0m (%s — %s)\n"+
+				"  Modo Ventanas : \x1b[1;32m%s\x1b[0m (Workspace %d)\n"+
+				"  Cristal Blur  : \x1b[1;36m%v (%dpx)\x1b[0m | Bordes Luminosos: \x1b[1;35m%v (%d%%)\x1b[0m\n",
+			t.Name, t.ID, t.JapaneseName,
+			strings.ToUpper(s.LayoutMode), s.ActiveWorkspace,
+			s.BlurEnabled, s.BlurRadius, s.BorderGlow, s.GlowIntensity,
 		)
-
-	case "compositor", "comp":
-		comp := "toggle"
-		if len(args) >= 2 {
-			comp = strings.ToLower(args[1])
-		}
-		settings, err := h.store.SetCompositor(comp)
-		if err != nil {
-			return fmt.Sprintf("\x1b[31mError: %s\x1b[0m\n", err.Error())
-		}
-		if h.sway != nil && h.sway.Available() {
-			_ = h.sway.ApplyLiveState(h.store.ActiveTheme(), settings)
-		}
-		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": settings, "theme": h.store.ActiveTheme()}})
-		return fmt.Sprintf("\x1b[1;32m✓ Perfil de compositor cambiado a: %s\x1b[0m\n", strings.ToUpper(settings.Compositor))
 
 	case "theme":
 		if len(args) < 2 || args[1] == "list" {
 			var b strings.Builder
 			cur := h.store.Settings().ActiveTheme
-			b.WriteString("\x1b[1;36mTemas Anime disponibles para Sway / SwayFX:\x1b[0m\n")
+			b.WriteString("\x1b[1;36mTemas Anime incluidos en Kitsune Go Wayland:\x1b[0m\n")
 			for _, t := range h.store.Themes() {
 				mark := "  "
 				if t.ID == cur {
@@ -370,9 +210,6 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 				}
 			}
 			settings, theme, _ := h.store.SetTheme(nextID)
-			if h.sway != nil && h.sway.Available() {
-				h.sway.SyncNativeDesktop(theme, settings)
-			}
 			h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": settings, "theme": theme}})
 			return fmt.Sprintf("\x1b[1;32m✓ Tema cambiado a %s (%s)\x1b[0m\n", theme.Name, theme.JapaneseName)
 		}
@@ -380,9 +217,6 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 			settings, theme, err := h.store.SetTheme(args[2])
 			if err != nil {
 				return fmt.Sprintf("\x1b[31mError: %s\x1b[0m\n", err.Error())
-			}
-			if h.sway != nil && h.sway.Available() {
-				h.sway.SyncNativeDesktop(theme, settings)
 			}
 			h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": settings, "theme": theme}})
 			return fmt.Sprintf("\x1b[1;32m✓ Tema aplicado en vivo: %s (%s)\x1b[0m\n", theme.Name, theme.JapaneseName)
@@ -399,7 +233,39 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 			return fmt.Sprintf("\x1b[31mError: %s\x1b[0m\n", err.Error())
 		}
 		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": settings, "theme": h.store.ActiveTheme()}})
-		return fmt.Sprintf("\x1b[1;32m✓ Modo de ventanas Sway cambiado a: %s\x1b[0m\n", strings.ToUpper(settings.LayoutMode))
+		return fmt.Sprintf("\x1b[1;32m✓ Modo de escritorio cambiado a: %s\x1b[0m\n", strings.ToUpper(settings.LayoutMode))
+
+	case "blur":
+		cur := h.store.Settings()
+		if len(args) < 2 || args[1] == "toggle" {
+			cur.BlurEnabled = !cur.BlurEnabled
+		} else if args[1] == "on" {
+			cur.BlurEnabled = true
+		} else if args[1] == "off" {
+			cur.BlurEnabled = false
+		} else if px, err := strconv.Atoi(args[1]); err == nil {
+			cur.BlurEnabled = px > 0
+			cur.BlurRadius = px
+		}
+		updated, _ := h.store.UpdateSettings(cur)
+		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": updated, "theme": h.store.ActiveTheme()}})
+		return fmt.Sprintf("\x1b[1;32m✓ Cristal Blur actualizado: activo=%v (%dpx)\x1b[0m\n", updated.BlurEnabled, updated.BlurRadius)
+
+	case "glow":
+		cur := h.store.Settings()
+		if len(args) < 2 || args[1] == "toggle" {
+			cur.BorderGlow = !cur.BorderGlow
+		} else if args[1] == "on" {
+			cur.BorderGlow = true
+		} else if args[1] == "off" {
+			cur.BorderGlow = false
+		} else if val, err := strconv.Atoi(args[1]); err == nil {
+			cur.BorderGlow = val > 0
+			cur.GlowIntensity = val
+		}
+		updated, _ := h.store.UpdateSettings(cur)
+		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": updated, "theme": h.store.ActiveTheme()}})
+		return fmt.Sprintf("\x1b[1;32m✓ Bordes luminosos actualizados: activo=%v (%d%%)\x1b[0m\n", updated.BorderGlow, updated.GlowIntensity)
 
 	case "workspace", "ws":
 		if len(args) < 2 {
@@ -413,15 +279,22 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 		h.hub.Broadcast(ws.Event{Type: "state_updated", Payload: map[string]any{"settings": settings, "theme": h.store.ActiveTheme()}})
 		return fmt.Sprintf("\x1b[1;32m✓ Cambiado al Workspace %d\x1b[0m\n", settings.ActiveWorkspace)
 
+	case "open":
+		if len(args) < 2 {
+			return "\x1b[31mUso: kitsune-ctl open <settings|sysmon|files|nvim|terminal|music|pacman>\x1b[0m\n"
+		}
+		h.hub.Broadcast(ws.Event{Type: "open_app", Payload: map[string]any{"appId": args[1]}})
+		return fmt.Sprintf("\x1b[1;32m✓ Abriendo pestaña en Kitsune Go Wayland: %s\x1b[0m\n", args[1])
+
 	case "notify":
-		msg := "Notificación SwayNC desde KitsuneDE"
+		msg := "Notificación desde Kitsune Go Wayland"
 		if len(args) >= 2 {
 			msg = strings.Join(args[1:], " ")
 		}
 		h.hub.Broadcast(ws.Event{
 			Type: "notification",
 			Payload: map[string]any{
-				"title": "狐 Kitsune SwayNC",
+				"title": "狐 Kitsune Go Wayland",
 				"body":  msg,
 				"icon":  "sparkles",
 			},
@@ -429,7 +302,7 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 		return fmt.Sprintf("\x1b[1;36m✓ Notificación enviada: %q\x1b[0m\n", msg)
 
 	case "export":
-		outDir := filepath.Join(cwd, "dotfiles-sway-export")
+		outDir := filepath.Join(cwd, "dotfiles-kitsune-wayland")
 		if len(args) >= 2 {
 			if filepath.IsAbs(args[1]) {
 				outDir = args[1]
@@ -442,7 +315,7 @@ func (h *Handler) handleKitsuneCtl(cwd string, args []string) string {
 			return fmt.Sprintf("\x1b[31mError exportando dotfiles: %v\x1b[0m\n", err)
 		}
 		var b strings.Builder
-		b.WriteString(fmt.Sprintf("\x1b[1;32m✓ %d archivos Sway / SwayFX / Waybar exportados a %s:\x1b[0m\n", len(files), outDir))
+		b.WriteString(fmt.Sprintf("\x1b[1;32m✓ %d archivos Kitsune Go Wayland exportados a %s:\x1b[0m\n", len(files), outDir))
 		for _, f := range files {
 			b.WriteString("  • " + f + "\n")
 		}
@@ -466,9 +339,8 @@ func (h *Handler) handleArchPkg(bin string, args []string, cwd string) string {
 		return "\x1b[1;34m::\x1b[0m \x1b[1mSincronizando bases de datos de paquetes de Arch Linux...\x1b[0m\n" +
 			" \x1b[32mcore\x1b[0m                  164.2 KiB  1.42 MiB/s 00:00 [\x1b[36m########################\x1b[0m] 100%\n" +
 			" \x1b[32mextra\x1b[0m                   8.4 MiB  19.8 MiB/s 00:00 [\x1b[36m########################\x1b[0m] 100%\n" +
-			" \x1b[35mchaotic-aur\x1b[0m             2.1 MiB   9.4 MiB/s 00:00 [\x1b[35m########################\x1b[0m] 100%\n" +
 			"\x1b[1;34m::\x1b[0m \x1b[1mIniciando actualización completa del sistema...\x1b[0m\n" +
-			" nada que hacer — \x1b[1;32mtu entorno KitsuneDE + SwayFX (Go) está actualizado 狐\x1b[0m\n"
+			" nada que hacer — \x1b[1;32mtu escritorio Kitsune Go Wayland (Tabbed) está actualizado 狐\x1b[0m\n"
 	}
 
 	if args[0] == "-Ss" {
@@ -477,14 +349,12 @@ func (h *Handler) handleArchPkg(bin string, args []string, cwd string) string {
 			q = strings.ToLower(args[1])
 		}
 		pkgs := []struct{ repo, name, ver, desc string }{
-			{"kitsune", "kitsune-de", "1.1.0-1", "Escritorio y demonio sway-ipc estilo Anime en Go para Sway y SwayFX"},
-			{"aur", "swayfx", "0.4.0-2", "Sway con corner_radius, blur, shadows y layer_effects estilo anime"},
-			{"extra", "sway", "1.10-1", "Compositor Wayland ligero compatible con i3 e integrado con $SWAYSOCK"},
-			{"extra", "swaybg", "1.2.1-1", "Herramienta de fondos de pantalla para compositores Wayland / Sway"},
-			{"aur", "swaylock-effects-git", "1.7.0-1", "Pantalla de bloqueo para Sway/SwayFX con blur e indicador circular"},
-			{"extra", "autotiling", "2.1.2-1", "División automática espiral splith/splitv para Sway y SwayFX"},
-			{"extra", "waybar", "0.11.0-2", "Barra superior con soporte nativo para sway/workspaces y sway/mode"},
-			{"aur", "swaync", "0.10.1-2", "Centro de notificaciones para Sway y SwayFX"},
+			{"kitsune", "kitsune-go-wayland", "2.0.0-1", "Escritorio Anime Tabbed puro en Go para Wayland (sin Sway/Hyprland ni Dock inferior)"},
+			{"extra", "cage", "0.2.0-1", "Servidor de pantalla Wayland minimalista para la sesión nativa Kitsune Go Wayland"},
+			{"extra", "btop", "1.4.0-1", "Monitor de recursos Btop++ integrado con temas Anime"},
+			{"extra", "yazi", "0.4.2-1", "Gestor de archivos ultrarrápido Yazi sincronizado con Kitsune Go"},
+			{"extra", "neovim", "0.10.3-1", "Editor modal Neovim Go Studio con resaltado Anime"},
+			{"extra", "kitty", "0.38.1-1", "Emulador de terminal acelerado por GPU"},
 		}
 		var b strings.Builder
 		for _, p := range pkgs {
@@ -504,12 +374,12 @@ func (h *Handler) handleArchPkg(bin string, args []string, cwd string) string {
 			"\x1b[1;34m::\x1b[0m Resolviendo dependencias para \x1b[1;36m%s\x1b[0m...\n"+
 				"Paquetes (1) \x1b[1m%s-latest\x1b[0m\n\n"+
 				"\x1b[1;32m(1/1) instalando %s\x1b[0m                              [\x1b[36m########################\x1b[0m] 100%%\n"+
-				"\x1b[1;35m✓ Listo en KitsuneDE (en tu Arch Linux real ejecuta ./INSTALAR_EN_ARCH.sh --compositor swayfx)\x1b[0m\n",
+				"\x1b[1;35m✓ Listo en Kitsune Go Wayland (ejecuta ./INSTALAR_EN_ARCH.sh en tu Arch Linux real)\x1b[0m\n",
 			pkg, pkg, pkg,
 		)
 	}
 
-	return "\x1b[1;36mArch Pacman / Yay Wrapper\x1b[0m — prueba: \x1b[33myay -S swayfx\x1b[0m, \x1b[33mpacman -Ss sway\x1b[0m, \x1b[33mpacman -Syu\x1b[0m\n"
+	return "\x1b[1;36mArch Pacman Wrapper\x1b[0m — prueba: \x1b[33mpacman -Ss kitsune\x1b[0m, \x1b[33mpacman -Syu\x1b[0m\n"
 }
 
 func (h *Handler) renderFastfetch() string {
@@ -534,19 +404,14 @@ func (h *Handler) renderFastfetch() string {
 		"\x1b[1;34m      :osssssss/   🦊   osssso+++.    \x1b[0m",
 	}
 
-	compLabel := strings.ToUpper(settings.Compositor)
-	if compLabel == "" {
-		compLabel = "SWAYFX"
-	}
-
 	info := []string{
 		fmt.Sprintf("\x1b[1;36m%s\x1b[0m@\x1b[1;35m%s\x1b[0m", snap.Username, snap.Hostname),
 		"\x1b[38;5;240m──────────────────────────────────────────────\x1b[0m",
 		fmt.Sprintf("\x1b[1;36m󰣇 OS         \x1b[0m ➜  %s", snap.Distro),
 		fmt.Sprintf("\x1b[1;36m󰌽 Kernel     \x1b[0m ➜  %s (%s)", snap.Kernel, snap.Arch),
-		fmt.Sprintf("\x1b[1;35m󰖲 Compositor \x1b[0m ➜  KitsuneDE + %s [%s]", compLabel, strings.ToUpper(settings.LayoutMode)),
+		fmt.Sprintf("\x1b[1;35m🦊 Escritorio \x1b[0m ➜  Kitsune Go Wayland [%s • Sin Dock]", strings.ToUpper(settings.LayoutMode)),
 		fmt.Sprintf("\x1b[1;35m🎨 Tema Anime \x1b[0m ➜  %s (%s)", theme.Name, theme.JapaneseName),
-		fmt.Sprintf("\x1b[1;34m🐹 Motor IPC  \x1b[0m ➜  %s (sway-ipc + WebSocket)", snap.GoVersion),
+		fmt.Sprintf("\x1b[1;34m💧 Efectos    \x1b[0m ➜  Blur %dpx • Glow %d%% • %s", settings.BlurRadius, settings.GlowIntensity, snap.GoVersion),
 		fmt.Sprintf("\x1b[1;34m󰥔 Uptime     \x1b[0m ➜  %s", snap.UptimeHuman),
 		fmt.Sprintf("\x1b[1;32m󰻠 CPU        \x1b[0m ➜  %s (%d cores @ %.1f%%)", snap.CPUModel, snap.CPUCores, snap.CPUPercent),
 		fmt.Sprintf("\x1b[1;32m󰍛 Memoria    \x1b[0m ➜  %d MiB / %d MiB (%.1f%%)", snap.MemUsedMB, snap.MemTotalMB, snap.MemPercent),
@@ -570,25 +435,29 @@ func (h *Handler) renderFastfetch() string {
 		if i < len(info) {
 			right = info[i]
 		}
-		b.WriteString(left + "  " + right + "\n")
+		b.WriteString(left + "   " + right + "\n")
 	}
 	return b.String()
 }
 
 func renderHelp() string {
-	return "\x1b[1;35m╭─── 狐 KitsuneDE // Terminal Arch Linux Sway & SwayFX (Go) ───────────╮\x1b[0m\n" +
-		"  \x1b[1;36mswaymsg -t get_version\x1b[0m          Consultar versión IPC de Sway / SwayFX\n" +
-		"  \x1b[1;36mswaymsg corner_radius 18\x1b[0m        Ajustar redondeo SwayFX en tiempo real\n" +
-		"  \x1b[1;36mswaymsg layout tabbed\x1b[0m           Activar contenedor con pestañas de Sway\n" +
-		"  \x1b[1;36mkitsune-ctl compositor swayfx\x1b[0m   Cambiar perfil (swayfx | sway | hyprland)\n" +
-		"  \x1b[1;36mkitsune-ctl theme next\x1b[0m          Cambiar de tema anime en vivo\n" +
-		"  \x1b[1;36mkitsune-ctl export ./dotfiles\x1b[0m   Generar configs de Sway, SwayFX y Waybar\n" +
-		"  \x1b[1;36myay -S swayfx\x1b[0m / \x1b[1;36mpacman -Ss sway\x1b[0m Gestor de paquetes Arch Linux\n" +
-		"\x1b[1;35m╰──────────────────────────────────────────────────────────────────────╯\x1b[0m\n"
+	return "\x1b[1;36m🦊 Comandos de Kitsune Go Wayland (Tabbed Desktop):\x1b[0m\n" +
+		"  \x1b[33mfastfetch\x1b[0m                         Muestra información del sistema y tema activo\n" +
+		"  \x1b[33mkitsune-ctl status\x1b[0m                Estado del motor Kitsune Go Wayland\n" +
+		"  \x1b[33mkitsune-ctl theme list\x1b[0m            Lista los 4 temas Anime incluidos\n" +
+		"  \x1b[33mkitsune-ctl theme next\x1b[0m            Cambia al siguiente tema Anime en vivo\n" +
+		"  \x1b[33mkitsune-ctl theme set <id>\x1b[0m        Aplica neon-tokyo | sakura-lofi | crimson-shonen | eva-midnight\n" +
+		"  \x1b[33mkitsune-ctl layout tabbed\x1b[0m         Cambia modo (tabbed | tiling | floating | monocle)\n" +
+		"  \x1b[33mkitsune-ctl blur <0..36>\x1b[0m          Ajusta en vivo el radio de desenfoque Blur en píxeles\n" +
+		"  \x1b[33mkitsune-ctl glow <0..100>\x1b[0m         Ajusta en vivo la intensidad de bordes luminosos (%)\n" +
+		"  \x1b[33mkitsune-ctl open <app>\x1b[0m            Abre pestaña: settings | sysmon | files | nvim | terminal\n" +
+		"  \x1b[33mkitsune-ctl workspace <1..5>\x1b[0m      Cambia al espacio de trabajo Kanji (一 二 三 四 五)\n" +
+		"  \x1b[33mkitsune-ctl export [carpeta]\x1b[0m      Exporta configuraciones Kitsune Go Wayland\n"
 }
 
 func prettyCwd(cwd string) string {
-	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(cwd, home) {
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" && strings.HasPrefix(cwd, home) {
 		rel := strings.TrimPrefix(cwd, home)
 		if rel == "" {
 			return "~"

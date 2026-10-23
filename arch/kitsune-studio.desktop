@@ -1,9 +1,9 @@
 [Desktop Entry]
 Name=Kitsune Rice Studio
-Comment=Panel Anime de Temas, Efectos SwayFX, Wallpapers y Dotfiles en vivo
-Exec=chromium --ozone-platform-hint=auto --app=http://127.0.0.1:8080
+Comment=Estudio de Temas Anime, Blur y Bordes Luminosos para Kitsune Go Wayland
+Exec=chromium --ozone-platform-hint=auto --app=http://127.0.0.1:18080
 Icon=preferences-desktop-theme
 Terminal=false
 Type=Application
 Categories=Settings;DesktopSettings;GTK;
-Keywords=anime;sway;swayfx;waybar;theme;kitsune;
+Keywords=anime;wayland;kitsune;theme;blur;

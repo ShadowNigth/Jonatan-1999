@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Lanzador de sesión Full Anime Shell de KitsuneDE (100% Idéntico al Ejemplo Web)
+# Lanzador Nativo de Kitsune Go Wayland (Modo Tabbed • Sin Sway • Sin Dock)
 # Compatible con SDDM, GDM, LightDM, greetd, ly o ejecución directa desde TTY.
-# Renderiza el escritorio completo con partículas Canvas 60fps, audio pentatónico,
-# animaciones spring, Waybar, Dock, Rofi, Terminal PTY real y Rice Studio.
 # ==============================================================================
 set -euo pipefail
 
 export KITSUNE_PORT="${KITSUNE_PORT:-18080}"
 export KITSUNE_URL="http://127.0.0.1:${KITSUNE_PORT}"
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP="KitsuneGoWayland"
 export XCURSOR_THEME="${XCURSOR_THEME:-Bibata-Modern-Ice}"
 export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
 export MOZ_ENABLE_WAYLAND=1
@@ -19,15 +19,15 @@ if [[ -d /usr/share/kitsune-de/wallpapers ]]; then
   cp -n /usr/share/kitsune-de/wallpapers/*.jpg "${HOME}/.config/kitsune-de/wallpapers/" 2>/dev/null || true
 fi
 
-# Iniciar el motor Go de KitsuneDE en segundo plano
-kitsune-de --addr "127.0.0.1:${KITSUNE_PORT}" --workdir "${HOME}" --compositor swayfx &
+# Iniciar motor Go de Kitsune Go Wayland en modo Tabbed predeterminado
+kitsune-de --addr "127.0.0.1:${KITSUNE_PORT}" --workdir "${HOME}" --layout tabbed &
 DE_PID=$!
 cleanup() {
   kill "${DE_PID}" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-# Esperar hasta que el servidor local responda (máx ~3s)
+# Esperar a que el motor Go esté listo
 for _ in {1..30}; do
   if command -v curl >/dev/null 2>&1; then
     curl -fsS "${KITSUNE_URL}/api/health" >/dev/null 2>&1 && break
@@ -48,7 +48,7 @@ CHROME_FLAGS=(
   "--app=${KITSUNE_URL}"
 )
 
-# Si arranca desde TTY o Display Manager sin sesión Wayland/X11 previa -> Cage Wayland Kiosk
+# Arranque directo sobre Wayland puro (desde TTY o Display Manager)
 if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
   if command -v cage >/dev/null 2>&1; then
     for browser in chromium brave google-chrome-stable; do
@@ -64,7 +64,7 @@ if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
   fi
 fi
 
-# Dentro de Wayland o X11 existente
+# Arranque dentro de una sesión Wayland/X11 existente
 for browser in chromium brave google-chrome-stable; do
   if command -v "${browser}" >/dev/null 2>&1; then
     "${browser}" "${CHROME_FLAGS[@]}"

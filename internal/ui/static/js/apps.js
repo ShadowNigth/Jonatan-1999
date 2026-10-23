@@ -1,4 +1,4 @@
-// KitsuneDE Built-in Applications Suite (Powered by Go Backend APIs & WebSockets)
+// Kitsune Go Wayland — Flagship Applications Suite (Rice Studio, Btop++, Yazi, Neovim Go Studio, Kitty)
 (function () {
   function wsURL(path) {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -12,7 +12,6 @@
       .replace(/>/g, '&gt;');
   }
 
-  // Lightweight ANSI -> HTML converter for Kitty Terminal
   const ANSI_FG = {
     30: '#1e1e2e', 31: '#ff4d79', 32: '#2ee59d', 33: '#ffd166',
     34: '#5ccfe6', 35: '#cba6f7', 36: '#00f0ff', 37: '#eef6ff',
@@ -72,26 +71,636 @@
       if (!ctx) return;
 
       switch (appId) {
-        case 'terminal':
-          return this.openTerminal(ctx, extra);
         case 'settings':
           return this.openSettings(ctx, extra);
         case 'sysmon':
-          return this.openSysmon(ctx);
+          return this.openSysmon(ctx, extra);
         case 'files':
           return this.openFiles(ctx, extra);
         case 'nvim':
           return this.openNvim(ctx, extra);
-        case 'music':
-          return this.openMusic(ctx);
-        case 'pacman':
-          return this.openPacman(ctx);
-        default:
+        case 'terminal':
           return this.openTerminal(ctx, extra);
+        case 'music':
+          return this.openMusic(ctx, extra);
+        case 'pacman':
+          return this.openPacman(ctx, extra);
+        default:
+          return this.openSettings(ctx, extra);
       }
     },
 
-    // ==================== 1. KITTY TERMINAL ====================
+    // ==================== 1. KITSUNE RICE STUDIO ====================
+    openSettings(ctx, extra = {}) {
+      let activeTab = extra.tab || 'themes';
+      let selectedDotfile = 'kitsune-wayland/config.toml';
+      let cachedBundle = null;
+      let unsubState = null;
+
+      return ctx.wm.createWindow({
+        appId: 'settings',
+        title: 'Kitsune Rice Studio',
+        icon: '🎨',
+        width: 820,
+        height: 540,
+        focus: extra.focus !== false,
+        onDestroy: () => {
+          if (unsubState) unsubState();
+        },
+        mount: (body) => {
+          const render = async () => {
+            const s = ctx.settings;
+            const themes = ctx.themes || [];
+
+            body.innerHTML = `
+              <div class="studio-wrap">
+                <div class="studio-tabs">
+                  <button class="studio-tab ${activeTab === 'themes' ? 'active' : ''}" data-tab="themes">🌸 Temas Anime, Blur &amp; Bordes Luminosos</button>
+                  <button class="studio-tab ${activeTab === 'dotfiles' ? 'active' : ''}" data-tab="dotfiles">⚙️ Configs Kitsune Go Wayland</button>
+                </div>
+                <div class="studio-content" id="studio-pane"></div>
+              </div>
+            `;
+
+            body.querySelectorAll('.studio-tab').forEach((btn) => {
+              btn.addEventListener('click', () => {
+                activeTab = btn.dataset.tab;
+                render();
+              });
+            });
+
+            const pane = body.querySelector('#studio-pane');
+
+            if (activeTab === 'themes') {
+              pane.innerHTML = `
+                <div class="theme-grid">
+                  ${themes.map((t) => `
+                    <div class="theme-card ${t.id === s.activeTheme ? 'active' : ''}" data-theme="${t.id}">
+                      <div class="theme-thumb" style="background-image:url('${t.wallpaper}')">
+                        <span class="theme-jp-badge">${escapeHTML(t.japaneseName)}</span>
+                      </div>
+                      <div class="theme-card-body">
+                        <div class="theme-card-title">${escapeHTML(t.name)} <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(${escapeHTML(t.id)})</span></div>
+                        <div class="theme-card-sub">${escapeHTML(t.subtitle)}</div>
+                        <div class="theme-swatches">
+                          <span style="background:${t.primary}" title="Primary"></span>
+                          <span style="background:${t.secondary}" title="Secondary"></span>
+                          <span style="background:${t.accent}" title="Accent"></span>
+                          <span style="background:${t.bgSurface}" title="Surface"></span>
+                        </div>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+
+                <div class="controls-grid">
+                  <div class="ctl-box">
+                    <div class="ctl-label"><span>💧 Desenfoque Cristal Blur</span><strong id="lbl-blur">${s.blurRadius ?? 18}px</strong></div>
+                    <input type="range" min="0" max="36" value="${s.blurRadius ?? 18}" id="rng-blur" />
+                  </div>
+                  <div class="ctl-box">
+                    <div class="ctl-label"><span>🌟 Brillo Bordes Luminosos</span><strong id="lbl-glow">${s.glowIntensity ?? 72}%</strong></div>
+                    <input type="range" min="0" max="100" value="${s.glowIntensity ?? 72}" id="rng-glow" />
+                  </div>
+                  <div class="ctl-box">
+                    <div class="ctl-label"><span>▣ Grosor del Borde Neón</span><strong id="lbl-bsz">${s.borderSize ?? 2}px</strong></div>
+                    <input type="range" min="1" max="6" value="${s.borderSize ?? 2}" id="rng-bsz" />
+                  </div>
+                  <div class="ctl-box">
+                    <div class="ctl-label"><span>◜ Redondeo de Ventanas</span><strong id="lbl-rad">${s.borderRadius ?? 12}px</strong></div>
+                    <input type="range" min="0" max="28" value="${s.borderRadius ?? 12}" id="rng-rad" />
+                  </div>
+                  <div class="ctl-box">
+                    <div class="ctl-label"><span>🪟 Opacidad de Cristal</span><strong id="lbl-op">${s.windowOpacity ?? 92}%</strong></div>
+                    <input type="range" min="65" max="100" value="${s.windowOpacity ?? 92}" id="rng-op" />
+                  </div>
+                  <div class="ctl-box">
+                    <div class="ctl-label"><span>⇔ Margen Exterior (gaps)</span><strong id="lbl-go">${s.gapsOut ?? 12}px</strong></div>
+                    <input type="range" min="0" max="36" value="${s.gapsOut ?? 12}" id="rng-go" />
+                  </div>
+                </div>
+
+                <div class="toggle-row">
+                  <button class="pill-toggle ${s.layoutMode === 'tabbed' ? 'on' : ''}" data-layout="tabbed">🗂️ Modo Tabbed (Sin Dock)</button>
+                  <button class="pill-toggle ${s.layoutMode === 'tiling' ? 'on' : ''}" data-layout="tiling">⊞ Tiling Mosaico</button>
+                  <button class="pill-toggle ${s.layoutMode === 'floating' ? 'on' : ''}" data-layout="floating">⧉ Flotante</button>
+                  <button class="pill-toggle ${s.layoutMode === 'monocle' ? 'on' : ''}" data-layout="monocle">▣ Monocle</button>
+                  <button class="pill-toggle ${s.particlesEnabled ? 'on' : ''}" id="tog-part">✨ Partículas Anime</button>
+                  <button class="pill-toggle ${s.blurEnabled ? 'on' : ''}" id="tog-blur">💧 Cristal Blur</button>
+                  <button class="pill-toggle ${s.borderGlow ? 'on' : ''}" id="tog-glow">🌟 Bordes Luminosos</button>
+                </div>
+              `;
+
+              pane.querySelectorAll('.theme-card').forEach((card) => {
+                card.addEventListener('click', async () => {
+                  await ctx.saveSettings({ ...ctx.settings, activeTheme: card.dataset.theme });
+                  cachedBundle = null;
+                  render();
+                });
+              });
+
+              const bindRange = (id, lblId, key, suffix, extraMutator) => {
+                const el = pane.querySelector(id);
+                const lbl = pane.querySelector(lblId);
+                el.addEventListener('input', () => {
+                  const val = parseInt(el.value, 10);
+                  lbl.textContent = val + suffix;
+                  const next = { ...ctx.settings, [key]: val };
+                  if (extraMutator) extraMutator(next, val);
+                  ctx.previewLocalSettings(next);
+                });
+                el.addEventListener('change', () => {
+                  const val = parseInt(el.value, 10);
+                  const next = { ...ctx.settings, [key]: val };
+                  if (extraMutator) extraMutator(next, val);
+                  ctx.saveSettings(next);
+                });
+              };
+
+              bindRange('#rng-blur', '#lbl-blur', 'blurRadius', 'px', (n, v) => { n.blurEnabled = v > 0; });
+              bindRange('#rng-glow', '#lbl-glow', 'glowIntensity', '%', (n, v) => { n.borderGlow = v > 0; });
+              bindRange('#rng-bsz', '#lbl-bsz', 'borderSize', 'px');
+              bindRange('#rng-rad', '#lbl-rad', 'borderRadius', 'px');
+              bindRange('#rng-op', '#lbl-op', 'windowOpacity', '%');
+              bindRange('#rng-go', '#lbl-go', 'gapsOut', 'px');
+
+              pane.querySelectorAll('[data-layout]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                  await ctx.saveSettings({ ...ctx.settings, layoutMode: btn.dataset.layout });
+                  render();
+                });
+              });
+
+              pane.querySelector('#tog-part').addEventListener('click', async () => {
+                await ctx.saveSettings({ ...ctx.settings, particlesEnabled: !ctx.settings.particlesEnabled });
+                render();
+              });
+              pane.querySelector('#tog-blur').addEventListener('click', async () => {
+                await ctx.saveSettings({ ...ctx.settings, blurEnabled: !ctx.settings.blurEnabled });
+                render();
+              });
+              pane.querySelector('#tog-glow').addEventListener('click', async () => {
+                await ctx.saveSettings({ ...ctx.settings, borderGlow: !ctx.settings.borderGlow });
+                render();
+              });
+            } else {
+              pane.innerHTML = `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">Generando configuraciones nativas Kitsune Go Wayland...</div>`;
+              const res = await fetch(`/api/ricer/preview?theme=${encodeURIComponent(s.activeTheme)}`);
+              cachedBundle = await res.json();
+              const files = cachedBundle.files || {};
+              const preferredOrder = [
+                'kitsune-wayland/config.toml',
+                'kitsune-wayland/waybar.jsonc',
+                'kitsune-wayland/waybar.css',
+                'rofi/config.rasi',
+                'btop/themes/kitsune.theme',
+                'yazi/theme.toml',
+                'nvim/init.lua',
+                'kitty/kitty.conf',
+                'fastfetch/config.jsonc',
+                'gtk-4.0/gtk.css',
+              ];
+              const keys = preferredOrder.filter((k) => files[k]);
+              if (!files[selectedDotfile] && keys.length) selectedDotfile = keys[0];
+
+              pane.innerHTML = `
+                <div class="dotfiles-bar">
+                  <div class="dotfile-select">
+                    ${keys.map((k) => `
+                      <button class="dot-btn ${k === selectedDotfile ? 'active' : ''}" data-file="${k}">${k}</button>
+                    `).join('')}
+                  </div>
+                  <div style="display:flex;gap:6px">
+                    <button class="dot-btn" id="btn-copy-dot">📋 Copiar</button>
+                    <button class="action-primary" id="btn-export-dot">⚡ Exportar Configs</button>
+                  </div>
+                </div>
+                <pre class="code-preview" id="dot-code">${escapeHTML(files[selectedDotfile] || '')}</pre>
+              `;
+
+              pane.querySelectorAll('[data-file]').forEach((b) => {
+                b.addEventListener('click', () => {
+                  selectedDotfile = b.dataset.file;
+                  render();
+                });
+              });
+
+              pane.querySelector('#btn-copy-dot').addEventListener('click', () => {
+                navigator.clipboard?.writeText(files[selectedDotfile] || '');
+                ctx.pushToast('Copiado al portapapeles', selectedDotfile);
+              });
+
+              pane.querySelector('#btn-export-dot').addEventListener('click', async () => {
+                await fetch('/api/ricer/export', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ themeId: s.activeTheme, outDir: 'dotfiles-kitsune-wayland' }),
+                });
+              });
+            }
+          };
+
+          render();
+          let lastTheme = ctx.settings.activeTheme;
+          let lastLayout = ctx.settings.layoutMode;
+          unsubState = ctx.onStateUpdate((nextS) => {
+            if (nextS.activeTheme !== lastTheme || nextS.layoutMode !== lastLayout) {
+              lastTheme = nextS.activeTheme;
+              lastLayout = nextS.layoutMode;
+              render();
+            }
+          });
+        },
+      });
+    },
+
+    // ==================== 2. BTOP++ MONITOR ====================
+    openSysmon(ctx, extra = {}) {
+      let unsub = null;
+      const cpuHistory = [];
+
+      return ctx.wm.createWindow({
+        appId: 'sysmon',
+        title: 'Btop++ Monitor',
+        icon: '📊',
+        width: 780,
+        height: 520,
+        focus: extra.focus !== false,
+        onDestroy: () => {
+          if (unsub) unsub();
+        },
+        mount: (body) => {
+          const drawSparkline = () => {
+            const canvas = body.querySelector('#btop-spark');
+            if (!canvas) return;
+            const c = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            c.clearRect(0, 0, w, h);
+
+            const primary = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#00f0ff';
+            const secondary = getComputedStyle(document.documentElement).getPropertyValue('--secondary').trim() || '#ff2a85';
+
+            // Subtle grid lines
+            c.strokeStyle = 'rgba(255,255,255,0.06)';
+            c.lineWidth = 1;
+            for (let y = 16; y < h; y += 18) {
+              c.beginPath();
+              c.moveTo(0, y);
+              c.lineTo(w, y);
+              c.stroke();
+            }
+
+            if (cpuHistory.length < 2) return;
+            const step = w / Math.max(1, 39);
+            const grad = c.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, primary + '66');
+            grad.addColorStop(1, secondary + '08');
+
+            c.beginPath();
+            cpuHistory.forEach((val, idx) => {
+              const x = idx * step;
+              const y = h - 6 - (Math.min(100, Math.max(0, val)) / 100) * (h - 14);
+              if (idx === 0) c.moveTo(x, y);
+              else c.lineTo(x, y);
+            });
+            c.strokeStyle = primary;
+            c.lineWidth = 2;
+            c.stroke();
+
+            c.lineTo((cpuHistory.length - 1) * step, h);
+            c.lineTo(0, h);
+            c.closePath();
+            c.fillStyle = grad;
+            c.fill();
+          };
+
+          const updateView = (snap) => {
+            if (!snap) return;
+            cpuHistory.push(snap.cpuPercent || 0);
+            if (cpuHistory.length > 40) cpuHistory.shift();
+
+            body.innerHTML = `
+              <div class="sysmon-wrap">
+                <div class="btop-graph-box">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:11.5px">
+                    <span style="color:var(--primary);font-weight:700">󰻠 Btop++ Historial CPU en Vivo — ${escapeHTML(snap.cpuModel)}</span>
+                    <span style="color:var(--secondary);font-weight:800">${snap.cpuPercent.toFixed(1)}% • LoadAvg ${escapeHTML(snap.loadAvg)}</span>
+                  </div>
+                  <canvas id="btop-spark" width="720" height="68" style="width:100%;height:68px;display:block"></canvas>
+                </div>
+
+                <div class="sysmon-cards">
+                  <div class="metric-card">
+                    <div class="metric-title">󰻠 CPU Total (${snap.cpuCores} núcleos)</div>
+                    <div class="metric-val">${snap.cpuPercent.toFixed(1)}%</div>
+                    <div class="metric-sub">Kernel ${escapeHTML(snap.kernel)}</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, snap.cpuPercent)}%"></div></div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="metric-title">󰍛 Memoria RAM</div>
+                    <div class="metric-val">${snap.memPercent.toFixed(1)}%</div>
+                    <div class="metric-sub">${snap.memUsedMB} MiB / ${snap.memTotalMB} MiB</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, snap.memPercent)}%"></div></div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="metric-title">󰋊 Disco Raíz (/)</div>
+                    <div class="metric-val">${snap.diskPercent.toFixed(1)}%</div>
+                    <div class="metric-sub">${snap.diskUsedGB} GiB / ${snap.diskTotalGB} GiB</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, snap.diskPercent)}%"></div></div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="metric-title">🐹 Kitsune Go &amp; Red</div>
+                    <div class="metric-val">${snap.goroutines} <span style="font-size:12px">goroutines</span></div>
+                    <div class="metric-sub">↓ ${snap.netRxKBps} KB/s • ↑ ${snap.netTxKBps} KB/s</div>
+                    <div class="metric-sub">${escapeHTML(snap.goVersion)} • Uptime ${escapeHTML(snap.uptimeHuman)}</div>
+                  </div>
+                </div>
+
+                <div class="cores-grid">
+                  ${(snap.perCore || []).slice(0, 8).map((c) => `
+                    <div class="core-pill">
+                      <div style="display:flex;justify-content:space-between">
+                        <span>${escapeHTML(c.name)}</span>
+                        <strong style="color:var(--primary)">${c.percent.toFixed(0)}%</strong>
+                      </div>
+                      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, c.percent)}%"></div></div>
+                    </div>
+                  `).join('')}
+                </div>
+
+                <div>
+                  <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:6px">
+                    Procesos Activos en Linux (/proc)
+                  </div>
+                  <table class="proc-table">
+                    <thead>
+                      <tr>
+                        <th>PID</th>
+                        <th>PROCESO</th>
+                        <th>ESTADO</th>
+                        <th>HILOS</th>
+                        <th>MEMORIA RSS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${(snap.processes || []).map((p) => `
+                        <tr>
+                          <td>${p.pid}</td>
+                          <td style="color:var(--primary);font-weight:700">${escapeHTML(p.name)}</td>
+                          <td>${escapeHTML(p.state)}</td>
+                          <td>${p.threads}</td>
+                          <td>${p.memMB.toFixed(1)} MB</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            `;
+            drawSparkline();
+          };
+
+          updateView(ctx.system);
+          unsub = ctx.onTelemetry((snap) => updateView(snap));
+        },
+      });
+    },
+
+    // ==================== 3. YAZI FILE MANAGER ====================
+    openFiles(ctx, extra = {}) {
+      let currentPath = extra.path || '';
+      let selectedRel = '';
+
+      return ctx.wm.createWindow({
+        appId: 'files',
+        title: 'Yazi File Manager',
+        icon: '📁',
+        width: 780,
+        height: 500,
+        focus: extra.focus !== false,
+        mount: (body) => {
+          const iconFor = (e) => {
+            if (e.isDir) return '📂';
+            if (e.ext === 'go') return '🐹';
+            if (e.ext === 'jpg' || e.ext === 'png') return '🖼️';
+            if (e.ext === 'sh' || e.name === 'PKGBUILD') return '⚙️';
+            if (e.ext === 'md' || e.ext === 'toml') return '📘';
+            return '📄';
+          };
+
+          const previewEntry = async (entry) => {
+            const headEl = body.querySelector('#yazi-prev-title');
+            const bodyPre = body.querySelector('#yazi-prev-body');
+            const openBtn = body.querySelector('#btn-yazi-nvim');
+            if (!headEl || !bodyPre || !openBtn) return;
+
+            headEl.textContent = entry.relPath;
+            if (entry.isDir) {
+              openBtn.classList.add('hidden');
+              bodyPre.textContent = `📂 Directorio: ${entry.relPath}\nHaz doble clic o pulsa Enter para entrar.`;
+              return;
+            }
+            if (entry.ext === 'jpg' || entry.ext === 'png') {
+              openBtn.classList.add('hidden');
+              const baseName = entry.name;
+              bodyPre.innerHTML = `<div style="text-align:center"><img src="/wallpapers/${escapeHTML(baseName)}" style="max-width:100%;max-height:260px;border-radius:10px;border:1px solid var(--primary)" alt="${escapeHTML(baseName)}" /><div style="margin-top:8px;color:var(--text-muted)">${escapeHTML(entry.relPath)} (${(entry.size / 1024).toFixed(1)} KB)</div></div>`;
+              return;
+            }
+
+            openBtn.classList.remove('hidden');
+            openBtn.onclick = () => Apps.open('nvim', { filePath: entry.relPath });
+
+            const res = await fetch(`/api/fs/read?path=${encodeURIComponent(entry.relPath)}`);
+            const data = await res.json();
+            bodyPre.textContent = (data.content || data.error || '').slice(0, 6000);
+          };
+
+          const loadDir = async (rel) => {
+            const res = await fetch(`/api/fs/list?path=${encodeURIComponent(rel)}`);
+            const data = await res.json();
+            currentPath = data.path || '';
+            const entries = data.entries || [];
+
+            body.innerHTML = `
+              <div class="files-wrap">
+                <div class="files-toolbar">
+                  <button class="dot-btn" id="btn-fs-up">⬆ Subir</button>
+                  <button class="dot-btn" id="btn-fs-root">🏠 Raíz</button>
+                  <div class="files-path">󰉋 ~/${escapeHTML(data.root)}${currentPath ? '/' + escapeHTML(currentPath) : ''}</div>
+                </div>
+                <div class="yazi-split">
+                  <div class="yazi-list-pane" id="yazi-list">
+                    ${entries.map((e, idx) => `
+                      <div class="yazi-row ${idx === 0 ? 'selected' : ''}" data-idx="${idx}">
+                        <span style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden">
+                          <span>${iconFor(e)}</span>
+                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(e.name)}</span>
+                        </span>
+                        <span style="font-size:10.5px;color:var(--text-muted);flex-shrink:0">${e.isDir ? 'DIR ❯' : `${(e.size / 1024).toFixed(1)} KB`}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                  <div class="yazi-preview-pane">
+                    <div class="yazi-preview-head">
+                      <span id="yazi-prev-title" style="color:var(--primary)">Vista previa Yazi</span>
+                      <button class="action-primary hidden" id="btn-yazi-nvim" style="padding:3px 9px;font-size:11px">📝 Abrir en Neovim Go</button>
+                    </div>
+                    <div class="yazi-preview-body" id="yazi-prev-body">Selecciona un archivo para previsualizar su código...</div>
+                  </div>
+                </div>
+              </div>
+            `;
+
+            body.querySelector('#btn-fs-up').addEventListener('click', () => {
+              if (!currentPath) return;
+              const parts = currentPath.split('/');
+              parts.pop();
+              loadDir(parts.join('/'));
+            });
+            body.querySelector('#btn-fs-root').addEventListener('click', () => loadDir(''));
+
+            body.querySelectorAll('.yazi-row').forEach((row) => {
+              const entry = entries[parseInt(row.dataset.idx, 10)];
+              row.addEventListener('click', () => {
+                body.querySelectorAll('.yazi-row').forEach((r) => r.classList.remove('selected'));
+                row.classList.add('selected');
+                selectedRel = entry.relPath;
+                if (entry.isDir) {
+                  loadDir(entry.relPath);
+                } else {
+                  previewEntry(entry);
+                }
+              });
+              row.addEventListener('dblclick', () => {
+                if (!entry.isDir && entry.ext !== 'jpg' && entry.ext !== 'png') {
+                  Apps.open('nvim', { filePath: entry.relPath });
+                }
+              });
+            });
+
+            const firstFile = entries.find((e) => !e.isDir) || entries[0];
+            if (firstFile && selectedRel !== firstFile.relPath) {
+              previewEntry(firstFile);
+            } else if (firstFile) {
+              previewEntry(firstFile);
+            }
+          };
+
+          loadDir(currentPath);
+        },
+      });
+    },
+
+    // ==================== 4. NEOVIM GO STUDIO ====================
+    openNvim(ctx, extra = {}) {
+      let currentFile = extra.filePath || 'cmd/kitsune-de/main.go';
+
+      const loadFileIntoWin = async (win, path) => {
+        currentFile = path;
+        const res = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}`);
+        const data = await res.json();
+        const content = data.content || `// Error abriendo ${path}: ${data.error || ''}`;
+        const lines = content.split('\n').length;
+
+        win.bodyEl.innerHTML = `
+          <div class="nvim-wrap">
+            <div class="nvim-topbar">
+              <div style="display:flex;gap:5px;flex-wrap:wrap">
+                <button class="dot-btn ${path === 'cmd/kitsune-de/main.go' ? 'active' : ''}" data-open="cmd/kitsune-de/main.go">cmd/kitsune-de/main.go</button>
+                <button class="dot-btn ${path === 'internal/config/state.go' ? 'active' : ''}" data-open="internal/config/state.go">config/state.go</button>
+                <button class="dot-btn ${path === 'internal/ricer/generator.go' ? 'active' : ''}" data-open="internal/ricer/generator.go">ricer/generator.go</button>
+                <button class="dot-btn ${path === 'INSTALAR_EN_ARCH.sh' ? 'active' : ''}" data-open="INSTALAR_EN_ARCH.sh">INSTALAR_EN_ARCH.sh</button>
+                <button class="dot-btn ${path === 'arch/PKGBUILD' ? 'active' : ''}" data-open="arch/PKGBUILD">PKGBUILD</button>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="dot-btn" id="btn-nvim-test">▶ go test ./...</button>
+                <button class="action-primary" id="btn-nvim-save">💾 Guardar (:w)</button>
+              </div>
+            </div>
+            <div class="nvim-editor-area">
+              <div class="nvim-gutter" id="nvim-gutter">${Array.from({ length: lines }, (_, i) => i + 1).join('<br>')}</div>
+              <textarea class="nvim-textarea" id="nvim-ta" spellcheck="false">${escapeHTML(content)}</textarea>
+            </div>
+            <div class="nvim-statusline">
+              <div><span class="nvim-mode" id="nvim-mode-badge">NORMAL</span> &nbsp; 🐹 ${escapeHTML(path)}</div>
+              <div style="color:var(--text-muted)">Neovim Go Studio • UTF-8 • <span id="nvim-line-count">${lines}</span> líneas</div>
+            </div>
+          </div>
+        `;
+
+        ctx.wm.setTitle(win, `Neovim Go Studio — ${path}`);
+        const ta = win.bodyEl.querySelector('#nvim-ta');
+        const gutter = win.bodyEl.querySelector('#nvim-gutter');
+        const modeBadge = win.bodyEl.querySelector('#nvim-mode-badge');
+        const lineCount = win.bodyEl.querySelector('#nvim-line-count');
+
+        const saveCurrent = async () => {
+          const saveRes = await fetch('/api/fs/write', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: currentFile, content: ta.value }),
+          });
+          const out = await saveRes.json();
+          if (out.ok) {
+            ctx.pushToast('Neovim Go Studio (:w)', `${currentFile} guardado en disco`);
+          } else {
+            ctx.pushToast('Error al guardar', out.error || 'Error desconocido');
+          }
+        };
+
+        ta.addEventListener('focus', () => {
+          modeBadge.textContent = 'INSERT';
+          modeBadge.style.background = 'var(--secondary)';
+        });
+        ta.addEventListener('blur', () => {
+          modeBadge.textContent = 'NORMAL';
+          modeBadge.style.background = 'var(--primary)';
+        });
+        ta.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            ta.blur();
+          } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+            e.preventDefault();
+            saveCurrent();
+          }
+        });
+        ta.addEventListener('scroll', () => {
+          gutter.scrollTop = ta.scrollTop;
+        });
+        ta.addEventListener('input', () => {
+          const count = ta.value.split('\n').length;
+          lineCount.textContent = String(count);
+          gutter.innerHTML = Array.from({ length: count }, (_, i) => i + 1).join('<br>');
+        });
+
+        win.bodyEl.querySelectorAll('[data-open]').forEach((b) => {
+          b.addEventListener('click', () => loadFileIntoWin(win, b.dataset.open));
+        });
+
+        win.bodyEl.querySelector('#btn-nvim-save').addEventListener('click', saveCurrent);
+        win.bodyEl.querySelector('#btn-nvim-test').addEventListener('click', () => {
+          Apps.open('terminal', { initialCommand: 'go test -v ./...' });
+        });
+      };
+
+      return ctx.wm.createWindow({
+        appId: 'nvim',
+        title: `Neovim Go Studio — ${currentFile}`,
+        icon: '📝',
+        width: 780,
+        height: 500,
+        focus: extra.focus !== false,
+        onReopen: (existingWin) => {
+          if (extra.filePath) loadFileIntoWin(existingWin, extra.filePath);
+        },
+        mount: (_, winObj) => {
+          loadFileIntoWin(winObj, currentFile);
+        },
+      });
+    },
+
+    // ==================== 5. KITTY TERMINAL ====================
     openTerminal(ctx, extra = {}) {
       let ws = null;
       const history = [];
@@ -99,10 +708,11 @@
 
       return ctx.wm.createWindow({
         appId: 'terminal',
-        title: 'kitty — kitsune@arch ~',
+        title: 'Kitty Terminal — kitsune@arch ~',
         icon: '>_',
-        width: 740,
-        height: 470,
+        width: 760,
+        height: 490,
+        focus: extra.focus !== false,
         multiInstance: Boolean(extra.multiInstance),
         onDestroy: () => {
           if (ws) try { ws.close(); } catch (_) {}
@@ -112,17 +722,17 @@
             <div class="term-wrap">
               <div class="term-quickbar">
                 <button class="term-chip" data-cmd="fastfetch">fastfetch</button>
-                <button class="term-chip" data-cmd="swaymsg -t get_version">swaymsg version</button>
-                <button class="term-chip" data-cmd="swaymsg layout tabbed">swaymsg tabbed</button>
-                <button class="term-chip" data-cmd="swaymsg corner_radius 18">corner_radius 18</button>
+                <button class="term-chip" data-cmd="kitsune-ctl status">kitsune-ctl status</button>
                 <button class="term-chip" data-cmd="kitsune-ctl theme next">theme next</button>
-                <button class="term-chip" data-cmd="kitsune-ctl compositor toggle">SwayFX/Sway</button>
-                <button class="term-chip" data-cmd="yay -S swayfx">yay -S swayfx</button>
+                <button class="term-chip" data-cmd="kitsune-ctl blur 24">blur 24px</button>
+                <button class="term-chip" data-cmd="kitsune-ctl glow 90">glow 90%</button>
+                <button class="term-chip" data-cmd="kitsune-ctl layout tabbed">layout tabbed</button>
+                <button class="term-chip" data-cmd="go test ./...">go test ./...</button>
               </div>
               <div class="term-output"></div>
               <form class="term-input-row">
                 <span class="term-prompt">󰣇 kitsune <span class="tp-cwd">~</span> ❯</span>
-                <input class="term-cmd-input" type="text" placeholder="Escribe un comando Linux, swaymsg o kitsune-ctl..." autocomplete="off" spellcheck="false" />
+                <input class="term-cmd-input" type="text" placeholder="Escribe un comando Linux o kitsune-ctl..." autocomplete="off" spellcheck="false" />
               </form>
             </div>
           `;
@@ -167,7 +777,7 @@
                 const msg = JSON.parse(ev.data);
                 if (msg.cwd) {
                   cwdEl.textContent = msg.cwd;
-                  winObj.el.querySelector('.win-title-text').textContent = `kitty — kitsune@arch ${msg.cwd}`;
+                  ctx.wm.setTitle(winObj, `Kitty Terminal — ${msg.cwd}`);
                 }
                 if (msg.clear) {
                   outEl.innerHTML = '';
@@ -209,494 +819,25 @@
           });
 
           body.addEventListener('click', () => inputEl.focus());
-          setTimeout(() => inputEl.focus(), 60);
-        },
-      });
-    },
-
-    // ==================== 2. RICE STUDIO & DOTFILES ====================
-    openSettings(ctx, extra = {}) {
-      let activeTab = extra.tab || 'themes';
-      let selectedDotfile = 'swayfx/config';
-      let cachedBundle = null;
-      let unsubState = null;
-
-      return ctx.wm.createWindow({
-        appId: 'settings',
-        title: 'Kitsune Rice Studio — Sway, SwayFX & Temas Anime (Go)',
-        icon: '🎨',
-        width: 780,
-        height: 510,
-        onDestroy: () => {
-          if (unsubState) unsubState();
-        },
-        mount: (body) => {
-          const render = async () => {
-            const s = ctx.settings;
-            const themes = ctx.themes || [];
-
-            body.innerHTML = `
-              <div class="studio-wrap">
-                <div class="studio-tabs">
-                  <button class="studio-tab ${activeTab === 'themes' ? 'active' : ''}" data-tab="themes">🌸 Temas Anime &amp; Sway/SwayFX</button>
-                  <button class="studio-tab ${activeTab === 'dotfiles' ? 'active' : ''}" data-tab="dotfiles">⚙️ Configs Sway / SwayFX (Go)</button>
-                </div>
-                <div class="studio-content" id="studio-pane"></div>
-              </div>
-            `;
-
-            body.querySelectorAll('.studio-tab').forEach((btn) => {
-              btn.addEventListener('click', () => {
-                activeTab = btn.dataset.tab;
-                render();
-              });
-            });
-
-            const pane = body.querySelector('#studio-pane');
-
-            if (activeTab === 'themes') {
-              pane.innerHTML = `
-                <div class="theme-grid">
-                  ${themes.map((t) => `
-                    <div class="theme-card ${t.id === s.activeTheme ? 'active' : ''}" data-theme="${t.id}">
-                      <div class="theme-thumb" style="background-image:url('${t.wallpaper}')">
-                        <span class="theme-jp-badge">${escapeHTML(t.japaneseName)}</span>
-                      </div>
-                      <div class="theme-card-body">
-                        <div class="theme-card-title">${escapeHTML(t.name)}</div>
-                        <div class="theme-card-sub">${escapeHTML(t.subtitle)}</div>
-                        <div class="theme-swatches">
-                          <span style="background:${t.primary}" title="Primary"></span>
-                          <span style="background:${t.secondary}" title="Secondary"></span>
-                          <span style="background:${t.accent}" title="Accent"></span>
-                          <span style="background:${t.bgSurface}" title="Surface"></span>
-                        </div>
-                      </div>
-                    </div>
-                  `).join('')}
-                </div>
-
-                <div class="controls-grid">
-                  <div class="ctl-box">
-                    <div class="ctl-label"><span>Gaps Internos (gaps_in)</span><strong id="lbl-gi">${s.gapsIn}px</strong></div>
-                    <input type="range" min="0" max="24" value="${s.gapsIn}" id="rng-gi" />
-                  </div>
-                  <div class="ctl-box">
-                    <div class="ctl-label"><span>Gaps Externos (gaps_out)</span><strong id="lbl-go">${s.gapsOut}px</strong></div>
-                    <input type="range" min="0" max="36" value="${s.gapsOut}" id="rng-go" />
-                  </div>
-                  <div class="ctl-box">
-                    <div class="ctl-label"><span>Redondeo Ventanas</span><strong id="lbl-rad">${s.borderRadius}px</strong></div>
-                    <input type="range" min="0" max="24" value="${s.borderRadius}" id="rng-rad" />
-                  </div>
-                  <div class="ctl-box">
-                    <div class="ctl-label"><span>Opacidad Cristal</span><strong id="lbl-op">${s.windowOpacity}%</strong></div>
-                    <input type="range" min="70" max="100" value="${s.windowOpacity}" id="rng-op" />
-                  </div>
-                </div>
-
-                <div class="toggle-row" style="margin-bottom:6px">
-                  <button class="pill-toggle ${(s.compositor || 'swayfx') === 'swayfx' ? 'on' : ''}" data-comp="swayfx">✨ SwayFX (Blur + Corner Radius)</button>
-                  <button class="pill-toggle ${s.compositor === 'sway' ? 'on' : ''}" data-comp="sway">▣ Sway Puro (Bordes Clásicos)</button>
-                  <button class="pill-toggle ${s.compositor === 'hyprland' ? 'on' : ''}" data-comp="hyprland">💧 Hyprland</button>
-                </div>
-
-                <div class="toggle-row">
-                  <button class="pill-toggle ${s.layoutMode === 'tiling' ? 'on' : ''}" data-layout="tiling">⊞ Sway Split Tiling</button>
-                  <button class="pill-toggle ${s.layoutMode === 'tabbed' ? 'on' : ''}" data-layout="tabbed">🗂️ Sway Tabbed (Alt+W)</button>
-                  <button class="pill-toggle ${s.layoutMode === 'floating' ? 'on' : ''}" data-layout="floating">⧉ Flotante</button>
-                  <button class="pill-toggle ${s.layoutMode === 'monocle' ? 'on' : ''}" data-layout="monocle">▣ Monocle</button>
-                  <button class="pill-toggle ${s.particlesEnabled ? 'on' : ''}" id="tog-part">✨ Partículas Anime</button>
-                  <button class="pill-toggle ${s.blurEnabled ? 'on' : ''}" id="tog-blur">💧 Blur</button>
-                  <button class="pill-toggle ${s.borderGlow ? 'on' : ''}" id="tog-glow">🌟 Sombras Neón</button>
-                </div>
-              `;
-
-              pane.querySelectorAll('.theme-card').forEach((card) => {
-                card.addEventListener('click', async () => {
-                  await ctx.saveSettings({ ...ctx.settings, activeTheme: card.dataset.theme });
-                  cachedBundle = null;
-                  render();
-                });
-              });
-
-              const bindRange = (id, lblId, key, suffix) => {
-                const el = pane.querySelector(id);
-                const lbl = pane.querySelector(lblId);
-                el.addEventListener('input', () => {
-                  lbl.textContent = el.value + suffix;
-                  ctx.previewLocalSettings({ ...ctx.settings, [key]: parseInt(el.value, 10) });
-                });
-                el.addEventListener('change', () => {
-                  ctx.saveSettings({ ...ctx.settings, [key]: parseInt(el.value, 10) });
-                });
-              };
-
-              bindRange('#rng-gi', '#lbl-gi', 'gapsIn', 'px');
-              bindRange('#rng-go', '#lbl-go', 'gapsOut', 'px');
-              bindRange('#rng-rad', '#lbl-rad', 'borderRadius', 'px');
-              bindRange('#rng-op', '#lbl-op', 'windowOpacity', '%');
-
-              pane.querySelectorAll('[data-comp]').forEach((btn) => {
-                btn.addEventListener('click', async () => {
-                  await ctx.saveSettings({ ...ctx.settings, compositor: btn.dataset.comp });
-                  render();
-                });
-              });
-
-              pane.querySelectorAll('[data-layout]').forEach((btn) => {
-                btn.addEventListener('click', async () => {
-                  await ctx.saveSettings({ ...ctx.settings, layoutMode: btn.dataset.layout });
-                  render();
-                });
-              });
-
-              pane.querySelector('#tog-part').addEventListener('click', async () => {
-                await ctx.saveSettings({ ...ctx.settings, particlesEnabled: !ctx.settings.particlesEnabled });
-                render();
-              });
-              pane.querySelector('#tog-blur').addEventListener('click', async () => {
-                await ctx.saveSettings({ ...ctx.settings, blurEnabled: !ctx.settings.blurEnabled });
-                render();
-              });
-              pane.querySelector('#tog-glow').addEventListener('click', async () => {
-                await ctx.saveSettings({ ...ctx.settings, borderGlow: !ctx.settings.borderGlow });
-                render();
-              });
-            } else {
-              pane.innerHTML = `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">Generando dotfiles Sway / SwayFX desde el motor Go...</div>`;
-              const comp = s.compositor || 'swayfx';
-              const res = await fetch(`/api/ricer/preview?theme=${encodeURIComponent(s.activeTheme)}&compositor=${encodeURIComponent(comp)}`);
-              cachedBundle = await res.json();
-              const files = cachedBundle.files || {};
-              const preferredOrder = [
-                'swayfx/config',
-                'sway/config',
-                'sway/swayfx-effects.conf',
-                'waybar/config-sway.jsonc',
-                'waybar/style.css',
-                'nwg-dock/style.css',
-                'swaylock/config',
-                'swaync/style.css',
-                'gtk-4.0/gtk.css',
-                'kitty/kitty.conf',
-                'rofi/config.rasi',
-                'fastfetch/config.jsonc',
-                'hypr/hyprland.conf',
-              ];
-              const keys = preferredOrder.filter((k) => files[k]);
-              if (!files[selectedDotfile] && keys.length) selectedDotfile = keys[0];
-
-              pane.innerHTML = `
-                <div class="dotfiles-bar">
-                  <div class="dotfile-select">
-                    ${keys.map((k) => `
-                      <button class="dot-btn ${k === selectedDotfile ? 'active' : ''}" data-file="${k}">${k}</button>
-                    `).join('')}
-                  </div>
-                  <div style="display:flex;gap:6px">
-                    <button class="dot-btn" id="btn-copy-dot">📋 Copiar</button>
-                    <button class="action-primary" id="btn-export-dot">⚡ Exportar a ./dotfiles-sway</button>
-                  </div>
-                </div>
-                <pre class="code-preview" id="dot-code">${escapeHTML(files[selectedDotfile] || '')}</pre>
-              `;
-
-              pane.querySelectorAll('[data-file]').forEach((b) => {
-                b.addEventListener('click', () => {
-                  selectedDotfile = b.dataset.file;
-                  render();
-                });
-              });
-
-              pane.querySelector('#btn-copy-dot').addEventListener('click', () => {
-                navigator.clipboard?.writeText(files[selectedDotfile] || '');
-                ctx.pushToast('Copiado al portapapeles', selectedDotfile);
-              });
-
-              pane.querySelector('#btn-export-dot').addEventListener('click', async () => {
-                await fetch('/api/ricer/export', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ themeId: s.activeTheme, compositor: comp, outDir: 'dotfiles-sway' }),
-                });
-              });
-            }
-          };
-
-          render();
-          let lastTheme = ctx.settings.activeTheme;
-          let lastLayout = ctx.settings.layoutMode;
-          let lastComp = ctx.settings.compositor;
-          unsubState = ctx.onStateUpdate((nextS) => {
-            if (nextS.activeTheme !== lastTheme || nextS.layoutMode !== lastLayout || nextS.compositor !== lastComp) {
-              lastTheme = nextS.activeTheme;
-              lastLayout = nextS.layoutMode;
-              lastComp = nextS.compositor;
-              render();
-            }
-          });
-        },
-      });
-    },
-
-    // ==================== 3. BTOP++ SYSTEM MONITOR ====================
-    openSysmon(ctx) {
-      let unsub = null;
-
-      return ctx.wm.createWindow({
-        appId: 'sysmon',
-        title: 'btop++ — Telemetría Linux en Tiempo Real (Go /proc)',
-        icon: '📊',
-        width: 720,
-        height: 480,
-        onDestroy: () => {
-          if (unsub) unsub();
-        },
-        mount: (body) => {
-          const updateView = (snap) => {
-            if (!snap) return;
-            body.innerHTML = `
-              <div class="sysmon-wrap">
-                <div class="sysmon-cards">
-                  <div class="metric-card">
-                    <div class="metric-title">󰻠 CPU Total (${snap.cpuCores} núcleos)</div>
-                    <div class="metric-val">${snap.cpuPercent.toFixed(1)}%</div>
-                    <div class="metric-sub">${escapeHTML(snap.cpuModel)}</div>
-                    <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, snap.cpuPercent)}%"></div></div>
-                  </div>
-                  <div class="metric-card">
-                    <div class="metric-title">󰍛 Memoria RAM</div>
-                    <div class="metric-val">${snap.memPercent.toFixed(1)}%</div>
-                    <div class="metric-sub">${snap.memUsedMB} MiB / ${snap.memTotalMB} MiB</div>
-                    <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, snap.memPercent)}%"></div></div>
-                  </div>
-                  <div class="metric-card">
-                    <div class="metric-title">󰋊 Disco Raíz (/)</div>
-                    <div class="metric-val">${snap.diskPercent.toFixed(1)}%</div>
-                    <div class="metric-sub">${snap.diskUsedGB} GiB / ${snap.diskTotalGB} GiB</div>
-                    <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, snap.diskPercent)}%"></div></div>
-                  </div>
-                  <div class="metric-card">
-                    <div class="metric-title">🐹 Motor Go &amp; Red</div>
-                    <div class="metric-val">${snap.goroutines} <span style="font-size:12px">goroutines</span></div>
-                    <div class="metric-sub">↓ ${snap.netRxKBps} KB/s • ↑ ${snap.netTxKBps} KB/s</div>
-                    <div class="metric-sub">${escapeHTML(snap.goVersion)} • Uptime ${escapeHTML(snap.uptimeHuman)}</div>
-                  </div>
-                </div>
-
-                <div class="cores-grid">
-                  ${(snap.perCore || []).slice(0, 8).map((c) => `
-                    <div class="core-pill">
-                      <div style="display:flex;justify-content:space-between">
-                        <span>${escapeHTML(c.name)}</span>
-                        <strong style="color:var(--primary)">${c.percent.toFixed(0)}%</strong>
-                      </div>
-                      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, c.percent)}%"></div></div>
-                    </div>
-                  `).join('')}
-                </div>
-
-                <div>
-                  <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:6px">
-                    Procesos Reales en Linux (/proc) — LoadAvg: ${escapeHTML(snap.loadAvg)}
-                  </div>
-                  <table class="proc-table">
-                    <thead>
-                      <tr>
-                        <th>PID</th>
-                        <th>PROCESO</th>
-                        <th>ESTADO</th>
-                        <th>HILOS</th>
-                        <th>MEMORIA RSS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${(snap.processes || []).map((p) => `
-                        <tr>
-                          <td>${p.pid}</td>
-                          <td style="color:var(--primary);font-weight:700">${escapeHTML(p.name)}</td>
-                          <td>${escapeHTML(p.state)}</td>
-                          <td>${p.threads}</td>
-                          <td>${p.memMB.toFixed(1)} MB</td>
-                        </tr>
-                      `).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            `;
-          };
-
-          updateView(ctx.system);
-          unsub = ctx.onTelemetry((snap) => updateView(snap));
-        },
-      });
-    },
-
-    // ==================== 4. YAZI FILE MANAGER ====================
-    openFiles(ctx, extra = {}) {
-      let currentPath = extra.path || '';
-
-      return ctx.wm.createWindow({
-        appId: 'files',
-        title: 'yazi — Explorador de Archivos Arch',
-        icon: '📁',
-        width: 680,
-        height: 450,
-        mount: (body) => {
-          const loadDir = async (rel) => {
-            const res = await fetch(`/api/fs/list?path=${encodeURIComponent(rel)}`);
-            const data = await res.json();
-            currentPath = data.path || '';
-
-            const iconFor = (e) => {
-              if (e.isDir) return '📂';
-              if (e.ext === 'go') return '🐹';
-              if (e.ext === 'jpg' || e.ext === 'png') return '🖼️';
-              if (e.ext === 'sh' || e.name === 'PKGBUILD') return '⚙️';
-              if (e.ext === 'md') return '📘';
-              return '📄';
-            };
-
-            body.innerHTML = `
-              <div class="files-wrap">
-                <div class="files-toolbar">
-                  <button class="dot-btn" id="btn-fs-up">⬆ Subir</button>
-                  <button class="dot-btn" id="btn-fs-root">🏠 Raíz</button>
-                  <div class="files-path">~/${escapeHTML(data.root)}${currentPath ? '/' + escapeHTML(currentPath) : ''}</div>
-                </div>
-                <div class="files-grid">
-                  ${(data.entries || []).map((e) => `
-                    <div class="file-item" data-rel="${escapeHTML(e.relPath)}" data-dir="${e.isDir}" data-ext="${escapeHTML(e.ext)}">
-                      <div class="file-icon">${iconFor(e)}</div>
-                      <div class="file-name">${escapeHTML(e.name)}</div>
-                      <div class="file-meta">${e.isDir ? 'Directorio' : `${(e.size / 1024).toFixed(1)} KB`}</div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            `;
-
-            body.querySelector('#btn-fs-up').addEventListener('click', () => {
-              if (!currentPath) return;
-              const parts = currentPath.split('/');
-              parts.pop();
-              loadDir(parts.join('/'));
-            });
-            body.querySelector('#btn-fs-root').addEventListener('click', () => loadDir(''));
-
-            body.querySelectorAll('.file-item').forEach((item) => {
-              item.addEventListener('click', () => {
-                const relPath = item.dataset.rel;
-                const isDir = item.dataset.dir === 'true';
-                const ext = item.dataset.ext;
-                if (isDir) {
-                  loadDir(relPath);
-                } else if (ext === 'jpg' || ext === 'png') {
-                  ctx.pushToast('Imagen Anime', relPath);
-                } else {
-                  Apps.open('nvim', { filePath: relPath });
-                }
-              });
-            });
-          };
-
-          loadDir(currentPath);
-        },
-      });
-    },
-
-    // ==================== 5. NEOVIM ANIME CODE STUDIO ====================
-    openNvim(ctx, extra = {}) {
-      let currentFile = extra.filePath || 'cmd/kitsune-de/main.go';
-
-      const loadFileIntoWin = async (win, path) => {
-        currentFile = path;
-        const res = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}`);
-        const data = await res.json();
-        const content = data.content || `// Error abriendo ${path}: ${data.error || ''}`;
-        const lines = content.split('\n').length;
-
-        win.bodyEl.innerHTML = `
-          <div class="nvim-wrap">
-            <div class="nvim-topbar">
-              <div style="display:flex;gap:5px;flex-wrap:wrap">
-                <button class="dot-btn" data-open="internal/swayipc/client.go">swayipc/client.go</button>
-                <button class="dot-btn" data-open="internal/ricer/generator.go">ricer/generator.go</button>
-                <button class="dot-btn" data-open="INSTALAR_EN_ARCH.sh">INSTALAR_EN_ARCH.sh</button>
-                <button class="dot-btn" data-open="arch/PKGBUILD">PKGBUILD</button>
-              </div>
-              <button class="action-primary" id="btn-nvim-save">💾 Guardar (:w)</button>
-            </div>
-            <div class="nvim-editor-area">
-              <div class="nvim-gutter" id="nvim-gutter">${Array.from({ length: lines }, (_, i) => i + 1).join('<br>')}</div>
-              <textarea class="nvim-textarea" id="nvim-ta" spellcheck="false">${escapeHTML(content)}</textarea>
-            </div>
-            <div class="nvim-statusline">
-              <div><span class="nvim-mode">NORMAL</span> &nbsp; ${escapeHTML(path)}</div>
-              <div style="color:var(--text-muted)">UTF-8 • Go / Arch Linux • ${lines} líneas</div>
-            </div>
-          </div>
-        `;
-
-        win.el.querySelector('.win-title-text').textContent = `nvim — ${path}`;
-        const ta = win.bodyEl.querySelector('#nvim-ta');
-        const gutter = win.bodyEl.querySelector('#nvim-gutter');
-
-        ta.addEventListener('scroll', () => {
-          gutter.scrollTop = ta.scrollTop;
-        });
-        ta.addEventListener('input', () => {
-          const count = ta.value.split('\n').length;
-          gutter.innerHTML = Array.from({ length: count }, (_, i) => i + 1).join('<br>');
-        });
-
-        win.bodyEl.querySelectorAll('[data-open]').forEach((b) => {
-          b.addEventListener('click', () => loadFileIntoWin(win, b.dataset.open));
-        });
-
-        win.bodyEl.querySelector('#btn-nvim-save').addEventListener('click', async () => {
-          const saveRes = await fetch('/api/fs/write', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: currentFile, content: ta.value }),
-          });
-          const out = await saveRes.json();
-          if (out.ok) {
-            ctx.pushToast('Archivo guardado (:w)', `${currentFile} escrito correctamente`);
-          } else {
-            ctx.pushToast('Error al guardar', out.error || 'Error desconocido');
+          if (extra.focus !== false) {
+            setTimeout(() => inputEl.focus(), 60);
           }
-        });
-      };
-
-      return ctx.wm.createWindow({
-        appId: 'nvim',
-        title: `nvim — ${currentFile}`,
-        icon: '📝',
-        width: 740,
-        height: 480,
-        onReopen: (existingWin) => {
-          if (extra.filePath) loadFileIntoWin(existingWin, extra.filePath);
-        },
-        mount: (_, winObj) => {
-          loadFileIntoWin(winObj, currentFile);
         },
       });
     },
 
     // ==================== 6. KITSUNE LO-FI & SYNTH PLAYER ====================
-    openMusic(ctx) {
+    openMusic(ctx, extra = {}) {
       let animId = null;
       let unsub = null;
 
       return ctx.wm.createWindow({
         appId: 'music',
-        title: 'Kitsune Synth — Anime Lo-Fi & Synthwave Radio',
+        title: 'Kitsune Synth Radio',
         icon: '🎵',
-        width: 500,
-        height: 430,
+        width: 520,
+        height: 440,
+        focus: extra.focus !== false,
         onDestroy: () => {
           if (animId) cancelAnimationFrame(animId);
           if (unsub) unsub();
@@ -778,16 +919,17 @@
       });
     },
 
-    // ==================== 7. PACMAN / AUR & ARCH INSTALLER ====================
-    openPacman(ctx) {
+    // ==================== 7. PACMAN & ARCH LINUX INSTALLER ====================
+    openPacman(ctx, extra = {}) {
       let query = '';
 
       return ctx.wm.createWindow({
         appId: 'pacman',
-        title: 'Pacman & Instalador Nativo Arch Linux',
+        title: 'Pacman & Instalador Kitsune Go Wayland',
         icon: '📦',
-        width: 720,
+        width: 740,
         height: 490,
+        focus: extra.focus !== false,
         mount: (body) => {
           const pkgs = ctx.archPackages || [];
 
@@ -803,20 +945,20 @@
               <div class="pacman-wrap">
                 <div class="arch-banner-box">
                   <div style="font-family:var(--font-mono);font-size:12.5px;font-weight:800;color:var(--primary);margin-bottom:4px">
-                    󰣇 Instalar KitsuneDE + Sway / SwayFX en Arch Linux
+                    󰣇 Instalar Kitsune Go Wayland (Tabbed • Sin Sway • Sin Dock) en Arch Linux
                   </div>
                   <div style="font-size:12px;color:var(--text-main);line-height:1.45;margin-bottom:8px">
-                    Incluye soporte nativo para <strong>SwayFX</strong> (blur, corner_radius, layer_effects) y <strong>Sway</strong> estándar mediante <code>$SWAYSOCK</code> en Go:
+                    Escritorio independiente <strong>Kitsune Go Wayland</strong> con barra superior Waybar Kanji, Rofi, Blur y bordes luminosos en vivo:
                   </div>
                   <div style="display:flex;gap:6px;flex-wrap:wrap">
-                    <a class="action-primary" href="/download/kitsune-de-sway-arch-linux.zip" download="kitsune-de-sway-arch-linux.zip" style="text-decoration:none;display:inline-flex;align-items:center">⬇️ Descargar ZIP Sway/SwayFX Listo</a>
+                    <a class="action-primary" href="/download/kitsune-go-wayland-arch-linux.zip" download="kitsune-go-wayland-arch-linux.zip" style="text-decoration:none;display:inline-flex;align-items:center">⬇️ Descargar ZIP Kitsune Go Wayland</a>
                     <button class="dot-btn" id="btn-view-install">📜 Ver INSTALAR_EN_ARCH.sh</button>
                     <button class="dot-btn" id="btn-view-pkgbuild">📦 Ver arch/PKGBUILD</button>
-                    <button class="dot-btn" id="btn-run-syu">⚡ yay -S swayfx</button>
+                    <button class="dot-btn" id="btn-run-syu">⚡ pacman -Syu</button>
                   </div>
                 </div>
 
-                <input class="pkg-search" id="pkg-q" type="text" value="${escapeHTML(query)}" placeholder="Buscar paquete en repositorios extra / aur / kitsune..." />
+                <input class="pkg-search" id="pkg-q" type="text" value="${escapeHTML(query)}" placeholder="Buscar paquete de Kitsune Go Wayland..." />
 
                 <div class="pkg-list">
                   ${filtered.map((p) => `
@@ -852,13 +994,13 @@
               Apps.open('nvim', { filePath: 'arch/PKGBUILD' });
             });
             body.querySelector('#btn-run-syu').addEventListener('click', () => {
-              Apps.open('terminal', { multiInstance: true, initialCommand: 'yay -S swayfx' });
+              Apps.open('terminal', { initialCommand: 'pacman -Syu' });
             });
 
             body.querySelectorAll('[data-install]').forEach((btn) => {
               btn.addEventListener('click', () => {
                 const pkgName = btn.dataset.install;
-                Apps.open('terminal', { multiInstance: true, initialCommand: `pacman -S ${pkgName}` });
+                Apps.open('terminal', { initialCommand: `pacman -S ${pkgName}` });
               });
             });
           };

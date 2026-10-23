@@ -1,0 +1,15 @@
+# 🦊 Kitsune Go Wayland — Tema Oficial Yazi File Manager (Sakura Catppuccin • 桜ローファイ // 宵)
+[manager]
+cwd = { fg = "#f5c2e7", bold = true }
+hovered = { fg = "#090812", bg = "#f5c2e7", bold = true }
+preview_hovered = { underline = true }
+find_keyword = { fg = "#cba6f7", bold = true }
+marker_selected = { fg = "#a6e3a1", bg = "#a6e3a1" }
+border_symbol = "│"
+border_style = { fg = "#f5c2e7" }
+
+[status]
+separator_open = ""
+separator_close = ""
+mode_normal = { fg = "#090812", bg = "#f5c2e7", bold = true }
+mode_select = { fg = "#090812", bg = "#cba6f7", bold = true }

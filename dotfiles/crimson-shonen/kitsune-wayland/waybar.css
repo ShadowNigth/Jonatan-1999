@@ -1,0 +1,21 @@
+/* 🦊 Kitsune Go Wayland — Waybar Top Bar Stylesheet (Crimson Shonen) */
+* {
+  font-family: "JetBrainsMono Nerd Font", "Inter", "Noto Sans CJK JP", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+window#waybar {
+  background: rgba(11, 9, 22, 0.78);
+  color: #f8fafc;
+  border-radius: 12px;
+  border: 2px solid #ff1e42;
+  backdrop-filter: blur(18px);
+}
+
+#workspaces button.active {
+  background: linear-gradient(135deg, #ff1e42, #ff7b54);
+  color: #090812;
+  font-weight: 800;
+  border-radius: 7px;
+}

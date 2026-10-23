@@ -34,24 +34,12 @@ func main() {
 		}
 		fmt.Println(prettyJSON(resp))
 
-	case "compositor", "comp":
-		val := "toggle"
-		if len(args) >= 2 {
-			val = strings.ToLower(args[1])
-		}
-		resp, err := sendCtl(baseURL, "set_compositor", val, "")
-		if err != nil {
-			fatalErr(err)
-		}
-		fmt.Println("✓ Compositor actualizado:")
-		fmt.Println(prettyJSON(resp))
-
 	case "theme":
 		if len(args) < 2 || args[1] == "list" {
 			store := config.NewStore("")
-			fmt.Println("🦊 Temas Anime incluidos en KitsuneDE (Sway / SwayFX / Hyprland):")
+			fmt.Println("🦊 Temas Anime incluidos en Kitsune Go Wayland:")
 			for _, t := range store.Themes() {
-				fmt.Printf("  • %-16s  %-18s  %s\n", t.ID, t.JapaneseName, t.Name)
+				fmt.Printf("  • %-16s  %-18s  %s — %s\n", t.ID, t.JapaneseName, t.Name, t.Subtitle)
 			}
 			return
 		}
@@ -84,7 +72,31 @@ func main() {
 		if err != nil {
 			fatalErr(err)
 		}
-		fmt.Println("✓ Modo de ventanas actualizado:")
+		fmt.Println("✓ Modo de escritorio actualizado:")
+		fmt.Println(prettyJSON(resp))
+
+	case "blur":
+		val := "toggle"
+		if len(args) >= 2 {
+			val = args[1]
+		}
+		resp, err := sendCtl(baseURL, "set_blur", val, "")
+		if err != nil {
+			fatalErr(err)
+		}
+		fmt.Println("✓ Desenfoque Blur actualizado en vivo:")
+		fmt.Println(prettyJSON(resp))
+
+	case "glow":
+		val := "toggle"
+		if len(args) >= 2 {
+			val = args[1]
+		}
+		resp, err := sendCtl(baseURL, "set_glow", val, "")
+		if err != nil {
+			fatalErr(err)
+		}
+		fmt.Println("✓ Bordes luminosos actualizados en vivo:")
 		fmt.Println(prettyJSON(resp))
 
 	case "workspace", "ws":
@@ -103,34 +115,28 @@ func main() {
 			fatalMsg("Uso: kitsune-ctl notify <mensaje>")
 		}
 		msg := strings.Join(args[1:], " ")
-		if _, err := sendCtl(baseURL, "notify", msg, "狐 Kitsune SwayNC"); err != nil {
+		if _, err := sendCtl(baseURL, "notify", msg, "狐 Kitsune Go Wayland"); err != nil {
 			fatalErr(err)
 		}
 		fmt.Printf("✓ Notificación enviada: %s\n", msg)
 
 	case "open":
 		if len(args) < 2 {
-			fatalMsg("Uso: kitsune-ctl open <terminal|sysmon|files|settings|music|pacman|nvim>")
+			fatalMsg("Uso: kitsune-ctl open <settings|sysmon|files|nvim|terminal|music|pacman>")
 		}
 		if _, err := sendCtl(baseURL, "open_app", args[1], ""); err != nil {
 			fatalErr(err)
 		}
-		fmt.Printf("✓ Abriendo aplicación en escritorio: %s\n", args[1])
+		fmt.Printf("✓ Abriendo pestaña en escritorio: %s\n", args[1])
 
 	case "export":
 		themeID := "neon-tokyo"
-		compositor := "swayfx"
-		outDir := "./dotfiles-sway"
+		outDir := "./dotfiles-kitsune-wayland"
 		for i := 1; i < len(args); i++ {
 			switch args[i] {
 			case "--theme", "-t":
 				if i+1 < len(args) {
 					themeID = args[i+1]
-					i++
-				}
-			case "--compositor", "-c":
-				if i+1 < len(args) {
-					compositor = strings.ToLower(args[i+1])
 					i++
 				}
 			case "--out", "-o":
@@ -149,24 +155,35 @@ func main() {
 		if !ok {
 			fatalMsg("Tema desconocido: " + themeID)
 		}
-		settings := store.Settings()
-		if compositor == "swayfx" || compositor == "sway" || compositor == "hyprland" {
-			settings.Compositor = compositor
-		}
-		written, err := ricer.ExportToDir(outDir, theme, settings)
+		written, err := ricer.ExportToDir(outDir, theme, store.Settings())
 		if err != nil {
 			fatalErr(err)
 		}
-		fmt.Printf("✓ Exportados %d archivos de configuración Arch Linux [%s • %s] en %s:\n",
-			len(written), strings.ToUpper(settings.Compositor), theme.Name, outDir)
+		fmt.Printf("✓ Exportados %d archivos de Kitsune Go Wayland [%s] en %s:\n", len(written), theme.Name, outDir)
 		for _, f := range written {
-			fmt.Println("  •", f)
+			fmt.Printf("  • %s\n", f)
 		}
 
 	default:
 		printUsage()
-		os.Exit(1)
 	}
+}
+
+func printUsage() {
+	fmt.Println(`🦊 kitsune-ctl — Utilidad CLI para Kitsune Go Wayland (Tabbed Desktop)
+
+Uso:
+  kitsune-ctl status                            Ver estado de Kitsune Go Wayland
+  kitsune-ctl theme list                        Listar los 4 temas Anime incluidos
+  kitsune-ctl theme next                        Cambiar al siguiente tema en caliente
+  kitsune-ctl theme set <id>                    Aplicar neon-tokyo | sakura-lofi | crimson-shonen | eva-midnight
+  kitsune-ctl layout [tabbed|tiling|floating]   Cambiar modo de ventanas (por defecto: tabbed)
+  kitsune-ctl blur <0..36|toggle>               Ajustar intensidad de Blur en vivo (px)
+  kitsune-ctl glow <0..100|toggle>              Ajustar brillo de bordes luminosos en vivo (%)
+  kitsune-ctl workspace <1..5>                  Cambiar al workspace Kanji (一 二 三 四 五)
+  kitsune-ctl open <app>                        Abrir pestaña (settings, sysmon, files, nvim, terminal)
+  kitsune-ctl notify "<texto>"                  Enviar notificación al escritorio
+  kitsune-ctl export --theme <id> --out <dir>   Exportar configuraciones Kitsune Go Wayland`)
 }
 
 func sendCtl(baseURL, action, value, title string) ([]byte, error) {
@@ -178,12 +195,12 @@ func sendCtl(baseURL, action, value, title string) ([]byte, error) {
 	client := &http.Client{Timeout: 4 * time.Second}
 	resp, err := client.Post(baseURL+"/api/ctl", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("no se pudo conectar con kitsune-de en %s (%v)", baseURL, err)
+		return nil, fmt.Errorf("no se pudo conectar a kitsune-de en %s: %w", baseURL, err)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return nil, fmt.Errorf("error del servidor (%d): %s", resp.StatusCode, string(data))
 	}
 	return data, nil
 }
@@ -196,22 +213,8 @@ func prettyJSON(raw []byte) string {
 	return out.String()
 }
 
-func printUsage() {
-	fmt.Println(`🦊 kitsune-ctl — Controlador IPC y Generador de Rice Sway / SwayFX / Arch Linux (Go)
-
-Uso:
-  kitsune-ctl status                                                Estado actual del escritorio y telemetría
-  kitsune-ctl compositor <swayfx|sway|hyprland|toggle>              Cambiar perfil de compositor activo
-  kitsune-ctl theme [list | next | set <id>]                        Gestionar temas anime incluidos
-  kitsune-ctl layout <tiling|tabbed|floating|monocle|toggle>        Cambiar modo de contenedores Sway
-  kitsune-ctl workspace <1..5>                                      Cambiar al workspace indicado
-  kitsune-ctl open <terminal|sysmon|files|settings|music|pacman|nvim>
-  kitsune-ctl notify "<mensaje>"                                    Mostrar notificación anime estilo SwayNC
-  kitsune-ctl export [--compositor swayfx|sway] [--theme <id>] [--out <dir>]`)
-}
-
 func fatalErr(err error) {
-	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	fmt.Fprintln(os.Stderr, "Error:", err)
 	os.Exit(1)
 }
 

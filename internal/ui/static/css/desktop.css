@@ -13,8 +13,10 @@
 
   --border-size: 2px;
   --border-radius: 12px;
-  --win-opacity: 0.90;
-  --glass-blur: 16px;
+  --win-opacity: 0.92;
+  --glass-blur: 18px;
+  --glow-spread: 26px;
+  --glow-alpha: 48%;
   --anim-speed: 0.24s;
 
   --font-sans: "Inter", "Noto Sans", "Noto Sans CJK JP", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -82,14 +84,14 @@ body.no-anim .kitsune-window {
 .eww-widget {
   position: fixed;
   left: 26px;
-  bottom: 84px;
+  bottom: 22px;
   z-index: 3;
   pointer-events: none;
   padding: 16px 20px;
   border-radius: 16px;
   background: color-mix(in srgb, var(--bg-base) 58%, transparent);
-  backdrop-filter: blur(10px);
-  border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
   max-width: 440px;
 }
@@ -157,8 +159,8 @@ body.no-anim .kitsune-window {
   border-radius: var(--border-radius);
   background: color-mix(in srgb, var(--bg-base) 76%, transparent);
   backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--primary) 34%, rgba(255,255,255,0.08));
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 18px color-mix(in srgb, var(--primary) 12%, transparent);
+  border: var(--border-size) solid color-mix(in srgb, var(--primary) 42%, rgba(255,255,255,0.1));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 var(--glow-spread) color-mix(in srgb, var(--primary) var(--glow-alpha), transparent);
 }
 
 .waybar-left,
@@ -346,13 +348,13 @@ body.no-anim .kitsune-window {
   to { height: 12px; }
 }
 
-/* Desktop Stage & Windows */
+/* Desktop Stage & Windows (Full Height — No Bottom Dock) */
 .desktop-stage {
   position: fixed;
   top: 56px;
   left: 0;
   right: 0;
-  bottom: 68px;
+  bottom: 0;
   z-index: 10;
 }
 
@@ -386,8 +388,14 @@ body.no-anim .kitsune-window {
   border-color: var(--primary);
   box-shadow:
     0 18px 50px rgba(0, 0, 0, 0.65),
-    0 0 0 1px color-mix(in srgb, var(--secondary) 45%, transparent),
-    0 0 22px color-mix(in srgb, var(--primary) 32%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--secondary) 52%, transparent),
+    0 0 var(--glow-spread) color-mix(in srgb, var(--primary) var(--glow-alpha), transparent);
+}
+
+.kitsune-window.tab-hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 body.glow-off .kitsune-window.focused {
@@ -510,85 +518,7 @@ body.glow-off .kitsune-window.focused {
   border-bottom-right-radius: calc(var(--border-radius) - 2px);
 }
 
-/* Bottom Anime Dock */
-.kitsune-dock {
-  position: fixed;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  height: 52px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 500;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--bg-base) 76%, transparent);
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--primary) 35%, rgba(255,255,255,0.1));
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
-}
-
-.dock-item {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
-  color: var(--text-main);
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.18s cubic-bezier(0.2, 1, 0.3, 1), border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.dock-item:hover {
-  transform: translateY(-6px) scale(1.12);
-  border-color: var(--primary);
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--primary) 35%, transparent);
-}
-
-.dock-tooltip {
-  position: absolute;
-  bottom: 48px;
-  left: 50%;
-  transform: translateX(-50%) translateY(4px);
-  padding: 4px 9px;
-  border-radius: 7px;
-  background: var(--bg-surface);
-  border: 1px solid var(--primary);
-  color: var(--text-main);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: all 0.15s ease;
-}
-
-.dock-item:hover .dock-tooltip {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-.dock-dot {
-  position: absolute;
-  bottom: -4px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: transparent;
-}
-
-.dock-item.running .dock-dot {
-  background: var(--primary);
-  box-shadow: 0 0 8px var(--primary);
-}
+/* Bottom Dock removed by design — Pure Tabbed Kitsune Go Wayland Desktop */
 
 /* ==================== APP 1: KITTY TERMINAL ==================== */
 .term-wrap {
@@ -1620,67 +1550,183 @@ body.glow-off .kitsune-window.focused {
   background: var(--primary);
 }
 
-/* ==================== SWAY & SWAYFX COMPOSITOR STYLES ==================== */
-.wb-comp {
-  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
-  color: var(--primary);
-}
-
-/* Pure Sway profile: crisp 0px corners & no glass blur (classic wlroots Sway) */
-body.comp-sway .kitsune-window,
-body.comp-sway .waybar,
-body.comp-sway .rofi-modal,
-body.comp-sway .swaync-drawer {
-  border-radius: 0px !important;
-  backdrop-filter: none !important;
-}
-
-/* Sway Tabbed Container Header Bar (layout tabbed / Alt+W) */
-.sway-tabbar {
+/* ==================== KITSUNE GO WAYLAND TABBED ENGINE ==================== */
+.kitsune-tabbar {
   position: absolute;
   z-index: 95;
   display: flex;
-  align-items: stretch;
-  gap: 4px;
-  height: 30px;
-  padding: 2px;
-  border-radius: calc(var(--border-radius) * 0.7);
-  background: color-mix(in srgb, var(--bg-base) 88%, transparent);
+  align-items: center;
+  gap: 5px;
+  height: 36px;
+  padding: 4px 6px;
+  border-radius: calc(var(--border-radius) * 0.85);
+  background: color-mix(in srgb, var(--bg-base) 82%, transparent);
   backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--primary) 40%, rgba(255,255,255,0.1));
+  border: var(--border-size) solid color-mix(in srgb, var(--primary) 42%, rgba(255,255,255,0.1));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42), 0 0 var(--glow-spread) color-mix(in srgb, var(--primary) calc(var(--glow-alpha) * 0.55), transparent);
+  overflow-x: auto;
 }
 
-body.comp-sway .sway-tabbar,
-body.comp-sway .sway-tab {
-  border-radius: 0px !important;
-}
-
-.sway-tab {
+.kitsune-tab {
   flex: 1;
-  min-width: 0;
-  border: none;
-  border-radius: calc(var(--border-radius) * 0.5);
-  background: color-mix(in srgb, var(--bg-surface) 80%, transparent);
+  min-width: 120px;
+  max-width: 260px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: calc(var(--border-radius) * 0.55);
+  background: color-mix(in srgb, var(--bg-surface) 78%, transparent);
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 11.5px;
   font-weight: 600;
-  padding: 0 12px;
+  padding: 0 8px 0 11px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
+  transition: all 0.16s ease;
+}
+
+.kitsune-tab:hover {
+  color: var(--text-main);
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+.kitsune-tab.active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 30%, var(--bg-surface)), color-mix(in srgb, var(--secondary) 16%, var(--bg-surface)));
+  color: var(--text-main);
+  border-color: var(--primary);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.kitsune-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
-  text-align: left;
+}
+
+.kitsune-tab-close {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.kitsune-tab-close:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.kitsune-tab-add {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: calc(var(--border-radius) * 0.55);
+  border: 1px dashed color-mix(in srgb, var(--primary) 55%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
-.sway-tab:hover {
+.kitsune-tab-add:hover {
+  background: var(--primary);
+  color: #090812;
+  border-style: solid;
+}
+
+/* Yazi Dual-Pane File Manager & Btop++ Sparkline */
+.yazi-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 1.15fr) minmax(240px, 1fr);
+  gap: 10px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.yazi-list-pane {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 4px;
+}
+
+.yazi-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition: all 0.14s ease;
+}
+
+.yazi-row:hover,
+.yazi-row.selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 16%, var(--bg-surface));
+}
+
+.yazi-preview-pane {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: rgba(7, 6, 15, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.yazi-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.yazi-preview-body {
+  flex: 1;
+  padding: 10px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
   color: var(--text-main);
 }
 
-.sway-tab.active {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 32%, var(--bg-surface)), var(--bg-surface));
-  color: var(--text-main);
-  border-bottom: 2px solid var(--primary);
+.btop-graph-box {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
+
 

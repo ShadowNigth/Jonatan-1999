@@ -1,4 +1,4 @@
-// KitsuneDE Core Shell Controller (Waybar, Rofi, SwayNC, Particles, Live Go WS Sync)
+// Kitsune Go Wayland Shell Controller (Top Waybar, Tabbed WM, Rofi, Live Blur/Glow, 4-Mode Anime Particles)
 (function () {
   function wsURL(path) {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -41,13 +41,16 @@
 
       this.connectEventsWS();
 
-      // Launch default Hyprland Tiled pair on Workspace 1: Kitty Fastfetch + Rice Studio
-      window.KitsuneApps.open('terminal');
-      window.KitsuneApps.open('settings');
-      this.wm.focus(this.wm.windows[0]?.id);
+      // Open the flagship Kitsune Go Wayland suite as clean tabs on Workspace 一 (no bottom dock)
+      const mainWin = window.KitsuneApps.open('settings');
+      window.KitsuneApps.open('sysmon', { focus: false });
+      window.KitsuneApps.open('files', { focus: false });
+      window.KitsuneApps.open('nvim', { focus: false });
+      window.KitsuneApps.open('terminal', { focus: false });
+      if (mainWin) this.wm.focus(mainWin.id);
 
       document.body.classList.remove('booting');
-      this.pushToast('狐 KitsuneDE // Sway & SwayFX', 'Escritorio Arch Linux Anime impulsado por Go');
+      this.pushToast('狐 Kitsune Go Wayland', 'Escritorio Anime Tabbed puro en Go (sin Dock inferior)');
     }
 
     onTelemetry(fn) {
@@ -80,25 +83,32 @@
 
     applyCSSSettings(s) {
       const root = document.documentElement.style;
+      const blurPx = s.blurEnabled ? (s.blurRadius ?? 18) : 0;
+      const glowPct = s.borderGlow ? (s.glowIntensity ?? 72) : 0;
+      const glowSpread = Math.round(glowPct * 0.42);
+      const glowAlpha = Math.round(glowPct * 0.72);
+
       root.setProperty('--border-size', `${s.borderSize ?? 2}px`);
       root.setProperty('--border-radius', `${s.borderRadius ?? 12}px`);
-      root.setProperty('--win-opacity', ((s.windowOpacity ?? 90) / 100).toFixed(2));
-      root.setProperty('--glass-blur', s.blurEnabled ? '16px' : '0px');
+      root.setProperty('--win-opacity', ((s.windowOpacity ?? 92) / 100).toFixed(2));
+      root.setProperty('--glass-blur', `${blurPx}px`);
+      root.setProperty('--glow-spread', `${glowSpread}px`);
+      root.setProperty('--glow-alpha', `${glowAlpha}%`);
 
       document.body.classList.toggle('no-anim', !s.animationsEnabled);
-      document.body.classList.toggle('glow-off', !s.borderGlow);
-      document.body.classList.toggle('comp-sway', s.compositor === 'sway');
+      document.body.classList.toggle('glow-off', !s.borderGlow || glowPct === 0);
 
-      const compEl = document.getElementById('wb-comp-label');
-      if (compEl) compEl.textContent = (s.compositor || 'swayfx').toUpperCase();
-      document.getElementById('wb-layout-label').textContent = (s.layoutMode || 'tiling').toUpperCase();
+      document.getElementById('wb-layout-label').textContent = (s.layoutMode || 'tabbed').toUpperCase();
       document.querySelectorAll('.ws-btn').forEach((btn) => {
         btn.classList.toggle('active', parseInt(btn.dataset.ws, 10) === s.activeWorkspace);
       });
 
-      document.getElementById('nc-btn-tiling').classList.toggle('active', s.layoutMode === 'tiling');
+      const ncTabbed = document.getElementById('nc-btn-tabbed');
+      if (ncTabbed) ncTabbed.classList.toggle('active', s.layoutMode === 'tabbed');
       document.getElementById('nc-btn-particles').classList.toggle('active', Boolean(s.particlesEnabled));
       document.getElementById('nc-btn-blur').classList.toggle('active', Boolean(s.blurEnabled));
+      const ncGlow = document.getElementById('nc-btn-glow');
+      if (ncGlow) ncGlow.classList.toggle('active', Boolean(s.borderGlow));
     }
 
     applyState(settings, theme) {
@@ -125,7 +135,7 @@
         document.getElementById('wallpaper-layer').style.backgroundImage = `url('${theme.wallpaper}')`;
         document.getElementById('wb-theme-label').textContent = theme.name;
         document.getElementById('eww-jp').textContent = theme.japaneseName;
-        document.getElementById('lock-jp').textContent = `狐 ${theme.japaneseName} // Arch Linux`;
+        document.getElementById('lock-jp').textContent = `狐 ${theme.japaneseName} // Kitsune Go Wayland`;
 
         if (this.particleMode !== theme.particleMode) {
           this.particleMode = theme.particleMode || 'rain';
@@ -141,7 +151,7 @@
       document.getElementById('wb-cpu').textContent = `${Math.round(snap.cpuPercent)}%`;
       document.getElementById('wb-ram').textContent = `${Math.round(snap.memPercent)}%`;
       document.getElementById('nc-user').textContent = `${snap.username}@${snap.hostname}`;
-      document.getElementById('nc-uptime').textContent = `${snap.goVersion} • Uptime ${snap.uptimeHuman}`;
+      document.getElementById('nc-uptime').textContent = `Kitsune Go • Uptime ${snap.uptimeHuman}`;
       this.telemetrySubs.forEach((fn) => fn(snap));
     }
 
@@ -155,9 +165,13 @@
           } else if (evt.type === 'state_updated' && evt.payload) {
             this.applyState(evt.payload.settings, evt.payload.theme);
           } else if (evt.type === 'notification' && evt.payload) {
-            this.pushToast(evt.payload.title || 'KitsuneDE', evt.payload.body || '');
+            this.pushToast(evt.payload.title || 'Kitsune Go Wayland', evt.payload.body || '');
           } else if (evt.type === 'open_app' && evt.payload?.appId) {
-            window.KitsuneApps.open(evt.payload.appId);
+            if (evt.payload.appId === 'rofi') {
+              this.openRofi();
+            } else {
+              window.KitsuneApps.open(evt.payload.appId);
+            }
           }
         } catch (_) {}
       };
@@ -167,37 +181,25 @@
     }
 
     bindShellUI() {
-      // Sync Waybar window title & workspace dots & dock running indicators
-      this.wm.onStateChange = ({ focused, occupied, runningApps }) => {
-        document.getElementById('wb-win-text').textContent = focused ? focused.title : 'Escritorio KitsuneDE';
+      this.wm.onRequestLauncher = () => this.openRofi();
+      this.wm.onQuickOpenApp = (appId) => window.KitsuneApps.open(appId);
+
+      // Sync Waybar window title & Kanji workspace occupancy dots
+      this.wm.onStateChange = ({ focused, occupied }) => {
+        document.getElementById('wb-win-text').textContent = focused ? focused.title : 'Kitsune Go Wayland';
         document.querySelectorAll('.ws-btn').forEach((btn) => {
           const wsNum = parseInt(btn.dataset.ws, 10);
           btn.classList.toggle('occupied', occupied.has(wsNum));
         });
-        document.querySelectorAll('.dock-item').forEach((btn) => {
-          btn.classList.toggle('running', runningApps.has(btn.dataset.app));
-        });
       };
 
-      // Workspaces
+      // Kanji Workspaces (一 二 三 四 五)
       document.querySelectorAll('.ws-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const ws = parseInt(btn.dataset.ws, 10);
           this.saveSettings({ ...this.settings, activeWorkspace: ws });
         });
       });
-
-      // Compositor profile cycle button (SwayFX -> Sway -> Hyprland)
-      const compBtn = document.getElementById('btn-compositor');
-      if (compBtn) {
-        compBtn.addEventListener('click', () => {
-          fetch('/api/ctl', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'set_compositor', value: 'toggle' }),
-          });
-        });
-      }
 
       // Layout toggle button
       document.getElementById('btn-layout').addEventListener('click', () => {
@@ -217,7 +219,7 @@
         });
       });
 
-      // Waybar telemetry -> Btop++
+      // Waybar telemetry -> Btop++ Monitor
       document.getElementById('btn-wb-sysmon').addEventListener('click', () => {
         window.KitsuneApps.open('sysmon');
       });
@@ -229,15 +231,6 @@
       window.KitsuneAudio.onChange((st) => {
         document.getElementById('wb-eq').classList.toggle('playing', st.playing);
         document.getElementById('wb-radio-label').textContent = st.playing ? st.track.jp : 'Synth Off';
-        document.getElementById('nc-btn-radio').classList.toggle('active', st.playing);
-      });
-
-      // Dock App Launchers
-      document.querySelectorAll('.dock-item').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const app = btn.dataset.app;
-          window.KitsuneApps.open(app);
-        });
       });
 
       // Rofi Launcher
@@ -256,7 +249,7 @@
         }
       });
 
-      // SwayNC Notification Drawer
+      // Control & Notification Drawer
       const drawer = document.getElementById('swaync-drawer');
       document.getElementById('btn-notif-drawer').addEventListener('click', () => {
         drawer.classList.toggle('hidden');
@@ -265,8 +258,8 @@
         this.notifications = [];
         this.renderDrawerNotifs();
       });
-      document.getElementById('nc-btn-tiling').addEventListener('click', () => {
-        const nextMode = this.settings.layoutMode === 'tiling' ? 'floating' : 'tiling';
+      document.getElementById('nc-btn-tabbed').addEventListener('click', () => {
+        const nextMode = this.settings.layoutMode === 'tabbed' ? 'tiling' : 'tabbed';
         this.saveSettings({ ...this.settings, layoutMode: nextMode });
       });
       document.getElementById('nc-btn-particles').addEventListener('click', () => {
@@ -275,11 +268,11 @@
       document.getElementById('nc-btn-blur').addEventListener('click', () => {
         this.saveSettings({ ...this.settings, blurEnabled: !this.settings.blurEnabled });
       });
-      document.getElementById('nc-btn-radio').addEventListener('click', () => {
-        window.KitsuneAudio.toggle();
+      document.getElementById('nc-btn-glow').addEventListener('click', () => {
+        this.saveSettings({ ...this.settings, borderGlow: !this.settings.borderGlow });
       });
 
-      // Swaylock Screen
+      // Lockscreen
       const lockEl = document.getElementById('lockscreen');
       document.getElementById('btn-lock').addEventListener('click', () => {
         lockEl.classList.remove('hidden');
@@ -296,15 +289,17 @@
       document.getElementById('desktop-stage').addEventListener('contextmenu', (e) => {
         if (e.target.closest('.kitsune-window')) return;
         e.preventDefault();
-        ctxMenu.style.left = `${Math.min(window.innerWidth - 240, e.clientX)}px`;
-        ctxMenu.style.top = `${Math.min(window.innerHeight - 240, e.clientY)}px`;
+        ctxMenu.style.left = `${Math.min(window.innerWidth - 245, e.clientX)}px`;
+        ctxMenu.style.top = `${Math.min(window.innerHeight - 280, e.clientY)}px`;
         ctxMenu.classList.remove('hidden');
       });
       window.addEventListener('click', () => ctxMenu.classList.add('hidden'));
       ctxMenu.querySelectorAll('[data-ctx]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const val = btn.dataset.ctx;
-          if (val.startsWith('open:')) {
+          if (val === 'open:rofi') {
+            this.openRofi();
+          } else if (val.startsWith('open:')) {
             const app = val.split(':')[1];
             window.KitsuneApps.open(app, app === 'terminal' ? { multiInstance: true } : {});
           } else if (val === 'action:next-theme') {
@@ -329,13 +324,15 @@
         if (e.code === 'Space') {
           e.preventDefault();
           this.openRofi();
+        } else if (e.key === 'Tab') {
+          e.preventDefault();
+          this.wm.cycleTab(e.shiftKey ? -1 : 1);
         } else if (e.key === 'Enter') {
           e.preventDefault();
           window.KitsuneApps.open('terminal', { multiInstance: true });
         } else if (k === 'w') {
           e.preventDefault();
-          const next = this.settings.layoutMode === 'tabbed' ? 'tiling' : 'tabbed';
-          this.saveSettings({ ...this.settings, layoutMode: next });
+          this.saveSettings({ ...this.settings, layoutMode: 'tabbed' });
         } else if (k === 't') {
           e.preventDefault();
           document.getElementById('btn-layout').click();
@@ -367,19 +364,17 @@
     renderRofiItems(q) {
       const query = q.trim().toLowerCase();
       const entries = [
-        { label: '>_  Kitty Terminal (Nueva ventana)', sub: 'Alt+Enter', run: () => window.KitsuneApps.open('terminal', { multiInstance: true }) },
-        { label: '🎨  Kitsune Rice Studio (Sway / SwayFX)', sub: 'Personalizar WM', run: () => window.KitsuneApps.open('settings') },
-        { label: '⚙️  Exportar Configs Sway & SwayFX', sub: 'Generador Go', run: () => window.KitsuneApps.open('settings', { tab: 'dotfiles' }) },
-        { label: '🗂️  Activar Modo Sway Tabbed (Pestañas)', sub: 'Alt+W', run: () => this.saveSettings({ ...this.settings, layoutMode: 'tabbed' }) },
-        { label: '✨  Perfil SwayFX (Blur + Corner Radius)', sub: 'Compositor', run: () => this.saveSettings({ ...this.settings, compositor: 'swayfx' }) },
-        { label: '▣   Perfil Sway Puro (Bordes Clásicos)', sub: 'Compositor', run: () => this.saveSettings({ ...this.settings, compositor: 'sway' }) },
-        { label: '📊  Btop++ Monitor de Recursos Linux', sub: '/proc Go', run: () => window.KitsuneApps.open('sysmon') },
-        { label: '📁  Yazi Explorador de Archivos', sub: 'Gestor Arch', run: () => window.KitsuneApps.open('files') },
-        { label: '📝  Neovim Go Code Studio', sub: 'Editor IDE', run: () => window.KitsuneApps.open('nvim') },
-        { label: '🎵  Kitsune Synth Radio (Lo-Fi Anime)', sub: 'WebAudio', run: () => window.KitsuneApps.open('music') },
-        { label: '📦  Pacman / AUR & Instalador Sway/SwayFX', sub: 'PKGBUILD', run: () => window.KitsuneApps.open('pacman') },
+        { label: '🎨  Kitsune Rice Studio (Temas, Blur & Bordes Luminosos)', sub: 'Rice Studio', run: () => window.KitsuneApps.open('settings') },
+        { label: '📊  Btop++ Monitor (CPU, RAM, Disco & Procesos /proc)', sub: 'Telemetría Go', run: () => window.KitsuneApps.open('sysmon') },
+        { label: '📁  Yazi File Manager (Doble panel con vista previa)', sub: 'Gestor Archivos', run: () => window.KitsuneApps.open('files') },
+        { label: '📝  Neovim Go Studio (Editor modal Go & Arch)', sub: 'IDE Go', run: () => window.KitsuneApps.open('nvim') },
+        { label: '>_  Kitty Terminal (Nueva pestaña interactiva)', sub: 'Alt+Enter', run: () => window.KitsuneApps.open('terminal', { multiInstance: true }) },
+        { label: '🎵  Kitsune Synth Radio (Lo-Fi & Synthwave Anime)', sub: 'WebAudio', run: () => window.KitsuneApps.open('music') },
+        { label: '📦  Pacman & Instalador Kitsune Go Wayland', sub: 'Arch Linux', run: () => window.KitsuneApps.open('pacman') },
+        { label: '🗂️  Modo Escritorio Tabbed (Pestañas sin Dock)', sub: 'Alt+W', run: () => this.saveSettings({ ...this.settings, layoutMode: 'tabbed' }) },
+        { label: '⊞   Modo Escritorio Tiling (Mosaico)', sub: 'Alt+T', run: () => this.saveSettings({ ...this.settings, layoutMode: 'tiling' }) },
         ...this.themes.map((t) => ({
-          label: `🌸  Tema: ${t.name}`,
+          label: `🌸  Tema: ${t.name} (${t.id})`,
           sub: t.japaneseName,
           run: () => this.saveSettings({ ...this.settings, activeTheme: t.id }),
         })),
@@ -479,7 +474,7 @@
     }
 
     resetParticles() {
-      const count = 42;
+      const count = 44;
       this.particles = Array.from({ length: count }, () => ({
         x: Math.random() * window.innerWidth,
         y: Math.random() * window.innerHeight,
@@ -487,7 +482,7 @@
         vx: (Math.random() - 0.5) * 1.2,
         vy: 1 + Math.random() * 2.5,
         rot: Math.random() * Math.PI * 2,
-        alpha: 0.25 + Math.random() * 0.55,
+        alpha: 0.28 + Math.random() * 0.55,
       }));
     }
 
@@ -509,10 +504,10 @@
 
         if (mode === 'rain') {
           c.strokeStyle = p.s > 4.5 ? secondary : primary;
-          c.lineWidth = 1.2;
+          c.lineWidth = 1.25;
           c.beginPath();
           c.moveTo(p.x, p.y);
-          c.lineTo(p.x - 4, p.y + p.s * 4.2);
+          c.lineTo(p.x - 4, p.y + p.s * 4.4);
           c.stroke();
           p.x -= 0.9;
           p.y += p.vy * 3.8;
@@ -523,7 +518,7 @@
           c.rotate(p.rot);
           c.fillStyle = p.s > 4.2 ? secondary : primary;
           c.beginPath();
-          c.ellipse(0, 0, p.s * 1.4, p.s * 0.75, 0, 0, Math.PI * 2);
+          c.ellipse(0, 0, p.s * 1.45, p.s * 0.78, 0, 0, Math.PI * 2);
           c.fill();
           p.x += Math.sin(p.rot) * 0.7 + 0.45;
           p.y += p.vy * 0.65;
@@ -532,21 +527,21 @@
           if (p.x > w + 15) p.x = -15;
         } else if (mode === 'embers') {
           c.fillStyle = p.s > 4 ? secondary : primary;
-          c.shadowBlur = 8;
+          c.shadowBlur = 9;
           c.shadowColor = primary;
           c.beginPath();
-          c.arc(p.x, p.y, p.s * 0.55, 0, Math.PI * 2);
+          c.arc(p.x, p.y, p.s * 0.58, 0, Math.PI * 2);
           c.fill();
           p.x += Math.sin(p.y * 0.02) * 0.6;
           p.y -= p.vy * 0.85;
           if (p.y < -10) { p.y = h + 10; p.x = Math.random() * w; }
         } else {
-          // 'hud' Evangelion tactical markers
+          // 'hud' Midnight Evangelion NERV tactical markers
           c.strokeStyle = p.s > 4.5 ? secondary : primary;
-          c.lineWidth = 1;
-          const sz = p.s * 1.6;
+          c.lineWidth = 1.1;
+          const sz = p.s * 1.65;
           c.strokeRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
-          p.y -= p.vy * 0.35;
+          p.y -= p.vy * 0.38;
           if (p.y < -15) { p.y = h + 15; p.x = Math.random() * w; }
         }
         c.restore();

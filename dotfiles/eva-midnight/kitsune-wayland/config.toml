@@ -1,0 +1,64 @@
+# ============================================================================
+# 🦊 Kitsune Go Wayland — Configuración Principal del Escritorio Anime
+# Tema activo : Midnight Evangelion (第3新東京市 // NERV) — Verde ácido EVA-01, ámbar táctico y violeta oscuro
+# Modo        : TABBED (Sin Dock inferior • Barra superior Waybar + Rofi)
+# ============================================================================
+
+[engine]
+name = "Kitsune Go Wayland"
+listen_addr = "127.0.0.1:18080"
+wayland_backend = "cage-ozone-wayland"
+dock_enabled = false
+top_bar = "waybar-kitsune"
+launcher = "rofi-kitsune"
+
+[theme]
+id = "eva-midnight"
+name = "Midnight Evangelion"
+japanese_name = "第3新東京市 // NERV"
+wallpaper = "~/.config/kitsune-de/wallpapers/eva-midnight.jpg"
+particle_mode = "hud"
+particles_enabled = true
+animations_enabled = true
+
+[colors]
+primary = "#39ff14"
+secondary = "#ff9e00"
+accent = "#9d4edd"
+bg_base = "#10081c"
+bg_surface = "#190e2c"
+bg_overlay = "#281845"
+text_main = "#f0fdf4"
+text_muted = "#a78bfa"
+
+[windows]
+default_layout = "tabbed"
+workspaces = ["一", "二", "三", "四", "五"]
+gaps_in = 8
+gaps_out = 12
+border_size = 2
+border_radius = 12
+window_opacity = 92
+
+[effects]
+blur_enabled = true
+blur_radius = 18
+border_glow = true
+glow_intensity = 72
+
+[apps]
+rice_studio = "kitsune-ctl open settings"
+btop_monitor = "kitsune-ctl open sysmon"
+yazi_files = "kitsune-ctl open files"
+neovim_go_studio = "kitsune-ctl open nvim"
+terminal = "kitsune-ctl open terminal"
+
+[keybindings]
+"Alt+Space" = "launcher:rofi"
+"Alt+Return" = "app:terminal"
+"Alt+W" = "layout:tabbed"
+"Alt+T" = "layout:toggle"
+"Alt+V" = "window:toggle_floating"
+"Alt+Q" = "window:close"
+"Alt+Tab" = "tab:next"
+"Alt+1..5" = "workspace:switch"

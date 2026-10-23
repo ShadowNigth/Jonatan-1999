@@ -1,89 +1,89 @@
-# 🦊 KitsuneDE `v1.2.0` — Escritorio Anime Visual-Twin para Arch Linux (SwayFX, Sway & Full Anime Shell) en Go
+# 🦊 Kitsune Go Wayland `v2.0.0` — Escritorio Anime Tabbed Puro en Go para Arch Linux
 
-**KitsuneDE** (`v1.2.0`) es un entorno de escritorio híbrido (**Tiling / Sway Tabbed / Flotante**) estilo **Anime** para **Arch Linux**, desarrollado íntegramente en **Go** (`0` dependencias externas, cliente binario nativo **`sway-ipc` / `$SWAYSOCK`** y binario único auto-contenido con `//go:embed`).
+**Kitsune Go Wayland** (`v2.0.0`) es un entorno de escritorio independiente para **Wayland** en **Arch Linux**, desarrollado íntegramente en **Go** (`0` dependencias externas en Go y binario único con `//go:embed`), **sin Sway, sin SwayFX, sin Hyprland y sin Dock inferior**.
 
-Esta edición **Visual-Twin (`v1.2.0`)** instala **automáticamente todas las dependencias oficiales y de AUR** (tipografías japonesas Kanji, emojis, Nerd Fonts, Waybar, Dock flotante, animaciones de fondos a 60 FPS, desenfoque SwayFX y kiosco GPU Wayland) para que en tu Arch Linux real **se vea exactamente igual que en el ejemplo web, con todas sus animaciones y colores**.
-
----
-
-## ✨ Dos Modos de Sesión Incluidos (100% Paridad Visual con el Ejemplo Web)
-
-Al instalar **KitsuneDE**, tu pantalla de login (**SDDM, GDM, LightDM, greetd**) recibe ambas sesiones listas para elegir:
-
-1. **🌟 `KitsuneDE Full Anime Shell (Idéntico al Web)` (`kitsune-de.desktop`)**
-   - Arranca el motor Go `kitsune-de` sobre **Wayland GPU (`cage` + `chromium` Ozone Wayland)** a pantalla completa.
-   - Se ve **100% píxel por píxel idéntico** a la demostración web: partículas flotantes Canvas a 60 FPS, efectos sonoros pentatónicos japoneses, animaciones *spring*, Waybar cristalina, Dock inferior con rebote, lanzador Rofi, Terminal PTY real conectada a tu `bash`/`zsh` de Arch, explorador de tus archivos reales, telemetría real de CPU/RAM y lanzamiento de apps nativas.
-2. **🦊 `KitsuneDE + SwayFX (Visual-Twin Wayland)` (`kitsune-swayfx.desktop`)**
-   - Sesión Wayland nativa sobre **SwayFX** replicando cada elemento visual del ejemplo web:
-     - **Barra superior `Waybar`** con píldoras flotantes, workspaces Kanji (`一 二 三 四 五`), degradados neón, telemetría y selector de tema en 1 clic.
-     - **Dock inferior flotante `nwg-dock`** con cristal esmerilado (`layer_effects "gtk-layer-shell" blur enable`) y brillo neón.
-     - **Transiciones circulares a 60 FPS (`swww`)** al cambiar entre los 4 temas anime (`Super + T` o desde **Rice Studio**).
-     - **Recarga en caliente multicolor desde Go (`SyncNativeDesktop`)**: cambiar de tema actualiza al instante bordes, gaps, radio de esquinas y `shadow_color` por `$SWAYSOCK`, recarga CSS de `Waybar` (`SIGUSR2`), cambia los colores ANSI de todas las terminales `Kitty` abiertas (`SIGUSR1`), actualiza `SwayNC` (`swaync-client -rs`) y sincroniza temas oscuros **GTK3 / GTK4**.
+Está diseñado alrededor de un flujo de trabajo limpio en **modo `Tabbed` (por pestañas)** a pantalla completa, con **barra superior estilo Waybar** con *workspaces* kanji (`一 二 三 四 五`), lanzador **Rofi**, **bordes luminosos** y **desenfoque *blur* ajustables en vivo**.
 
 ---
 
-## 📦 Dependencias Instaladas Automáticamente por `INSTALAR_EN_ARCH.sh`
+## ✨ Aplicaciones Integradas yCaracterísticas Principales
 
-El instalador detecta automáticamente qué paquetes están en `[extra]` y auto-instala `yay-bin` si aún no tienes un helper AUR:
-
-- **Compositor & Efectos Anime**: `swayfx` (`corner_radius`, `blur`, `shadows`, `layer_effects`), `sway` (respaldo oficial), `autotiling`, `cage`, `chromium`
-- **Barra, Dock, Lanzador & Notificaciones**: `waybar`, `nwg-dock`, `rofi-wayland`, `swaync`, `swaylock-effects-git`, `libnotify`
-- **Animaciones de Wallpapers a 60 FPS**: `swww`, `swaybg`
-- **Tipografías Sin Cuadros Vacíos (Kanji + Iconos + Emojis)**: `ttf-jetbrains-mono-nerd`, `ttf-firacode-nerd`, `inter-font`, `noto-fonts`, `noto-fonts-cjk`, `noto-fonts-emoji`
-- **Iconos, Cursores & GTK3/GTK4 Oscuro**: `papirus-icon-theme`, `bibata-cursor-theme-bin`, `gnome-themes-extra`, `nwg-look`
-- **Apps & Utilidades Wayland**: `kitty`, `fastfetch`, `btop`, `yazi`, `neovim`, `thunar`, `pavucontrol`, `grim`, `slurp`, `wl-clipboard`, `polkit-gnome`, `xdg-desktop-portal-wlr`, `xdg-desktop-portal-gtk`
-
----
-
-## 🌸 4 Temas Anime con Transición en Vivo
-
-1. **`neon-tokyo`** (*Cyberpunk Neon Tokyo* — `ネオ東京 // 2099` — `#ff2e97` / `#00f0ff`)
-2. **`sakura-lofi`** (*Sakura Catppuccin* — `桜ローファイ // 宵` — `#f5a9b8` / `#cba6f7`)
-3. **`crimson-shonen`** (*Crimson Shonen* — `紅蓮の刃 // 月蝕` — `#ff3355` / `#ff9e3b`)
-4. **`eva-midnight`** (*Midnight Evangelion* — `第3新東京市 // NERV` — `#a855f7` / `#4ade80`)
+- **🗂️ Escritorio `Tabbed` de Altura Completa (Sin Dock Inferior)**:
+  - Todas tus aplicaciones se organizan en una barra de pestañas cristalina bajo la barra superior (`Alt + Tab` o clic directo), aprovechando el 100% del alto de la pantalla sin ningún dock abajo.
+  - También puedes alternar en vivo a `Tiling`, `Flotante` o `Monocle` (`Alt + T`).
+- **🧭 Barra Superior Estilo Waybar + Lanzador Rofi**:
+  - Espacios de trabajo kanji (`一 二 三 四 五`), disparador **Rofi** (`Alt + Space`), radio sintetizador Lo-Fi, reloj, selector de tema en 1 clic, telemetría CPU/RAM en tiempo real, centro de notificaciones y pantalla de bloqueo Anime (`Alt + L`).
+- **💧 Bordes Luminosos y *Blur* Ajustables en Vivo**:
+  - Deslizadores en tiempo real para **Intensidad de Cristal Blur (`0px` – `36px`)**, **Brillo de Bordes Luminosos (`0%` – `100%`)**, grosor de borde, redondeo de esquinas y opacidad.
+- **🛠️ Suite de 4 Aplicaciones Principales Incluidas**:
+  1. **🎨 Kitsune Rice Studio**: Selector de temas Anime, ajuste en vivo de *blur* y bordes luminosos, y exportador de configuraciones.
+  2. **📊 Btop++ Monitor**: Gráfica histórica de CPU en vivo (`<canvas>`), barras por núcleo, memoria RAM, disco, red y tabla real de procesos Linux (`/proc`).
+  3. **📁 Yazi File Manager**: Gestor de archivos de doble panel con vista previa instantánea de código e imágenes e integración directa con Neovim.
+  4. **📝 Neovim Go Studio**: Editor modal (`NORMAL` / `INSERT`) con pestañas rápidas del proyecto Go, numeración de líneas, guardado real en disco (`:w` / `Ctrl+S`) y ejecución de `go test ./...`.
 
 ---
 
-## 🚀 Descarga e Instalación en Arch Linux (`v1.2.0`)
+## 🌸 Todos los Temas Anime Incluidos
+
+- **`neon-tokyo`** (*Cyberpunk Neon Tokyo* — `ネオ東京 // 2099`): Lluvia nocturna neón cian y magenta.
+- **`sakura-lofi`** (*Sakura Catppuccin* — `桜ローファイ // 宵`): Pétalos de cerezo animados y paleta Catppuccin Mocha.
+- **`crimson-shonen`** (*Crimson Shonen* — `紅蓮の刃 // 月蝕`): Negro obsidiana, luna carmesí y brasas flotantes.
+- **`eva-midnight`** (*Midnight Evangelion* — `第3新東京市 // NERV`): Verde ácido EVA-01, ámbar táctico y violeta oscuro.
+
+---
+
+## 🚀 Descarga e Instalación en Arch Linux (`v2.0.0`)
 
 ```bash
-curl -fLO https://github.com/ShadowNigth/Jonatan-1999/raw/v1.2.0/release/kitsune-de-sway-arch-linux.zip
-unzip kitsune-de-sway-arch-linux.zip
-cd kitsune-de-sway-arch-linux
+curl -fLO https://github.com/ShadowNigth/Jonatan-1999/raw/v2.0.0/release/kitsune-go-wayland-arch-linux.zip
+unzip kitsune-go-wayland-arch-linux.zip
+cd kitsune-go-wayland-arch-linux
 chmod +x INSTALAR_EN_ARCH.sh
 
-# Instala TODAS las dependencias (pacman + AUR), fuentes Kanji, temas y sesiones:
-./INSTALAR_EN_ARCH.sh --compositor swayfx --theme neon-tokyo
+# Instala automáticamente todas las dependencias de Kitsune Go Wayland y las tipografías Kanji:
+./INSTALAR_EN_ARCH.sh --theme neon-tokyo
+```
+
+En tu gestor de inicio de sesión (**SDDM, GDM, LightDM, greetd**) selecciona **`Kitsune Go Wayland`**, o ejecútalo directamente desde una TTY con:
+```bash
+kitsune-session
 ```
 
 ---
 
-## 🛠️ Uso de `kitsune-ctl`
+## 🛠️ Control en Vivo con `kitsune-ctl`
 
 ```bash
-# Cambiar al siguiente tema anime en vivo (anima wallpaper a 60fps + recarga Waybar/Kitty/SwayFX)
+# Cambiar tema Anime en vivo
 kitsune-ctl theme next
 kitsune-ctl theme set sakura-lofi
 
-# Alternar layout (tiling -> tabbed -> floating -> monocle)
-kitsune-ctl layout tabbed
+# Ajustar desenfoque Blur (0..36px) y Bordes Luminosos (0..100%) en vivo
+kitsune-ctl blur 24
+kitsune-ctl glow 88
 
-# Exportar los 17 dotfiles Visual-Twin en ~/.config
-kitsune-ctl export --compositor swayfx --theme neon-tokyo --out ~/.config
+# Abrir aplicaciones en pestañas del modo Tabbed
+kitsune-ctl open settings   # Kitsune Rice Studio
+kitsune-ctl open sysmon     # Btop++ Monitor
+kitsune-ctl open files      # Yazi File Manager
+kitsune-ctl open nvim       # Neovim Go Studio
+
+# Exportar configuraciones de Kitsune Go Wayland, Btop++, Yazi, Neovim y Kitty
+kitsune-ctl export --theme neon-tokyo --out ~/.config
 ```
 
 ---
 
-## ⌨️ Atajos Principales
+## ⌨️ Atajos de Teclado
 
-| Atajo en SwayFX (`$mod = Super`) | Atajo en Full Anime Shell / Web | Acción |
-| :--- | :--- | :--- |
-| `Super + T` | Botón Tema en Waybar | Cambiar tema Anime en vivo con animación 60 FPS |
-| `Super + G` | Icono **Rice Studio** en Dock | Abrir **Kitsune Rice Studio** (temas, blur, gaps) |
-| `Super + Space` | `Alt + Space` | Lanzador **Rofi** estilo Anime |
-| `Super + Enter` | `Alt + Enter` | Nueva terminal **Kitty** |
-| `Super + W` | `Alt + W` | Modo **Sway Tabbed** (pestañas) |
-| `Super + Shift + Space` | `Alt + V` | Alternar ventana **Flotante / Tiling** |
-| `Super + Q` | `Alt + Q` | Cerrar ventana enfocada |
-| `Super + 1..5` | `Alt + 1..5` | Espacios de trabajo `一 二 三 四 五` |
-| `Super + L` / `Super + X` | `Alt + L` | Bloquear pantalla (**Swaylock Anime**) |
+| Atajo | Acción |
+| :--- | :--- |
+| `Alt + Space` | Abrir lanzador **Rofi** |
+| `Alt + Tab` | Cambiar a la siguiente pestaña abierta (**Modo Tabbed**) |
+| `Alt + Enter` | Nueva pestaña de **Kitty Terminal** |
+| `Alt + W` | Activar modo **Tabbed** |
+| `Alt + T` | Alternar entre `Tabbed`, `Tiling`, `Flotante` y `Monocle` |
+| `Alt + V` | Desacoplar / acoplar ventana flotante |
+| `Alt + Q` | Cerrar pestaña / ventana activa |
+| `Alt + 1..5` | Cambiar entre *workspaces* kanji `一 二 三 四 五` |
+| `Alt + L` | Bloquear pantalla Anime |

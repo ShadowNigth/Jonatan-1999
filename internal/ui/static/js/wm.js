@@ -1,28 +1,38 @@
-// KitsuneDE Hybrid Window Manager (Hyprland Tiling + Floating + Monocle)
+// Kitsune Go Wayland Window Manager (Tabbed First • Tiling • Floating • Monocle — No Bottom Dock)
 (function () {
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   class WindowManager {
     constructor(stageEl) {
       this.stage = stageEl;
       this.windows = [];
+      this.tabbedWindows = [];
       this.nextId = 1;
       this.zCounter = 30;
       this.focusedId = null;
 
-      this.layoutMode = 'tiling'; // 'tiling' | 'floating' | 'monocle'
+      this.layoutMode = 'tabbed'; // 'tabbed' | 'tiling' | 'floating' | 'monocle'
       this.activeWorkspace = 1;
       this.gapsIn = 8;
-      this.gapsOut = 14;
+      this.gapsOut = 12;
 
       this.onStateChange = null;
+      this.onRequestLauncher = null;
+      this.onQuickOpenApp = null;
       window.addEventListener('resize', () => this.relayout());
     }
 
     applySettings(s) {
       if (!s) return;
-      this.layoutMode = s.layoutMode || 'tiling';
+      this.layoutMode = s.layoutMode || 'tabbed';
       this.activeWorkspace = s.activeWorkspace || 1;
       this.gapsIn = typeof s.gapsIn === 'number' ? s.gapsIn : 8;
-      this.gapsOut = typeof s.gapsOut === 'number' ? s.gapsOut : 14;
+      this.gapsOut = typeof s.gapsOut === 'number' ? s.gapsOut : 12;
       this.relayout();
       this.notifyChange();
     }
@@ -35,7 +45,10 @@
           if (existing.workspace !== this.activeWorkspace && opts.switchWorkspace !== false) {
             existing.workspace = this.activeWorkspace;
           }
-          existing.minimized = false;
+          if (opts.focus === false) {
+            this.relayout();
+            return existing;
+          }
           this.focus(existing.id);
           this.relayout();
           if (opts.onReopen) opts.onReopen(existing);
@@ -45,8 +58,8 @@
 
       const id = 'win-' + this.nextId++;
       const stageRect = this.stage.getBoundingClientRect();
-      const defW = Math.min(opts.width || 720, Math.max(360, stageRect.width - 40));
-      const defH = Math.min(opts.height || 470, Math.max(260, stageRect.height - 40));
+      const defW = Math.min(opts.width || 760, Math.max(360, stageRect.width - 40));
+      const defH = Math.min(opts.height || 500, Math.max(260, stageRect.height - 40));
       const offset = ((this.windows.length % 5) * 26);
 
       const el = document.createElement('section');
@@ -57,13 +70,12 @@
         <header class="win-titlebar">
           <div class="win-title-left">
             <span class="win-app-icon">${opts.icon || '🦊'}</span>
-            <span class="win-title-text">${opts.title || 'Ventana'}</span>
-            <span class="win-mode-tag">TILE</span>
+            <span class="win-title-text">${esc(opts.title || 'Ventana')}</span>
+            <span class="win-mode-tag">TABBED</span>
           </div>
           <div class="win-controls">
-            <button class="win-ctl-btn btn-master" title="Promover a ventana principal Master">⇄</button>
-            <button class="win-ctl-btn btn-float" title="Alternar Flotante / Mosaico (Super+V)">⧉</button>
-            <button class="win-ctl-btn btn-min" title="Minimizar al Dock">─</button>
+            <button class="win-ctl-btn btn-master" title="Mover al inicio de las pestañas / Master">⇄</button>
+            <button class="win-ctl-btn btn-float" title="Alternar Ventana Flotante / Pestaña (Alt+V)">⧉</button>
             <button class="win-ctl-btn btn-max" title="Maximizar">□</button>
             <button class="win-ctl-btn btn-close" title="Cerrar ventana (Alt+Q)">✕</button>
           </div>
@@ -82,7 +94,6 @@
         workspace: opts.workspace || this.activeWorkspace,
         isFloatingOverride: Boolean(opts.floating),
         maximized: false,
-        minimized: false,
         floatRect: {
           x: Math.max(20, (stageRect.width - defW) / 2 + offset - 30),
           y: Math.max(16, (stageRect.height - defH) / 2 + offset - 20),
@@ -103,7 +114,11 @@
         opts.mount(winObj.bodyEl, winObj);
       }
 
-      this.focus(id);
+      if (opts.focus !== false) {
+        this.focus(id);
+      } else if (!this.focusedId) {
+        this.focusedId = id;
+      }
       this.relayout();
       return winObj;
     }
@@ -111,26 +126,20 @@
     bindWindowEvents(win) {
       const titlebar = win.el.querySelector('.win-titlebar');
       const btnClose = win.el.querySelector('.btn-close');
-      const btnMin = win.el.querySelector('.btn-min');
       const btnMax = win.el.querySelector('.btn-max');
       const btnFloat = win.el.querySelector('.btn-float');
       const btnMaster = win.el.querySelector('.btn-master');
       const resizeHandle = win.el.querySelector('.win-resize-handle');
 
       win.el.addEventListener('pointerdown', () => {
-        this.focus(win.id);
+        if (this.focusedId !== win.id) {
+          this.focus(win.id);
+        }
       });
 
       btnClose.addEventListener('click', (e) => {
         e.stopPropagation();
         this.close(win.id);
-      });
-
-      btnMin.addEventListener('click', (e) => {
-        e.stopPropagation();
-        win.minimized = true;
-        this.relayout();
-        this.notifyChange();
       });
 
       btnMax.addEventListener('click', (e) => {
@@ -143,6 +152,7 @@
         e.stopPropagation();
         win.maximized = false;
         win.isFloatingOverride = !win.isFloatingOverride;
+        this.focus(win.id);
         this.relayout();
       });
 
@@ -163,7 +173,7 @@
         this.relayout();
       });
 
-      // Pointer drag (supports floating drag + auto-pop-out if dragged far in tiling mode)
+      // Pointer drag (supports floating drag + pop-out if dragged far)
       titlebar.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || e.target.closest('.win-controls')) return;
         this.focus(win.id);
@@ -183,13 +193,13 @@
           const dx = ev.clientX - startX;
           const dy = ev.clientY - startY;
 
-          if (!detached && Math.hypot(dx, dy) > 20) {
+          if (!detached && Math.hypot(dx, dy) > 26) {
             detached = true;
             win.maximized = false;
             win.isFloatingOverride = true;
             const st = this.stage.getBoundingClientRect();
-            const w = Math.min(700, st.width * 0.62);
-            const h = Math.min(460, st.height * 0.68);
+            const w = Math.min(720, st.width * 0.64);
+            const h = Math.min(480, st.height * 0.70);
             baseRect = {
               x: ev.clientX - st.left - w / 2,
               y: Math.max(6, ev.clientY - st.top - 18),
@@ -255,6 +265,24 @@
       return this.layoutMode === 'floating' || win.isFloatingOverride;
     }
 
+    setTitle(win, newTitle) {
+      win.title = newTitle;
+      const el = win.el.querySelector('.win-title-text');
+      if (el) el.textContent = newTitle;
+      if (this.layoutMode === 'tabbed') {
+        this.renderTabbar();
+      }
+      this.notifyChange();
+    }
+
+    cycleTab(delta = 1) {
+      const list = this.visibleWindows();
+      if (list.length < 2) return;
+      const idx = list.findIndex((w) => w.id === this.focusedId);
+      const next = list[(idx + delta + list.length) % list.length];
+      if (next) this.focus(next.id);
+    }
+
     focus(id) {
       this.focusedId = id;
       this.windows.forEach((w) => {
@@ -266,8 +294,8 @@
           w.el.classList.remove('focused');
         }
       });
-      if (this.layoutMode === 'tabbed') {
-        this.renderSwayTabbar();
+      if (this.layoutMode === 'tabbed' || this.layoutMode === 'monocle') {
+        this.relayout();
       }
       this.notifyChange();
     }
@@ -301,7 +329,7 @@
     }
 
     visibleWindows() {
-      return this.windows.filter((w) => w.workspace === this.activeWorkspace && !w.minimized);
+      return this.windows.filter((w) => w.workspace === this.activeWorkspace);
     }
 
     relayout() {
@@ -311,22 +339,27 @@
       const go = this.gapsOut;
       const gi = this.gapsIn;
 
-      // Hide windows on other workspaces or minimized
+      // Hide windows on other workspaces
       this.windows.forEach((w) => {
-        const onWs = w.workspace === this.activeWorkspace;
-        if (!onWs) {
+        w.el.classList.remove('tab-hidden');
+        if (w.workspace !== this.activeWorkspace) {
           w.el.style.display = 'none';
           return;
         }
         w.el.style.display = 'flex';
-        w.el.classList.toggle('minimized', w.minimized);
       });
 
       const vis = this.visibleWindows();
+      // Ensure focusedId belongs to active workspace if any window exists
+      if (vis.length > 0 && !vis.some((w) => w.id === this.focusedId)) {
+        this.focusedId = vis[vis.length - 1].id;
+        vis.forEach((w) => w.el.classList.toggle('focused', w.id === this.focusedId));
+      }
+
       const tiled = [];
       const tabbed = [];
       const floating = [];
-      const tabbar = document.getElementById('sway-tabbar');
+      const tabbar = document.getElementById('kitsune-tabbar');
 
       vis.forEach((w) => {
         const btnFloat = w.el.querySelector('.btn-float');
@@ -337,12 +370,13 @@
           return;
         }
         if (this.layoutMode === 'monocle' && !w.isFloatingOverride) {
-          w.modeTagEl.textContent = 'MONO';
+          w.modeTagEl.textContent = 'MONOCLE';
           this.applyRect(w, go, go, stageW - go * 2, stageH - go * 2);
+          if (w.id !== this.focusedId) w.el.classList.add('tab-hidden');
           return;
         }
         if (this.layoutMode === 'tabbed' && !w.isFloatingOverride) {
-          w.modeTagEl.textContent = 'SWAY TAB';
+          w.modeTagEl.textContent = 'TABBED';
           btnFloat.classList.remove('active-float');
           tabbed.push(w);
           return;
@@ -359,15 +393,34 @@
       });
 
       if (tabbar) {
-        if (this.layoutMode === 'tabbed' && tabbed.length > 0) {
+        if (this.layoutMode === 'tabbed') {
           tabbar.classList.remove('hidden');
           tabbar.style.left = `${go}px`;
           tabbar.style.top = `${go}px`;
           tabbar.style.width = `${Math.max(260, stageW - go * 2)}px`;
           this.tabbedWindows = tabbed;
-          this.renderSwayTabbar();
+
+          let activeTabId = this.focusedId;
+          if (tabbed.length > 0 && !tabbed.some((w) => w.id === activeTabId)) {
+            activeTabId = tabbed[tabbed.length - 1].id;
+            this.focusedId = activeTabId;
+          }
+
+          this.renderTabbar(activeTabId);
+
+          const tabBodyY = go + 42;
+          const tabBodyH = Math.max(180, stageH - go * 2 - 42);
+          const tabBodyW = Math.max(260, stageW - go * 2);
+
           tabbed.forEach((w) => {
-            this.applyRect(w, go, go + 34, Math.max(260, stageW - go * 2), Math.max(180, stageH - go * 2 - 34));
+            this.applyRect(w, go, tabBodyY, tabBodyW, tabBodyH);
+            if (w.id === activeTabId) {
+              w.el.classList.remove('tab-hidden');
+              w.el.classList.add('focused');
+            } else {
+              w.el.classList.add('tab-hidden');
+              w.el.classList.remove('focused');
+            }
           });
         } else {
           tabbar.classList.add('hidden');
@@ -375,7 +428,7 @@
         }
       }
 
-      // Layout Hyprland Tiled Windows
+      // Layout Tiled Windows
       const areaX = go;
       const areaY = go;
       const areaW = Math.max(260, stageW - go * 2);
@@ -424,19 +477,64 @@
       });
     }
 
-    renderSwayTabbar() {
-      const tabbar = document.getElementById('sway-tabbar');
-      if (!tabbar || !this.tabbedWindows || !this.tabbedWindows.length) return;
-      tabbar.innerHTML = this.tabbedWindows.map((w) => `
-        <button class="sway-tab ${w.id === this.focusedId ? 'active' : ''}" data-tab-win="${w.id}">
-          ${w.icon} ${w.title}
-        </button>
-      `).join('');
-      tabbar.querySelectorAll('.sway-tab').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          this.focus(btn.dataset.tabWin);
+    renderTabbar(activeTabId = this.focusedId) {
+      const tabbar = document.getElementById('kitsune-tabbar');
+      if (!tabbar) return;
+
+      if (!this.tabbedWindows || this.tabbedWindows.length === 0) {
+        tabbar.innerHTML = `
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);padding:0 8px">Workspace vacío — Abrir pestaña:</span>
+          <button class="kitsune-tab-add" data-qapp="settings">🎨 Rice Studio</button>
+          <button class="kitsune-tab-add" data-qapp="sysmon">📊 Btop++ Monitor</button>
+          <button class="kitsune-tab-add" data-qapp="files">📁 Yazi Files</button>
+          <button class="kitsune-tab-add" data-qapp="nvim">📝 Neovim Go</button>
+          <button class="kitsune-tab-add" data-qapp="terminal">&gt;_ Kitty</button>
+          <button class="kitsune-tab-add" id="btn-tab-rofi">󰣇 Rofi (Alt+Space)</button>
+        `;
+      } else {
+        tabbar.innerHTML =
+          this.tabbedWindows.map((w) => `
+            <div class="kitsune-tab ${w.id === activeTabId ? 'active' : ''}" data-tab-win="${w.id}" role="tab">
+              <span class="kitsune-tab-label">
+                <span>${w.icon}</span>
+                <span>${esc(w.title)}</span>
+              </span>
+              <span class="kitsune-tab-close" data-close-win="${w.id}" title="Cerrar pestaña">✕</span>
+            </div>
+          `).join('') +
+          `<button class="kitsune-tab-add" id="btn-tab-rofi" title="Abrir nueva pestaña o aplicación con Rofi (Alt+Space)">＋ Rofi</button>`;
+      }
+
+      tabbar.querySelectorAll('[data-tab-win]').forEach((tabEl) => {
+        tabEl.addEventListener('click', (e) => {
+          if (e.target.closest('[data-close-win]')) return;
+          this.focus(tabEl.dataset.tabWin);
         });
       });
+
+      tabbar.querySelectorAll('[data-close-win]').forEach((closeEl) => {
+        closeEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.close(closeEl.dataset.closeWin);
+        });
+      });
+
+      tabbar.querySelectorAll('[data-qapp]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (typeof this.onQuickOpenApp === 'function') {
+            this.onQuickOpenApp(btn.dataset.qapp);
+          }
+        });
+      });
+
+      const rofiBtn = tabbar.querySelector('#btn-tab-rofi');
+      if (rofiBtn) {
+        rofiBtn.addEventListener('click', () => {
+          if (typeof this.onRequestLauncher === 'function') {
+            this.onRequestLauncher();
+          }
+        });
+      }
     }
 
     applyRect(win, x, y, w, h) {
@@ -448,7 +546,7 @@
 
     notifyChange() {
       if (typeof this.onStateChange === 'function') {
-        const focused = this.windows.find((w) => w.id === this.focusedId && w.workspace === this.activeWorkspace && !w.minimized);
+        const focused = this.windows.find((w) => w.id === this.focusedId && w.workspace === this.activeWorkspace);
         const occupied = new Set(this.windows.map((w) => w.workspace));
         const runningApps = new Set(this.windows.map((w) => w.appId));
         this.onStateChange({ focused, occupied, runningApps });
