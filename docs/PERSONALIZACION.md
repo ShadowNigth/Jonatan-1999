@@ -181,6 +181,30 @@ Para tener historial persistente, `~/.config/swaydesk/autostart.sh` arranca
 `wl-paste --type text --watch cliphist store` si `cliphist` está instalado.
 Puedes borrar la entrada seleccionada con `Ctrl+d`.
 
+### Si `swaydesk: orden no encontrada`
+
+Los binarios se instalan en `~/.local/bin`, que muchas veces no está en el
+`PATH` (`Arch` trae por defecto solo `~/bin`). Soluciones, de la más rápida a la
+más definitiva:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"          # solo esta terminal
+~/.local/bin/swaydesk keys                    # sin tocar nada, ruta completa
+```
+
+El instalador ya añade la línea a `~/.bashrc`, `~/.zshrc` y `~/.profile` (se
+puede evitar con `--no-path`), y `swaydesk doctor` lo comprueba:
+
+```
+  • PATH                   /home/shadow/.local/bin/swaydesk (falta en el PATH)
+    → añade ~/.local/bin al PATH (o reejecuta scripts/install.sh)
+```
+
+La sesión de sway es otro mundo: **no lee tus `.bashrc`**, así que la
+configuración generada escribe rutas absolutas para los binarios y
+`autostart.sh` empieza con `PATH="$HOME/.local/bin:$PATH"`. Si arrancas sway
+desde una TTY, añade la línea a `~/.profile` (lo hace el instalador).
+
 ### Si un atajo no hace nada
 
 sway **falla en silencio**: si el programa de un `bindsym … exec` no existe (por

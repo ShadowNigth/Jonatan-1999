@@ -713,6 +713,27 @@ type check struct {
 	fix      string
 }
 
+// binInPath indica si el binario se encuentra por el PATH actual.
+func binInPath(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+// pathDetail describe dónde se encontraron los binarios (o dónde deberían
+// estar si no están en el PATH).
+func pathDetail() string {
+	if p, err := exec.LookPath("swaydesk"); err == nil {
+		return p
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		cand := filepath.Join(home, ".local", "bin", "swaydesk")
+		if fileExists(cand) {
+			return cand + " (falta en el PATH)"
+		}
+	}
+	return "swaydesk no está en el PATH"
+}
+
 // cmdKeys lista los atajos de sway ya expandidos y señala los que no pueden
 // funcionar (tecla repetida o programa inexistente). Es el diagnóstico rápido
 // cuando «el atajo no hace nada»: sway falla en silencio.
@@ -876,6 +897,8 @@ func cmdDoctor(args []string) {
 			detail: "necesario para las notificaciones", fix: "arranca la sesión con dbus"},
 		{name: "swayfx", required: false, ok: setup.IsSwayfx(),
 			detail: "desenfoque y esquinas redondeadas", fix: "opcional: swayfx en el AUR"},
+		{name: "PATH", required: false, ok: binInPath("swaydesk"),
+			detail: pathDetail(), fix: "añade ~/.local/bin al PATH (o reejecuta scripts/install.sh)"},
 		{name: "foot.ini", required: false, ok: setup.FootConfigIssue() == "",
 			detail: footIssueDetail(), fix: "swaydesk init --force --only foot"},
 		{name: "atajos de sway", required: false, ok: setup.SwayDuplicateBinding() == "",

@@ -5,6 +5,7 @@
 #   PREFIX=/usr/local sudo ./scripts/install.sh
 #   ./scripts/install.sh --deps       # instala además las dependencias con pacman
 #   ./scripts/install.sh --no-config  # no escribe la configuración
+#   ./scripts/install.sh --no-path    # no toca los archivos de shell
 #
 # Instalación en un paso, sin clonar a mano (clona en un directorio temporal):
 #   curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scripts/install.sh | bash -s -- --deps
@@ -25,11 +26,13 @@ PREFIX="${PREFIX:-$HOME/.local}"
 WITH_DEPS=0
 WITH_CONFIG=1
 FORCE=0
+WITH_PATH=1
 
 for arg in "$@"; do
   case "$arg" in
     --deps) WITH_DEPS=1 ;;
     --no-config) WITH_CONFIG=0 ;;
+    --no-path) WITH_PATH=0 ;;
     --force) FORCE=1 ;;
     -h|--help)
       # Cabecera del archivo, quitando la almohadilla inicial.
@@ -139,10 +142,28 @@ for bin in swaydesk swaymenu swayctl swayclip swaybar swaynotify swayosd; do
   install -Dm755 "$REPO_DIR/bin/$bin" "$PREFIX/bin/$bin"
 done
 
+PATH_LINE="export PATH=\"$PREFIX/bin:\$PATH\""
 case ":$PATH:" in
-  *":$PREFIX/bin:"*) ;;
-  *) warn "$PREFIX/bin no está en el PATH. Añade esta línea a ~/.bashrc o ~/.zshrc:"
-     warn "  export PATH=\"$PREFIX/bin:\$PATH\"" ;;
+  *":$PREFIX/bin:"*) info "$PREFIX/bin ya está en el PATH" ;;
+  *)
+    if [[ $WITH_PATH -eq 1 ]]; then
+      # Se añade a los archivos de shell habituales (una sola vez). Es lo que
+      # hace que `swaydesk` funcione en la siguiente terminal, sin tener que
+      # copiar y pegar nada.
+      touch_one() {
+        [[ -f "$1" ]] || return 0
+        grep -qF "$PATH_LINE" "$1" 2>/dev/null && return 0
+        printf '\n# swaydesk\n%s\n' "$PATH_LINE" >>"$1"
+        info "PATH añadido a ${1/#$HOME/~}"
+      }
+      touch_one "$HOME/.bashrc"
+      touch_one "$HOME/.zshrc"
+      touch_one "$HOME/.profile"
+      info "En esta terminal ejecuta:  export PATH=\"$PREFIX/bin:\$PATH\"  (o abre una nueva)"
+    else
+      warn "$PREFIX/bin no está en el PATH. Añade esta línea a ~/.bashrc o ~/.zshrc:"
+      warn "  $PATH_LINE"
+    fi ;;
 esac
 
 # ── Configuración ─────────────────────────────────────────────────────────

@@ -12,6 +12,12 @@
 # duplica lo que ya está en marcha) y lo que solo debe ocurrir una vez por
 # sesión (animación de arranque, bienvenida) pasa por `una_vez`.
 
+# sway no hereda el PATH de tu shell: aquí se añaden las carpetas habituales
+# de binarios de usuario, para que este script (y lo que lanza) encuentre
+# swaydesk, swaybar o swaynotify aunque no estén en el PATH de la sesión.
+PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+export PATH
+
 have() { command -v "$1" >/dev/null 2>&1; }
 quiet() { "$@" >/dev/null 2>&1 & }
 

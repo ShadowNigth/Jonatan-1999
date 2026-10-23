@@ -205,6 +205,7 @@ curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scrip
 | `--deps` | instala las dependencias recomendadas con `pacman` |
 | `--no-config` | no escribe la configuración del escritorio |
 | `--force` | sobrescribe la configuración existente (con copia `*.bak-<fecha>`) |
+| `--no-path` | no añade `~/.local/bin` al PATH de tus archivos de shell |
 
 Variables de entorno: `PREFIX` (destino; por defecto `~/.local`),
 `SWAYDESK_REPO` (otra URL de repositorio) y `SWAYDESK_BRANCH` (rama o etiqueta).
@@ -214,8 +215,15 @@ PREFIX=/usr/local sudo -E ./scripts/install.sh   # instalación en el sistema
 SWAYDESK_BRANCH=v1.0.0 ./scripts/install.sh      # una versión concreta
 ```
 
-Si `~/.local/bin` no está en el `PATH`, el script te dice la línea exacta que
-hay que añadir al `~/.bashrc`/`~/.zshrc`.
+Si `~/.local/bin` no está en el `PATH`, el instalador **añade la línea él
+mismo** a `~/.bashrc`, `~/.zshrc` y `~/.profile` (una sola vez, sin duplicarla)
+y te recuerda recargar la terminal. Para que no toque nada, `--no-path`.
+
+> Si abres una terminal y `swaydesk: orden no encontrada`, casi siempre es esto:
+> `export PATH="$HOME/.local/bin:$PATH"` (o abre una terminal nueva). La sesión
+> de sway no hereda tu `PATH`, así que la configuración generada usa **rutas
+> absolutas** para los binarios y `autostart.sh` añade `~/.local/bin` por su
+> cuenta.
 
 ### Opción 2: manual
 
