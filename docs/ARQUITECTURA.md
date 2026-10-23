@@ -46,7 +46,7 @@ internal/ui      toolkit TUI (lo más grande del proyecto)
   term.go        modo crudo, pantalla alternativa, tamaño, dibujado de frames
   input.go       decodificación de teclas y secuencias de escape
   theme.go       tema, iconos Nerd Font / Unicode
-  palettes.go    40+ paletas por categoría con registro dinámico
+  palettes.go    31 paletas por categoría con registro dinámico
   decor.go       degradados, muestras, ventana de ejemplo, cajas
   imageview.go   imágenes en terminal (kitty/sixel/medios bloques)
   fuzzy.go       emparejamiento difuso con puntuación

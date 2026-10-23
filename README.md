@@ -52,7 +52,7 @@ terceros.
   cambio de tema en vivo y chuleta de atajos.
 - **Portapapeles** con soporte de `cliphist`, `clipman` o `wl-paste`, búsqueda,
   vista previa y borrado de entradas.
-- **40+ paletas de color** con estética **anime** (Sakura, Miku, Asuka, Rei,
+- **31 paletas de color**, 21 de ellas con estética **anime** (Sakura, Miku, Asuka, Rei,
   Zero Two, Neon Tokyo, Cyberpunk, Vaporwave, Ghibli, Hoshizora, Oni, Mecha…),
   además de las clásicas (Catppuccin, Tokyo Night, Nord, Gruvbox, Dracula,
   Kanagawa, Rosé Pine, Everforest), aplicadas de forma coherente a sway,
