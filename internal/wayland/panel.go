@@ -10,6 +10,7 @@ import (
 type PanelSpec struct {
 	Namespace     string
 	Layer         uint32 // LayerBackground, LayerBottom, LayerTop, LayerOverlay
+	Width         int    // ancho en píxeles (0 = lo decide el compositor)
 	Height        int    // alto en píxeles
 	Anchors       uint32 // combinación de Anchor*
 	ExclusiveZone int    // espacio reservado al compositor (0 = ninguno)
@@ -63,7 +64,7 @@ func NewPanel(c *Conn, spec PanelSpec) (*Panel, error) {
 		spec.Layer = LayerTop
 	}
 
-	p := &Panel{conn: c, H: spec.Height, spec: spec}
+	p := &Panel{conn: c, W: spec.Width, H: spec.Height, spec: spec}
 
 	p.surface = c.allocID("wl_surface", func(op uint16, d *decoder) {
 		switch op {
@@ -114,8 +115,10 @@ func NewPanel(c *Conn, spec PanelSpec) (*Panel, error) {
 		return nil, err
 	}
 
-	// Alto fijo; el ancho lo decide el compositor al anclar a izquierda y derecha.
-	_ = c.Send(newEncoder(p.layer, layerSurfaceSetSize).uint32(0).uint32(uint32(spec.Height)).bytes())
+	// Con anclas a izquierda y derecha el ancho lo decide el compositor; si se
+	// fija un ancho (paneles flotantes) se pide ese.
+	_ = c.Send(newEncoder(p.layer, layerSurfaceSetSize).
+		uint32(uint32(maxInt(0, spec.Width))).uint32(uint32(spec.Height)).bytes())
 	_ = c.Send(newEncoder(p.layer, layerSurfaceSetAnchor).uint32(spec.Anchors).bytes())
 	_ = c.Send(newEncoder(p.layer, layerSurfaceSetExclusiveZone).int32(int32(spec.ExclusiveZone)).bytes())
 	if spec.MarginTop != 0 || spec.MarginRight != 0 || spec.MarginBottom != 0 || spec.MarginLeft != 0 {
@@ -215,6 +218,29 @@ func (p *Panel) Draw(pix []uint8, srcW, srcH int) error {
 	return nil
 }
 
+// RequestSize pide al compositor un tamaño nuevo (por ejemplo, para crecer
+// cuando hay más notificaciones). El compositor responde con un configure que
+// se recoge en Dispatch; después NeedsResize y Resize hacen el resto.
+func (p *Panel) RequestSize(w, h int) error {
+	if w < 0 {
+		w = 0
+	}
+	if h < 1 {
+		h = 1
+	}
+	p.mu.Lock()
+	pending := p.cfgW == w && p.cfgH == h
+	p.mu.Unlock()
+	if pending {
+		return nil
+	}
+	if err := p.conn.Send(newEncoder(p.layer, layerSurfaceSetSize).
+		uint32(uint32(w)).uint32(uint32(h)).bytes()); err != nil {
+		return err
+	}
+	return p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes())
+}
+
 // NeedsResize indica si el tamaño cambió.
 func (p *Panel) NeedsResize() bool {
 	p.mu.Lock()
@@ -241,6 +267,13 @@ func (p *Panel) Dispatch(timeout time.Duration) error {
 	}
 	_, err := p.conn.Dispatch(timeout)
 	return err
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // Conn devuelve la conexión subyacente (para suscribirse a eventos de sway no

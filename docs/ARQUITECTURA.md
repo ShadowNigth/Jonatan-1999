@@ -27,6 +27,7 @@ cmd/swaymenu     lanzador: busca, puntúa y lanza
 cmd/swayctl      panel de control: 5 pestañas y acciones sobre sway
 cmd/swayclip     portapapeles: lista, filtra, copia, borra
 cmd/swaybar      barra de estado: CLI, recogida de datos y bucle de dibujo
+cmd/swaynotify   daemon de notificaciones: D-Bus, capa overlay y entrada
 
 internal/wayland cliente Wayland puro: conexión, registry, xdg-shell, shm y
                  wlr-layer-shell (capa background para el fondo animado)
@@ -47,6 +48,13 @@ internal/bar     barra de estado dibujada en píxeles
                  texto, escalado y composición sobre el fondo
   render.go      Snapshot de datos → tres islas (izquierda/centro/derecha) con
                  separadores, colores del tema y recorte según el espacio
+internal/notify  notificaciones de escritorio
+  notify.go      modelo, caducidad, modo «no molestar» e historial en JSON
+  render.go      tarjetas en píxeles: urgencias, acciones, progreso y cuenta atrás
+  service.go     servidor y cliente de org.freedesktop.Notifications
+internal/dbus    cliente y servidor D-Bus en Go puro
+  message.go     formato binario: firmas, alineación, arrays, variantes, dicts
+  conn.go        handshake SASL EXTERNAL, autobús de sesión, llamadas y señales
 internal/font    fuentes de mapa de bits
   psf.go         PSF1/PSF2, con gzip y tabla Unicode opcional
   builtin.go     fuente 5x7 incorporada (ASCII + símbolos de la barra)
@@ -99,6 +107,32 @@ sway IPC ──eventos──▶ cmd/swaybar/run.go ──Snapshot──▶ inter
   se usa la fuente 5×7 embebida; así la barra funciona en una instalación limpia.
 - **Degradación**: si con todos los módulos el centro no cabe, se quita el
   reproductor y después el título antes que solapar islas.
+
+## Las notificaciones
+
+```
+app (Chromium, pacman…)              swaynotify
+        │  D-Bus Notify                    │
+        ▼                                  ▼
+  internal/dbus ◀── autobús de sesión ─▶ Store ──▶ Renderer (píxeles)
+                                            │            │
+                                            │            ▼
+                                     historial JSON   wl_surface (overlay)
+```
+
+- **D-Bus a mano**: el protocolo entra en el proyecto como cualquier otro —
+  formato binario con firmas, sin libdbus. Se implementan cliente y servidor,
+  así que un test puede hablar con el daemon por un socket UNIX real.
+- **Repintado por eventos**: el servicio avisa al bucle con un canal cuando
+  cambia el estado; el bucle solo redibuja si cambia el resumen del contenido
+  (y una vez por segundo por la cuenta atrás).
+- **Superficie ajustada al contenido**: cuando hay más o menos tarjetas se pide
+  un tamaño nuevo al compositor y se espera su confirmación; mientras tanto no
+  se pinta, para no estirar las tarjetas.
+- **Entrada selectiva**: la región de entrada solo cubre las tarjetas, así que
+  el resto de la franja deja pasar el ratón a las ventanas de debajo.
+- **Sin mako**: el autostart arranca `swaynotify` si `notify.enabled` y si no
+  hay otro servidor; en caso contrario, `mako`.
 
 ## Flujo de `swaydesk init`
 
@@ -214,14 +248,28 @@ que lo usado ayer gana a lo usado cien veces hace un mes.
 | Opacidad en las plantillas, no por IPC | sway no permite cambiar el alpha de una ventana ya abierta; escribir `for_window` al generar la configuración es lo único fiable. |
 | Escenas procedurales en vez de vídeos de regalo | Sin binarios pesados en el repositorio y adaptadas a la paleta activa. Los GIF y vídeos del usuario se reproducen igual. |
 | `blur`/`rounding` solo en swayfx | Sway no implementa desenfoque ni esquinas; se detecta el compositor y las líneas quedan comentadas si no aplica. |
+| D-Bus implementado a mano | Es el único camino para sustituir a mako/dunst: sin libdbus ni cgo, un binario estático más y un protocolo que se puede probar con sockets de verdad. |
 
 ## Pruebas
 
-Además de los tests del toolkit y de los protocolos, `internal/bar` y
-`internal/font` tienen sus propias suites: colores y composición alfa, esquinas
-redondeadas, medidas de texto, elección de variantes cuando falta espacio, y
-carga de PSF1/PSF2 sintéticos (con gzip y tabla Unicode) incluyendo archivos
-corruptos.
+Además de los tests del toolkit (`internal/ui`), de los protocolos
+(`internal/swayipc`, `internal/wayland`) y de los fondos
+(`internal/wallpaper`), hay suites propias para:
+
+- **`internal/dbus`** — ida y vuelta de mensajes con todos los tipos del
+  formato (arrays de cadenas y bytes, estructuras, diccionarios con variantes),
+  validación de firmas, y un autobús de pruebas sobre socket UNIX que verifica
+  el saludo, las llamadas, los errores y las respuestas.
+- **`internal/notify`** — alta, sustitución por `replaces_id` y caducidad,
+  modo «no molestar» con excepción para las urgentes, historial en disco,
+  marcado limitado del protocolo (etiquetas y entidades), ajuste de texto en
+  líneas y el layout de las tarjetas (sin solapes, transparencia fuera de
+  ellas, acciones que no caben). Incluye una prueba de extremo a extremo con
+  un cliente y el servicio hablando D-Bus de verdad.
+- **`internal/bar`** — colores, composición alfa, esquinas redondeadas,
+  medidas de texto y elección de variantes cuando falta espacio.
+- **`internal/font`** — PSF1/PSF2 sintéticos con gzip y tabla Unicode,
+  archivos corruptos y la fuente incorporada.
 
 ```bash
 go test ./...          # incluye decenas de miles de comprobaciones internas

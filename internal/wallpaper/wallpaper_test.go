@@ -347,3 +347,23 @@ func TestSixelEncode(t *testing.T) {
 		t.Fatal("sixel sin cabecera de modo")
 	}
 }
+
+func TestCanvasToImageKeepsPixels(t *testing.T) {
+	c := NewCanvas(3, 2, ui.Color("#010203"))
+	c.set(0, 0, 10, 20, 30)
+	c.set(2, 1, 200, 100, 50)
+	img := CanvasToImage(c)
+	r, g, b, a := img.At(0, 0).RGBA()
+	if r>>8 != 10 || g>>8 != 20 || b>>8 != 30 || a>>8 != 255 {
+		t.Fatalf("píxel (0,0) = %d,%d,%d,%d", r>>8, g>>8, b>>8, a>>8)
+	}
+	r, g, b, _ = img.At(2, 1).RGBA()
+	if r>>8 != 200 || g>>8 != 100 || b>>8 != 50 {
+		t.Fatalf("píxel (2,1) = %d,%d,%d", r>>8, g>>8, b>>8)
+	}
+	// El relleno de fondo también debe conservarse.
+	r, _, _, _ = img.At(1, 0).RGBA()
+	if r>>8 != 1 {
+		t.Fatalf("fondo = %d", r>>8)
+	}
+}

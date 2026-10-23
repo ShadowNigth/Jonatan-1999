@@ -10,7 +10,9 @@ depends=('sway')
 makedepends=('go')
 optdepends=(
   'waybar: barra de estado alternativa (swaydesk trae la suya: swaybar)'
-  'kbd: fuentes de consola PSF para swaybar'
+  'mako: daemon de notificaciones alternativo (swaydesk trae el suyo: swaynotify)'
+  'dbus: bus de sesión (necesario para swaynotify)'
+  'kbd: fuentes de consola PSF para swaybar y swaynotify'
   'foot: terminal por defecto'
   'mako: notificaciones'
   'swaylock: bloqueo de pantalla'

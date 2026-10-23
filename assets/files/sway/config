@@ -145,6 +145,10 @@ bindsym $mod+c exec --no-startup-id $clip
 bindsym $mod+i exec --no-startup-id $ctl
 bindsym $mod+Shift+l exec $lock
 bindsym $mod+Shift+n exec --no-startup-id swaydesk notify "swaydesk" "Notificaciones de prueba"
+# Modo «no molestar» de las notificaciones propias
+bindsym $mod+Ctrl+n exec --no-startup-id swaydesk notifications dnd
+# Cerrar todas las notificaciones en pantalla
+bindsym $mod+Ctrl+Shift+n exec --no-startup-id swaydesk notifications clear
 
 # Capturas de pantalla
 bindsym Print exec sh -c 'mkdir -p ~/Capturas && grim ~/Capturas/$(date +%Y%m%d-%H%M%S).png'

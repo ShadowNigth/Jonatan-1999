@@ -358,6 +358,77 @@ Si prefieres waybar y sus módulos personalizados, pon `enabled = false` en
 `[bar]` (o ejecuta `swaydesk bar off`) y reinicia la sesión: la plantilla de
 waybar sigue instalada y se colorea con el tema igual que antes.
 
+## 8c. Notificaciones propias (`swaynotify`)
+
+El escritorio trae su propio daemon de notificaciones: implementa
+`org.freedesktop.Notifications` (así que Chromium, mpd, pacman, tu script de
+copias… todo funciona sin tocar nada) y dibuja las tarjetas en píxeles sobre
+una capa overlay, con la fuente y los colores del tema activo.
+
+```toml
+[notify]
+enabled = true             # false = usar mako
+position = "top-right"     # top-right, top-left, bottom-right, bottom-left
+width = 360                # ancho de cada tarjeta
+margin = 14                # separación con el borde de la pantalla
+padding = 14               # relleno interior
+gap = 8                    # separación entre tarjetas
+radius = 14                # esquinas redondeadas
+opacity = 0.94             # transparencia de las tarjetas
+timeout_ms = 6000          # tiempo en pantalla de las normales
+critical_timeout_ms = 0    # 0 = las urgentes se quedan hasta cerrarlas
+max_visible = 4            # cuántas se apilan
+history = 50               # entradas que se guardan
+max_lines = 3              # líneas del cuerpo
+dnd = false                # arrancar en modo «no molestar»
+font = ""                  # fuente PSF (vacío = automática)
+font_scale = 0             # 0 = automática
+```
+
+### Qué se dibuja
+
+- **Punto de color** según la urgencia: acento (normal), atenuado (baja) y
+  error (crítica, que además lleva el borde marcado).
+- **Aplicación y hora** arriba, con el resumen en tamaño doble y el cuerpo
+  recortado a `max_lines` líneas con puntos suspensivos.
+- **Acciones** como botones `[Etiqueta]`: se pulsan con el ratón y el cliente
+  recibe `ActionInvoked`.
+- **Barra de progreso** con el hint `progress` (descargas, copias…).
+- **Cuenta atrás**: una línea fina se va vaciando hasta que la tarjeta
+  desaparece sola. Un clic en cualquier parte de la tarjeta la cierra
+  (`NotificationClosed` con motivo 2).
+
+### Desde el terminal
+
+```bash
+swaydesk notify "Compilación terminada" "Todo en verde"        # lo normal
+swaynotify send --app pacman --urgency urgente --timeout -1 \
+    --action "default=Abrir" "12 paquetes" "Reinicia al terminar"
+
+swaydesk notifications status          # daemon, DND, en pantalla, historial
+swaydesk notifications dnd on          # silenciar (las urgentes pasan)
+swaydesk notifications history         # últimas 20, con --json para scripts
+swaydesk notifications clear --all     # cerrar y borrar historial
+swaydesk notifications preview         # PNG con tarjetas de ejemplo
+```
+
+El daemon atiende además una interfaz propia, `org.swaydesk.Notifications`,
+con `SetDND`, `ToggleDND`, `GetStatus`, `ListHistory`, `CloseAll`,
+`ClearHistory` y `Dismiss`; sirve para integrarla en la barra o en scripts con
+`busctl --user call org.freedesktop.Notifications /org/freedesktop/Notifications org.swaydesk.Notifications ToggleDND`.
+
+### Detalles que conviene saber
+
+- Sin bus de sesión (`DBUS_SESSION_BUS_ADDRESS`) el daemon no puede arrancar.
+  En una sesión de sway normal lo levanta `dbus-update-activation-environment` /
+  `dbus-launch`; el autostart lo comprueba antes de lanzarlo.
+- Solo puede haber un servidor de notificaciones: si ya hay `mako` o `dunst`,
+  `swaynotify` avisa y sale. El autostart arranca uno u otro, nunca los dos.
+- El historial se guarda en `~/.cache/swaydesk/notificaciones.json` cada cinco
+  segundos y al salir, así que sobrevive a un reinicio de la sesión.
+- Si un aviso llega con `replaces_id`, se actualiza la tarjeta en el sitio en
+  lugar de apilar otra (barras de progreso que se refrescan, por ejemplo).
+
 ## 8b. Barra de estado (waybar)
 
 `waybar/config.json` y `waybar/style.css` son plantillas. Los módulos de sistema

@@ -18,10 +18,12 @@ import (
 	"github.com/ShadowNigth/swaydesk/internal/actions"
 	"github.com/ShadowNigth/swaydesk/internal/adaptive"
 	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/dbus"
 	"github.com/ShadowNigth/swaydesk/internal/font"
 	"github.com/ShadowNigth/swaydesk/internal/gallery"
 	"github.com/ShadowNigth/swaydesk/internal/host"
 	"github.com/ShadowNigth/swaydesk/internal/launcher"
+	"github.com/ShadowNigth/swaydesk/internal/notify"
 	"github.com/ShadowNigth/swaydesk/internal/setup"
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 	"github.com/ShadowNigth/swaydesk/internal/ui"
@@ -72,6 +74,14 @@ func main() {
 		cmdOpacity(args)
 	case "bar", "barra":
 		cmdBar(args)
+	case "notifications", "notificaciones":
+		cmdNotifications(args)
+	case "notify-enabled", "notificaciones-activas":
+		// Para scripts: código 0 si el daemon propio está activado.
+		if cfg, err := config.Load(); err == nil && cfg.NotifyEnabled {
+			return
+		}
+		os.Exit(1)
 	case "version", "-v", "--version":
 		fmt.Printf("swaydesk %s (go %s, %s/%s)\n", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	case "help", "-h", "--help":
@@ -102,6 +112,8 @@ Sesión
   status [--json|--module M]  Estado del escritorio (sway, CPU, RAM, batería...)
   doctor                      Diagnóstico de dependencias y configuración
   notify <título> [cuerpo]    Envía una notificación de escritorio
+  notifications [status|dnd|history|clear|preview|test]
+                              Daemon de notificaciones propio (swaynotify)
   volume <up|down|mute>       Controla el volumen
   screenshot [region|full]    Captura de pantalla con grim
   wallpaper <fondo> [modo]    Fondo estático o animado (ver "swaydesk wallpaper help")
@@ -140,6 +152,20 @@ func must(err error) {
 		fmt.Fprintf(os.Stderr, "swaydesk: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// optValue devuelve el valor de --nombre valor o --nombre=valor.
+func optValue(args []string, name string) string {
+	long := "--" + name
+	for i, a := range args {
+		if strings.HasPrefix(a, long+"=") {
+			return a[len(long)+1:]
+		}
+		if a == long && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 func flagValue(args []string, def string) string {
@@ -715,6 +741,12 @@ func cmdDoctor(args []string) {
 			detail: "barra de estado de swaydesk", fix: "make build && make install"},
 		{name: "fuentes de consola", required: false, ok: font.Available(),
 			detail: "texto de swaybar (PSF)", fix: "sudo pacman -S kbd"},
+		{name: "swaynotify (propio)", required: false,
+			ok:     launcher.HasCommand("swaynotify") && cfg.NotifyEnabled && hasNotifyDaemon(),
+			detail: "notificaciones de swaydesk (D-Bus, sin mako)",
+			fix:    "make build && make install; reinicia la sesión"},
+		{name: "bus de sesión (D-Bus)", required: false, ok: dbus.SessionAvailable(),
+			detail: "necesario para las notificaciones", fix: "arranca la sesión con dbus"},
 		{name: "swayfx", required: false, ok: setup.IsSwayfx(),
 			detail: "desenfoque y esquinas redondeadas", fix: "opcional: swayfx en el AUR"},
 	}
@@ -792,6 +824,26 @@ func cmdNotify(args []string) {
 	}
 	title := words[0]
 	body := strings.Join(words[1:], " ")
+
+	// Primero se intenta el daemon propio (permite acciones y estilo del tema).
+	n := notify.Notification{
+		App: "swaydesk", Summary: title, Body: body, Progress: -1,
+		Icon: optValue(args, "icon"),
+	}
+	switch strings.ToLower(urgency) {
+	case "low", "baja":
+		n.Urgency = notify.Low
+	case "critical", "urgente", "crítica", "critica":
+		n.Urgency = notify.Critical
+	}
+	if t := optValue(args, "timeout"); t != "" {
+		if ms, err := time.ParseDuration(t + "ms"); err == nil {
+			n.Timeout = int(ms / time.Millisecond)
+		}
+	}
+	if notifySend(n) {
+		return
+	}
 	actions.Notification(title, body, urgency)
 }
 

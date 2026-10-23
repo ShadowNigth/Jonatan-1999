@@ -174,10 +174,43 @@ const (
 	surfaceDamage     = 2
 	surfaceFrame      = 3
 	surfaceSetOpaque  = 4
+	surfaceSetInput   = 5
 	surfaceCommit     = 6
 	surfaceDamageBuf  = 9
 	surfaceEnterEvent = 0
 	surfaceLeaveEvent = 1
+)
+
+// wl_seat
+const (
+	seatGetPointer   = 0
+	seatGetKeyboard  = 1
+	seatGetTouch     = 2
+	seatRelease      = 3
+	seatCapabilities = 0
+	seatNameEvent    = 1
+)
+
+// wl_seat capabilities
+const (
+	capPointer  = 1
+	capKeyboard = 2
+	capTouch    = 4
+)
+
+// wl_pointer (versión 7, hasta axis_disposition)
+const (
+	pointerSetCursor       = 0
+	pointerRelease         = 1
+	pointerEnterEvent      = 0
+	pointerLeaveEvent      = 1
+	pointerMotionEvent     = 2
+	pointerButtonEvent     = 3
+	pointerAxisEvent       = 4
+	pointerFrameEvent      = 5
+	pointerAxisSourceEvent = 6
+	pointerAxisStopEvent   = 7
+	pointerAxisDisposEvent = 8
 )
 
 // wl_region

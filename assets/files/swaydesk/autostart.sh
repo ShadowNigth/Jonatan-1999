@@ -29,7 +29,12 @@ elif have waybar; then
 fi
 
 # --- Notificaciones --------------------------------------------------------
-if have mako; then
+# swaynotify (propio) dibuja las tarjetas en una capa overlay con el tema
+# activo. Si no está instalado o está desactivado (notify.enabled = false),
+# se usa mako.
+if have swaynotify && swaydesk notify-enabled >/dev/null 2>&1; then
+    quiet swaynotify daemon
+elif have mako; then
     if [ -f "$HOME/.config/mako/config" ]; then
         quiet mako -c "$HOME/.config/mako/config"
     else

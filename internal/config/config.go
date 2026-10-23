@@ -67,6 +67,24 @@ type Config struct {
 	BarExclusive         bool     // reservar espacio (las ventanas no se solapan)
 	BarModules           []string // módulos de la derecha
 
+	// Notificaciones (swaynotify)
+	NotifyEnabled      bool
+	NotifyPosition     string // top-right, top-left, bottom-right, bottom-left, center
+	NotifyWidth        int
+	NotifyMargin       int
+	NotifyPadding      int
+	NotifyGap          int
+	NotifyRadius       int
+	NotifyOpacity      float64
+	NotifyTimeout      int // milisegundos para urgencia normal o baja
+	NotifyCriticalTime int // milisegundos (0 = no caducan)
+	NotifyMaxVisible   int
+	NotifyHistory      int
+	NotifyMaxLines     int
+	NotifyDND          bool // arrancar en modo «no molestar»
+	NotifyFont         string
+	NotifyFontScale    int
+
 	// Efectos de escritorio
 	TerminalOpacity float64
 	BarOpacity      float64
@@ -149,6 +167,22 @@ func Default() *Config {
 		BarShadow:            true,
 		BarExclusive:         true,
 		BarModules:           []string{"media", "cpu", "ram", "volume", "network", "battery", "clock"},
+
+		NotifyEnabled:      true,
+		NotifyPosition:     "top-right",
+		NotifyWidth:        360,
+		NotifyMargin:       14,
+		NotifyPadding:      14,
+		NotifyGap:          8,
+		NotifyRadius:       14,
+		NotifyOpacity:      0.94,
+		NotifyTimeout:      6000,
+		NotifyCriticalTime: 0,
+		NotifyMaxVisible:   4,
+		NotifyHistory:      50,
+		NotifyMaxLines:     3,
+		NotifyDND:          false,
+		NotifyFontScale:    0,
 
 		BootEnabled:  true,
 		BootStyle:    "sakura",
@@ -283,6 +317,34 @@ func (c *Config) apply() {
 	if v, ok := c.values["bar.font_scale"]; ok {
 		if n, ok := v.(int); ok && n >= 0 {
 			c.BarFontScale = n
+		}
+	}
+	bl("notify.enabled", &c.NotifyEnabled)
+	str("notify.position", &c.NotifyPosition)
+	num("notify.width", &c.NotifyWidth)
+	num("notify.margin", &c.NotifyMargin)
+	num("notify.padding", &c.NotifyPadding)
+	num("notify.gap", &c.NotifyGap)
+	if v, ok := c.values["notify.radius"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.NotifyRadius = n
+		}
+	}
+	flo("notify.opacity", &c.NotifyOpacity)
+	num("notify.timeout_ms", &c.NotifyTimeout)
+	if v, ok := c.values["notify.critical_timeout_ms"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.NotifyCriticalTime = n
+		}
+	}
+	num("notify.max_visible", &c.NotifyMaxVisible)
+	num("notify.history", &c.NotifyHistory)
+	num("notify.max_lines", &c.NotifyMaxLines)
+	bl("notify.dnd", &c.NotifyDND)
+	str("notify.font", &c.NotifyFont)
+	if v, ok := c.values["notify.font_scale"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.NotifyFontScale = n
 		}
 	}
 	bl("boot.enabled", &c.BootEnabled)
@@ -465,6 +527,37 @@ exclusive = %t
 # volume, network, battery, updates, title, clock, date
 modules = [%s]
 
+[notify]
+# daemon de notificaciones propio (swaynotify). Pon enabled = false para usar mako.
+enabled = %t
+# esquina donde se apilan: top-right, top-left, bottom-right, bottom-left
+position = %q
+# ancho de cada tarjeta en píxeles
+width = %d
+margin = %d
+padding = %d
+gap = %d
+# radio de las esquinas (0 = pastilla)
+radius = %d
+# opacidad del fondo de las tarjetas (0-1)
+opacity = %.2f
+# tiempo en pantalla de las notificaciones normales (ms)
+timeout_ms = %d
+# las urgentes no caducan salvo que se indique lo contrario (0 = no caducan)
+critical_timeout_ms = %d
+# cuántas se apilan a la vez
+max_visible = %d
+# entradas que se conservan en el historial
+history = %d
+# líneas máximas del cuerpo
+max_lines = %d
+# arrancar en modo «no molestar»
+dnd = %t
+# fuente PSF de consola (vacío = la mejor disponible del sistema)
+font = %q
+# escala de la fuente (0 = automática)
+font_scale = %d
+
 [boot]
 # animación que se muestra al iniciar la sesión
 enabled = %t
@@ -491,6 +584,10 @@ rounding = %d
 		c.BarEnabled, c.BarPosition, c.BarHeight, c.BarMargin, c.BarPadding,
 		c.BarGap, c.BarRadius, c.BarBackgroundOpacity, c.BarIslands, c.BarLogo, c.BarFont,
 		c.BarFontScale, c.BarShadow, c.BarExclusive, tomlList(c.BarModules),
+		c.NotifyEnabled, c.NotifyPosition, c.NotifyWidth, c.NotifyMargin,
+		c.NotifyPadding, c.NotifyGap, c.NotifyRadius, c.NotifyOpacity,
+		c.NotifyTimeout, c.NotifyCriticalTime, c.NotifyMaxVisible, c.NotifyHistory,
+		c.NotifyMaxLines, c.NotifyDND, c.NotifyFont, c.NotifyFontScale,
 		c.BootEnabled, c.BootStyle, c.BootDuration, c.BootLogo,
 		c.TerminalOpacity, c.BarOpacity, c.ActiveOpacity, c.InactiveOpacity,
 		c.Blur, c.GapsInner, c.GapsOuter, c.Rounding)

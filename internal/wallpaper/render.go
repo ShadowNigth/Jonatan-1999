@@ -343,10 +343,22 @@ func SaveImage(img image.Image, path string) error {
 	return png.Encode(f, img)
 }
 
-// CanvasToImage convierte un lienzo en image.Image.
+// CanvasToImage convierte un lienzo (3 bytes por píxel, RGB) en image.Image.
+//
+// No vale con copiar los bytes: el lienzo no tiene canal alfa y el búfer de
+// image.RGBA usa 4 bytes por píxel, así que hay que reordenar.
 func CanvasToImage(c *Canvas) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, c.W, c.H))
-	copy(img.Pix, c.Pix)
+	for y := 0; y < c.H; y++ {
+		src := c.Pix[y*c.W*3:]
+		dst := img.Pix[y*img.Stride:]
+		for x := 0; x < c.W; x++ {
+			dst[x*4] = src[x*3]
+			dst[x*4+1] = src[x*3+1]
+			dst[x*4+2] = src[x*3+2]
+			dst[x*4+3] = 255
+		}
+	}
 	return img
 }
 

@@ -6,7 +6,7 @@
 
 Lanzador de aplicaciones, panel de control, portapapeles, barra de estado, temas
 adaptativos, fondos animados (GIF y *live wallpapers*) y sesión — todo en
-**cinco binarios estáticos**, sin dependencias externas de Go y sin un solo
+**seis binarios estáticos**, sin dependencias externas de Go y sin un solo
 script de shell.
 
 ![Lanzador de aplicaciones](docs/screenshot-menu.png)
@@ -30,6 +30,7 @@ terceros.
 | `swayclip` | Historial del portapapeles (cliphist / clipman) con búsqueda y vista previa |
 | `swaydesk` | CLI central: instala la configuración, aplica temas, diagnostica, controla la sesión |
 | `swaybar` | Barra de estado propia dibujada en píxeles sobre `wlr-layer-shell` (sustituye a waybar) |
+| `swaynotify` | Daemon de notificaciones: habla `org.freedesktop.Notifications` por D-Bus y dibuja las tarjetas en píxeles (sustituye a mako) |
 
 ```
 ╭── swaydesk · lanzador ─────────────────────────────────────────────╮
@@ -79,6 +80,12 @@ terceros.
   tipografía de mapa de bits con fuentes PSF del sistema e iconos siempre
   visibles; se adapta sola a la paleta activa, se refresca al instante con los
   eventos de sway y se configura entera desde `[bar]` en `config.toml`.
+- **Notificaciones propias** (`swaynotify`): daemon completo de
+  `org.freedesktop.Notifications` sobre un cliente **D-Bus escrito desde cero**
+  (SASL EXTERNAL, formato binario con firmas, llamadas, señales y errores), y
+  tarjetas dibujadas en píxeles sobre una capa overlay. Urgencias con color,
+  acciones, barra de progreso, caducidad con cuenta atrás, modo «no molestar»,
+  historial persistente y clic para cerrar o para pulsar una acción. Sin mako.
 - **Animación de arranque** (`Super+Shift+b`): logotipo con degradado, pétalos
   o lluvia de neón, lista de componentes que se activan en vivo y barra de
   progreso. Cuatro estilos (`sakura`, `neon`, `matrix`, `minimal`), duración
@@ -105,6 +112,10 @@ terceros.
 | Barra de estado propia | Animación de arranque |
 |---|---|
 | ![Barra](docs/screenshot-barra.png) | ![Arranque](docs/screenshot-arranque.png) |
+
+| Notificaciones propias | Portapapeles |
+|---|---|
+| ![Notificaciones](docs/screenshot-notificaciones.png) | ![Portapapeles](docs/screenshot-portapapeles.png) |
 
 | Galería de temas (vista previa en vivo) | Selector de fondos animados |
 |---|---|
@@ -196,6 +207,15 @@ Sesión
   screenshot [region|full]       Captura con grim
   lock | reload | power [acción] Sesión y energía
 
+Notificaciones
+  notify <título> [cuerpo]   Envía una notificación (usa swaynotify si está)
+  notifications status       Estado del daemon, DND y contadores
+  notifications dnd [on|off] Modo «no molestar»
+  notifications history      Historial (con --json para scripts)
+  notifications clear        Cierra las visibles (--all borra el historial)
+  notifications preview      PNG con tarjetas de ejemplo
+  notifications test         Notificación de prueba
+
 Barra propia
   bar                        Estado de la barra (o `bar status`)
   bar on | off               Usar swaybar o volver a waybar
@@ -218,6 +238,8 @@ Barra propia
 | `Super+r` | Modo redimensionar | `Super+1..0` | Workspaces |
 | `Super+Shift+1..0` | Mover al workspace | `Super+Shift+c` | Recargar sway |
 | `Super+Shift+b` | Repetir la animación de arranque | `Super+Shift+w` | Selector de fondos |
+| `Super+Ctrl+b` | Reiniciar la barra | `Super+Shift+n` | Notificación de prueba |
+| `Super+Ctrl+n` | No molestar | `Super+Ctrl+Shift+n` | Cerrar notificaciones |
 
 La chuleta completa está en `Super+i` → *Atajos*, y en
 [`assets/files/sway/config`](assets/files/sway/config).
@@ -312,6 +334,23 @@ protocol = "auto"          # auto · kitty · sixel · ansi (para la vista en te
 adaptive = false           # genera un tema desde los colores del fondo
 dir = "~/Imágenes/Fondos"  # carpeta que explora el selector
 
+[notify]
+enabled = true             # false = volver a mako
+position = "top-right"     # top-right · top-left · bottom-right · bottom-left
+width = 360                # ancho de las tarjetas
+margin = 14
+padding = 14
+gap = 8
+radius = 14
+opacity = 0.94
+timeout_ms = 6000          # tiempo en pantalla (normales)
+critical_timeout_ms = 0    # 0 = las urgentes no caducan
+max_visible = 4            # cuántas se apilan
+history = 50               # entradas que se recuerdan
+max_lines = 3              # líneas del cuerpo
+dnd = false                # arrancar en «no molestar»
+font = ""                  # fuente PSF (vacío = automática)
+
 [bar]
 enabled = true             # false = volver a waybar
 position = "top"           # top · bottom
@@ -382,6 +421,8 @@ internal/
   wallpaper/    motor de fondos: escenas, GIF, vídeo, protocolos kitty/sixel
   boot/         animación de arranque (logo, partículas, progreso)
   bar/          barra de estado: lienzo RGBA, islas, módulos y layout
+  notify/       notificaciones: modelo, caducidad, DND, historial y tarjetas
+  dbus/         cliente y servidor D-Bus (SASL, formato binario, señales)
   font/         fuentes de mapa de bits (PSF1/PSF2 + 5x7 incorporada)
   gallery/      selectores compartidos: galería de temas y de fondos
   adaptive/     paletas derivadas de imágenes (cuantización + HSL + contraste)
