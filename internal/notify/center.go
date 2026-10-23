@@ -31,6 +31,9 @@ func (e Entry) Badges() []string {
 	if e.InlineReply {
 		out = append(out, "responder")
 	}
+	if e.HasImage() || e.ImagePath != "" {
+		out = append(out, "imagen")
+	}
 	if len(e.Actions) > 1 {
 		out = append(out, "acciones")
 	}

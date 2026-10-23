@@ -195,6 +195,7 @@ func (s *Service) handleNotify(m *dbus.Message) {
 			if hints, ok := m.Body[6].(dbus.Dict); ok {
 				applyHints(&n, hints)
 			}
+			resolveImage(&n)
 		}
 		if n.Summary == "" {
 			n.Summary = n.Body
@@ -243,11 +244,95 @@ func applyHints(n *Notification, h dbus.Dict) {
 			break
 		}
 	}
+	// Imagen: el blob (image-data) o la ruta (image-path). Se aceptan también
+	// las variantes con guion bajo, que usan algunos clientes.
+	for _, key := range []string{"image-data", "image_data"} {
+		if v := h.Value(key); v != nil {
+			if _, ok := v.([]any); ok {
+				n.imageRaw = v
+				break
+			}
+		}
+	}
+	for _, key := range []string{"image-path", "image_path"} {
+		if p, ok := h.Value(key).(string); ok && strings.TrimSpace(p) != "" {
+			n.ImagePath = strings.TrimSpace(p)
+			break
+		}
+	}
 	if p := h.Value("progress"); p != nil {
 		if v, ok := toUint(p); ok {
 			n.Progress = int(int32(uint32(v)))
 		}
 	}
+}
+
+// resolveImage busca la imagen de la notificación: primero los bytes del hint
+// `image-data`, después un archivo (`image-path`, `image_path`) y por último el
+// icono si resulta ser una ruta de archivo.
+//
+// Un fallo no invalida la notificación: como mucho, la tarjeta se dibuja sin
+// imagen.
+func resolveImage(n *Notification) {
+	if n.Image != nil {
+		return
+	}
+	if raw, ok := n.imageData(); ok {
+		n.Image = raw
+		return
+	}
+	path := n.ImagePath
+	if path == "" && strings.ContainsAny(n.Icon, "/") && !strings.HasPrefix(n.Icon, "http") {
+		path = n.Icon
+	}
+	if path == "" {
+		return
+	}
+	im, err := LoadImageFile(path)
+	if err != nil {
+		return
+	}
+	n.Image = im
+}
+
+// imageData decodifica el blob que trae el hint `image-data`.
+func (n *Notification) imageData() (*Image, bool) {
+	if n.imageRaw == nil {
+		return nil, false
+	}
+	fields, ok := n.imageRaw.([]any)
+	if !ok || len(fields) < 7 {
+		return nil, false
+	}
+	width, _ := toInt(fields[0])
+	height, _ := toInt(fields[1])
+	rowstride, _ := toInt(fields[2])
+	hasAlpha, _ := fields[3].(bool)
+	bits, _ := toInt(fields[4])
+	channels, _ := toInt(fields[5])
+	data, _ := fields[6].([]byte)
+	im, err := DecodeImageData(width, height, rowstride, hasAlpha, bits, channels, data)
+	if err != nil {
+		return nil, false
+	}
+	return im, true
+}
+
+// toInt acepta los enteros que puede devolver el decodificador de D-Bus.
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int32:
+		return int(n), true
+	case uint32:
+		return int(n), true
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case uint8:
+		return int(n), true
+	}
+	return 0, false
 }
 
 // closeByServer cierra desde el servidor y avisa a los clientes.
@@ -534,6 +619,14 @@ func (c *Client) Send(n Notification) (uint32, error) {
 	if n.Progress >= 0 {
 		hints = append(hints, dbus.DictEntry{Key: "progress", Value: dbus.Variant{Sig: "i", Value: int32(n.Progress)}})
 	}
+	if n.GroupID != "" {
+		hints = append(hints, dbus.DictEntry{Key: "x-swaydesk-group", Value: dbus.Variant{Sig: "s", Value: n.GroupID}})
+	}
+	// La imagen viaja como ruta: es el hint estándar y lo entienden también
+	// mako y dunst.
+	if path := n.imagePathForSend(); path != "" {
+		hints = append(hints, dbus.DictEntry{Key: "image-path", Value: dbus.Variant{Sig: "s", Value: path}})
+	}
 	flat := make([]any, 0, len(n.Actions)*2)
 	for _, a := range n.Actions {
 		flat = append(flat, a.Key, a.Label)
@@ -650,6 +743,18 @@ func (c *Client) SetDND(on bool) (bool, error) {
 		}
 	}
 	return v, nil
+}
+
+// imagePathForSend devuelve la ruta que se manda en el hint image-path.
+func (n *Notification) imagePathForSend() string {
+	if n.ImagePath != "" {
+		return n.ImagePath
+	}
+	// Un icono con forma de ruta también se anuncia como imagen.
+	if strings.ContainsAny(n.Icon, "/") && !strings.HasPrefix(n.Icon, "http") {
+		return n.Icon
+	}
+	return ""
 }
 
 // Available indica si hay un servidor de notificaciones atendiendo.

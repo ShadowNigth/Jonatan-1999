@@ -79,6 +79,7 @@ Opciones de send
   --reply-hint TEXTO         texto de ayuda del campo de respuesta
   --resident                 la tarjeta no se cierra al responder
   --group ETIQUETA           pila propia dentro de la misma aplicación
+  --image RUTA               imagen (PNG o JPEG) dentro de la tarjeta
   --urgency baja|normal|urgente
   --timeout MS               milisegundos en pantalla (-1 = no caducar)
   --action clave=etiqueta    botón (se puede repetir)
@@ -128,7 +129,7 @@ func parseFlags(args []string, repeat map[string]bool) (map[string][]string, []s
 func takesValue(name string) bool {
 	switch name {
 	case "app", "icon", "urgency", "timeout", "action", "category", "theme",
-		"scale", "out", "body", "reply-hint", "group":
+		"scale", "out", "body", "reply-hint", "group", "image":
 		return true
 	}
 	return false

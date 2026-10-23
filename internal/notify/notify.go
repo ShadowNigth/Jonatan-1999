@@ -93,6 +93,12 @@ type Notification struct {
 	// ReplyPlaceholder es el texto de ayuda del campo de respuesta (hint
 	// x-kde-reply-placeholder-text).
 	ReplyPlaceholder string `json:"reply_placeholder,omitempty"`
+	// Image es la imagen adjunta (hint `image-data`) ya decodificada. No se
+	// guarda en el historial: puede pesar cientos de kilobytes.
+	Image *Image `json:"-"`
+	// ImagePath es la ruta de la imagen (hint `image-path` o el icono cuando es
+	// un archivo), que sí se conserva en el historial para poder recargarla.
+	ImagePath string `json:"image_path,omitempty"`
 	// GroupID es la etiqueta de pila que manda el cliente (hints
 	// x-dunst-stack-tag, x-kde-group-id o group). Con ella se separan grupos
 	// dentro de una misma aplicación; vacía, se agrupa por aplicación.
@@ -106,7 +112,8 @@ type Notification struct {
 	ActionKey string    `json:"action,omitempty"`
 
 	// internal
-	closed bool
+	closed   bool
+	imageRaw any // valor crudo del hint image-data, ya decodificado por D-Bus
 }
 
 // Visible indica si la notificación debe dibujarse en este instante.
@@ -118,6 +125,19 @@ func (n *Notification) Visible(now time.Time) bool {
 		return false
 	}
 	return true
+}
+
+// HasImage indica si la notificación trae una imagen para dibujar.
+func (n *Notification) HasImage() bool { return !n.Image.Empty() }
+
+// AttachImage decodifica y asigna una imagen desde bytes (PNG o JPEG).
+func (n *Notification) AttachImage(data []byte) error {
+	im, err := DecodeImage(data)
+	if err != nil {
+		return err
+	}
+	n.Image = im
+	return nil
 }
 
 // Remaining devuelve la fracción de tiempo que le queda (0..1) y si tiene
@@ -445,6 +465,16 @@ func (s *Store) LoadHistory(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.history = recs
+	// Las imágenes no se guardan en disco (pueden pesar mucho), pero sí su
+	// ruta: se recargan para que el historial se vea igual que en su momento.
+	for i := range s.history {
+		if s.history[i].ImagePath == "" || s.history[i].Image != nil {
+			continue
+		}
+		if im, err := LoadImageFile(s.history[i].ImagePath); err == nil {
+			s.history[i].Image = im
+		}
+	}
 	for _, r := range recs {
 		if r.ID >= s.nextID {
 			s.nextID = r.ID + 1

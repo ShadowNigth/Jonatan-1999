@@ -56,7 +56,10 @@ internal/osd     avisos en pantalla (OSD)
 internal/notify  notificaciones de escritorio
   notify.go      modelo, caducidad, modo «no molestar» e historial en JSON
   render.go      tarjetas en píxeles: urgencias, acciones, progreso, cuenta
-                 atrás, pilas plegadas con capas y franjas de grupo
+                 atrás, pilas plegadas con capas y franjas de grupo, y la
+                 miniatura cuadrada cuando el aviso trae imagen
+  image.go       decodificación de image-data (crudo RGBA con salto de fila) y
+                 de archivos PNG/JPEG, escalado por caja y recorte al centro
   center.go      modelo del centro: filtro sin acentos, orden, pilas y selección
   group.go       agrupación por aplicación o etiqueta de pila, recorte por
                  grupos y estado de plegado
@@ -303,6 +306,10 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
   plegado y despliegue sin perder la selección, y las marcas que devuelve el
   dibujo (`Collapsed`, `Header`, `IDs`) para que el daemon sepa si un clic debe
   cerrar una tarjeta, plegar una pila o abrirla.
+- **`internal/notify`** — las imágenes: decodificación de `image-data` con
+  salto de fila y canal alfa, rechazo de tamaños desmedidos (lado, bytes y
+  hint), escalado y recorte cuadrado, el paso de `image-path` a imagen ya
+  cargada en la tarjeta, y el historial que guarda la ruta pero no los píxeles.
 - **`internal/notify`** — el modelo del centro (vivas primero, sin duplicar lo
   que ya está en pantalla, filtro que ignora mayúsculas y acentos, selección y
   recuento por urgencia), el saneado de respuestas (`SanitizeReply`: una línea,

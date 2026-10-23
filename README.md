@@ -94,6 +94,13 @@ terceros.
   etiqueta de pila de cada cliente (`x-dunst-stack-tag`, `x-kde-group-id`), así
   que varios chats de la misma app no se mezclan. Se enciende o apaga con
   `group` en `[notify]` (y con `g` en el centro).
+- **Imágenes en las tarjetas**: las apps que mandan `image-data` (el hint
+  estándar de reproductores, clientes de chat y `notify-send -i`) o `image-path`
+  muestran una **miniatura cuadrada** a la izquierda del texto, recortada por el
+  centro y con las esquinas redondeadas; el texto se recoloca solo. El
+  decodificador PNG/JPEG está escrito desde cero en el proyecto y limita el
+  tamaño (512 px de lado y 8 MiB) para que una carátula enorme no congele la
+  sesión. `swaynotify send --image ~/portada.png` lo prueba en un segundo.
 - **Respuesta rápida y centro de notificaciones**: las apps que hablan
   `inline-reply` (Telegram, Signal, Discord…) muestran el botón **Responder**;
   el texto se escribe en una ventana flotante y vuelve a la app solo a ella

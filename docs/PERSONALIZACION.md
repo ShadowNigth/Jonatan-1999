@@ -426,6 +426,49 @@ swaynotify send --app Telegram --group chat-marta "Marta" "Traigo el postre"
   con el número de avisos: `Enter`/`Tab` la abre, `g` quita o pone el
   agrupamiento y `x` cierra la pila completa.
 
+### Imágenes en las tarjetas
+
+Cuando un aviso trae **arte** (una carátula, la foto de perfil de un chat, la
+miniatura de una descarga), la tarjeta lo dibuja como una **miniatura cuadrada
+de 42 px lógicos** a la izquierda, con las esquinas redondeadas y un borde
+sutil; el resumen y el cuerpo se recolocan a su derecha y la tarjeta crece lo
+justo para que no se solapen. Si el hueco interior es muy estrecho (menos de
+60 px) la miniatura se omite y el texto vuelve a ocupar todo el ancho.
+
+Se aceptan las tres formas habituales de mandar la imagen:
+
+| Hint | Formato | Quién lo usa |
+| --- | --- | --- |
+| `image-data` (también `image_data`) | firma D-Bus `(iiibiiay)`: ancho, alto, salto de fila, alfa, bits, canales y píxeles | reproductores MPRIS, Telegram, Discord, `notify-send -i` con archivo |
+| `image-path` (también `image_path`) | ruta a un PNG/JPEG/GIF (admite `file://` y `~`) | mako, dunst y la mayoría de scripts |
+| `app_icon` | si es una **ruta** y no hay imagen propia, se usa como miniatura | apps que solo rellenan el icono |
+
+El decodificador (`internal/notify/image.go`) está escrito desde cero con la
+biblioteca estándar: entiende PNG, JPEG y los formatos que registra Go, respeta
+el **salto de fila** y el canal alfa del búfer crudo, y convierte todo a RGBA
+para poder mezclarlo con el tema. Límites pensados para no bloquear la sesión:
+
+- lado mayor **512 px** al entrar (el resto se reduce por caja, sin vecinos
+  borrosos) y miniatura final recortada al centro;
+- **8 MiB** por archivo y **12 MiB** por hint de D-Bus; lo que pase se ignora
+  sin romper la notificación;
+- una imagen ilegible nunca hace fallar el aviso: la tarjeta se dibuja sin ella.
+
+```bash
+# Lo más rápido para verlo
+swaynotify send --app spotify --timeout -1 \
+    --image ~/Música/caratulas/lofi.png \
+    "Lofi Girl · Midnight Study" "Reproduciendo la lista «estudio»"
+
+# Un cliente puede mandar los píxeles por D-Bus (equivalente a image-data)
+notify-send -i ~/fotos/perfil.png "Marta" "¿Comemos a las dos?"
+```
+
+El **historial** guarda solo la ruta (`image_path`), no los píxeles: al abrir el
+centro las imágenes se **recargan del disco** para no llenar el JSON. Si el
+archivo ya no existe, la entrada se ve como siempre, sin miniatura. En el
+centro esas filas llevan la insignia `imagen`.
+
 ### Responder desde la tarjeta (`inline-reply`)
 
 Los chats (Telegram, Signal, Discord, el cliente de Matrix…) pueden pedir una
@@ -474,6 +517,8 @@ nada. Un clic izquierdo abre el centro en una terminal flotante.
 swaydesk notify "Compilación terminada" "Todo en verde"        # lo normal
 swaynotify send --app pacman --urgency urgente --timeout -1 \
     --action "default=Abrir" "12 paquetes" "Reinicia al terminar"
+swaynotify send --app spotify --image ~/caratula.png \\
+    "Lofi Girl" "Midnight Study"          # tarjeta con miniatura
 
 swaydesk notifications status          # daemon, DND, en pantalla, historial
 swaydesk notifications dnd on          # silenciar (las urgentes pasan)

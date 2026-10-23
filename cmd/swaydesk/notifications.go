@@ -291,6 +291,16 @@ func notifyTest(cfg *config.Config) {
 			Timeout: -1,
 		})
 	}
+	// Una tarjeta con carátula: la imagen se genera en la caché y se pasa con
+	// image-path, el mismo hint que usan los reproductores.
+	if cover := demoCover(cfg.Cache, cfg.Theme); cover != "" {
+		_ = notifySend(notify.Notification{
+			App: "swaydesk", Summary: "Lofi Girl · Midnight Study",
+			Body:    "Reproduciendo la lista «estudio»",
+			Urgency: notify.Low, Icon: "audio-x-generic", Progress: -1,
+			Created: now, ImagePath: cover, Timeout: -1,
+		})
+	}
 	_ = notifySend(notify.Notification{
 		App: "swaydesk", Summary: "Descarga completada",
 		Body: "archlinux-2026.10.01-x86_64.iso", Urgency: notify.Low,

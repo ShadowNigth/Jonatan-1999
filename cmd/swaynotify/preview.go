@@ -5,8 +5,11 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/config"
@@ -35,6 +38,7 @@ func demoNotes(now time.Time) []notify.Notification {
 			ID: 3, App: "spotify", Summary: "Lofi Girl · Midnight Study",
 			Body:    "Reproduciendo la lista «estudio»",
 			Urgency: notify.Low, Created: now.Add(-20 * time.Second), Timeout: -1, Progress: -1,
+			Image: demoArt(96),
 		},
 		{
 			ID: 4, App: "Telegram", GroupID: "chat-marta", Sender: "Marta",
@@ -56,6 +60,59 @@ func demoNotes(now time.Time) []notify.Notification {
 			Actions: []notify.Action{{Key: notify.InlineReplyAction, Label: "Responder"}},
 		},
 	}
+}
+
+// demoArt genera una carátula de ejemplo (degradado y círculos) para que la
+// vista previa enseñe cómo se ve una notificación con imagen.
+func demoArt(size int) *notify.Image {
+	pal := ui.PaletteByName("sakura")
+	rgb := func(c ui.Color) (float64, float64, float64) {
+		h := strings.TrimPrefix(string(c), "#")
+		if len(h) != 6 {
+			return 0.5, 0.5, 0.5
+		}
+		v, err := strconv.ParseUint(h, 16, 32)
+		if err != nil {
+			return 0.5, 0.5, 0.5
+		}
+		return float64(v>>16&0xFF) / 255, float64(v>>8&0xFF) / 255, float64(v&0xFF) / 255
+	}
+	topR, topG, topB := rgb(pal.Accent2)
+	botR, botG, botB := rgb(pal.Bg)
+	im := &notify.Image{W: size, H: size, Pix: make([]uint8, size*size*4)}
+	for y := 0; y < size; y++ {
+		t := float64(y) / float64(size-1)
+		for x := 0; x < size; x++ {
+			i := (y*size + x) * 4
+			// Degradado diagonal con un halo claro en la esquina.
+			d := (t + float64(x)/float64(size-1)) / 2
+			im.Pix[i] = uint8(255 * (topR + (botR-topR)*d))
+			im.Pix[i+1] = uint8(255 * (topG + (botG-topG)*d))
+			im.Pix[i+2] = uint8(255 * (topB + (botB-topB)*d))
+			im.Pix[i+3] = 255
+		}
+	}
+	// Tres círculos concéntricos en el centro.
+	cx, cy := float64(size)/2, float64(size)/2
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			dx, dy := float64(x)-cx, float64(y)-cy
+			dist := math.Sqrt(dx*dx + dy*dy)
+			if dist < float64(size)*0.30 && dist > float64(size)*0.26 {
+				i := (y*size + x) * 4
+				im.Pix[i] = 255
+				im.Pix[i+1] = 255
+				im.Pix[i+2] = 255
+			}
+			if dist < float64(size)*0.09 {
+				i := (y*size + x) * 4
+				im.Pix[i] = uint8(im.Pix[i] / 4)
+				im.Pix[i+1] = uint8(im.Pix[i+1] / 4)
+				im.Pix[i+2] = uint8(im.Pix[i+2] / 4)
+			}
+		}
+	}
+	return im
 }
 
 // demoViews agrupa las notificaciones de ejemplo como las pintaría el daemon.

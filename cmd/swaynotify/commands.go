@@ -59,6 +59,15 @@ func runSend(args []string) {
 	}
 	n.Category = last(vals, "category")
 	n.GroupID = last(vals, "group")
+	if p := last(vals, "image"); p != "" {
+		// Se comprueba al enviar: si la ruta no existe, se avisa en vez de
+		// mandar una tarjeta sin la imagen que el usuario esperaba.
+		if _, err := os.Stat(p); err != nil {
+			fmt.Fprintf(os.Stderr, "swaynotify: no se pudo leer la imagen: %v\n", err)
+			os.Exit(1)
+		}
+		n.ImagePath = p
+	}
 	for _, spec := range vals["action"] {
 		key, label := spec, spec
 		if i := strings.IndexByte(spec, '='); i > 0 {

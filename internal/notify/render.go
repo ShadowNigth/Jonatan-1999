@@ -296,6 +296,35 @@ func (r *Renderer) stackStep() int {
 	return s
 }
 
+// thumbSize es el lado de la miniatura de una notificación con imagen.
+func (r *Renderer) thumbSize() int {
+	s := 30 * r.sc
+	if s < 24 {
+		s = 24
+	}
+	if s > 64 {
+		s = 64
+	}
+	return s
+}
+
+// thumbGap es la separación entre la miniatura y el texto.
+func (r *Renderer) thumbGap() int { return 5 * r.sc }
+
+// textCols devuelve el desplazamiento y el ancho disponibles para el texto
+// (la miniatura, si la hay, ocupa la izquierda).
+func (r *Renderer) textCols(n *Notification, inner int) (int, int) {
+	if !n.HasImage() {
+		return 0, inner
+	}
+	used := r.thumbSize() + r.thumbGap()
+	if inner-used < 60*r.sc {
+		// Sin sitio para la miniatura: mejor el texto completo.
+		return 0, inner
+	}
+	return used, inner - used
+}
+
 // cardHeight calcula el alto de una tarjeta según su contenido.
 func (r *Renderer) cardHeight(n *Notification, now time.Time) int {
 	pad := r.Opt.Padding
@@ -304,20 +333,9 @@ func (r *Renderer) cardHeight(n *Notification, now time.Time) int {
 
 	h += r.rows(r.sc) // fila de la app
 	h += 4
+	h += r.contentHeight(n, inner)
 
-	titleScale := r.sc
-	if r.sc == 1 && r.Opt.Width >= 300 {
-		titleScale = 2
-	}
-	titleLines := Wrap(Sanitize(n.Summary, 0), inner, r.advance(titleScale), 2)
-	h += len(titleLines) * r.lineH(titleScale)
-	if body := strings.TrimSpace(StripMarkup(n.Body)); body != "" {
-		h += 4
-		bodyLines := Wrap(body, inner, r.advance(r.sc), r.Opt.MaxLines)
-		h += len(bodyLines) * r.lineH(r.sc)
-	}
 	if len(n.Actions) > 0 || n.InlineReply {
-		_ = 0
 		h += 6
 		h += r.rows(r.sc)
 	}
@@ -326,6 +344,27 @@ func (r *Renderer) cardHeight(n *Notification, now time.Time) int {
 	}
 	if _, timed := n.Remaining(now); timed {
 		h += 4
+	}
+	return h
+}
+
+// contentHeight es el alto del bloque de título y cuerpo, con la miniatura si
+// es más alta que el texto.
+func (r *Renderer) contentHeight(n *Notification, inner int) int {
+	titleScale := r.sc
+	if r.sc == 1 && r.Opt.Width >= 300 {
+		titleScale = 2
+	}
+	_, cols := r.textCols(n, inner)
+	h := len(Wrap(Sanitize(n.Summary, 0), cols, r.advance(titleScale), 2)) * r.lineH(titleScale)
+	if body := strings.TrimSpace(StripMarkup(n.Body)); body != "" {
+		h += 4
+		h += len(Wrap(body, cols, r.advance(r.sc), r.Opt.MaxLines)) * r.lineH(r.sc)
+	}
+	if n.HasImage() {
+		if t := r.thumbSize(); t > h {
+			h = t
+		}
 	}
 	return h
 }
@@ -511,23 +550,37 @@ func (r *Renderer) drawCard(c *bar.Canvas, e layoutEntry, rect Rect, app string,
 	}
 	ty += r.rows(r.sc) + 4
 
+	// Miniatura a la izquierda, si la tarjeta trae imagen.
+	indent, cols := r.textCols(n, inner)
+	tx := x + indent
+	if indent > 0 {
+		r.drawThumb(c, n.Image, x, ty, r.thumbSize())
+	}
+
 	// Resumen.
 	titleScale := r.sc
 	if r.sc == 1 && r.Opt.Width >= 300 {
 		titleScale = 2
 	}
-	for _, line := range Wrap(Sanitize(n.Summary, 0), inner, r.advance(titleScale), 2) {
-		c.Text(r.face, x, ty, line, titleScale, titleScale, fg)
+	for _, line := range Wrap(Sanitize(n.Summary, 0), cols, r.advance(titleScale), 2) {
+		c.Text(r.face, tx, ty, line, titleScale, titleScale, fg)
 		ty += r.lineH(titleScale)
 	}
 
 	// Cuerpo.
 	if body := strings.TrimSpace(StripMarkup(n.Body)); body != "" {
 		ty += 4
-		for _, line := range Wrap(body, inner, r.advance(r.sc), r.Opt.MaxLines) {
-			c.Text(r.face, x, ty, line, r.sc, r.sc, muted)
+		for _, line := range Wrap(body, cols, r.advance(r.sc), r.Opt.MaxLines) {
+			c.Text(r.face, tx, ty, line, r.sc, r.sc, muted)
 			ty += r.lineH(r.sc)
 		}
+	}
+	// El bloque de contenido manda: si la miniatura es más alta, los botones
+	// y las barras empiezan debajo de ella.
+	contentTop := rect.Y + pad + r.rows(r.sc) + 4
+	contentBottom := contentTop + r.contentHeight(n, inner)
+	if ty < contentBottom {
+		ty = contentBottom
 	}
 
 	// Acciones, respuesta rápida y el botón de abrir la pila.
@@ -610,6 +663,67 @@ func (r *Renderer) drawCard(c *bar.Canvas, e layoutEntry, rect Rect, app string,
 		}
 	}
 	return buttons
+}
+
+// drawThumb dibuja una imagen cuadrada con las esquinas redondeadas y un
+// borde tenue; los píxeles con alfa se mezclan con lo que haya debajo.
+func (r *Renderer) drawThumb(c *bar.Canvas, im *Image, x, y, side int) {
+	if im.Empty() || side <= 0 {
+		return
+	}
+	thumb := im.Thumbnail(side)
+	rad := side / 6
+	if rad < 2 {
+		rad = 2
+	}
+	// Máscara: se pinta un rectángulo redondeado opaco y se recortan los
+	// píxeles de fuera con una comprobación de esquina.
+	for py := 0; py < thumb.H; py++ {
+		for px := 0; px < thumb.W; px++ {
+			if !insideRound(px, py, thumb.W, thumb.H, rad) {
+				continue
+			}
+			sr, sg, sb, sa := thumb.At(px, py)
+			if sa == 0 {
+				continue
+			}
+			c.Over(x+px, y+py, bar.RGBA{R: sr, G: sg, B: sb, A: sa})
+		}
+	}
+	// Marco.
+	borderCol := bar.RGBA{R: 255, G: 255, B: 255, A: 40}
+	for py := 0; py < thumb.H; py++ {
+		for px := 0; px < thumb.W; px++ {
+			edge := py == 0 || px == 0 || py == thumb.H-1 || px == thumb.W-1
+			if !edge || !insideRound(px, py, thumb.W, thumb.H, rad) {
+				continue
+			}
+			c.Over(x+px, y+py, borderCol)
+		}
+	}
+}
+
+// insideRound indica si un punto cae dentro de un rectángulo de esquinas
+// redondeadas de radio rad.
+func insideRound(x, y, w, h, rad int) bool {
+	if rad <= 0 {
+		return true
+	}
+	cx, cy := x, y
+	switch {
+	case x < rad && y < rad:
+		cx, cy = rad, rad
+	case x >= w-rad && y < rad:
+		cx, cy = w-rad-1, rad
+	case x < rad && y >= h-rad:
+		cx, cy = rad, h-rad-1
+	case x >= w-rad && y >= h-rad:
+		cx, cy = w-rad-1, h-rad-1
+	default:
+		return true
+	}
+	dx, dy := float64(x-cx), float64(y-cy)
+	return dx*dx+dy*dy <= float64(rad*rad)
 }
 
 // truncateRunes recorta por caracteres completos con puntos suspensivos.
