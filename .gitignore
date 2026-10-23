@@ -11,8 +11,9 @@
 /dotfiles-arch/
 state.json
 
-# Arch makepkg build artifacts & release bundles
+# Arch makepkg build artifacts & scratch zips
 /arch/pkg/
 /arch/src/
 /arch/*.pkg.tar.*
-*.zip
+/*.zip
+!release/kitsune-de-arch-linux.zip

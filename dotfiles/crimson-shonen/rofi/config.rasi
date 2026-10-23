@@ -1,0 +1,44 @@
+/* KitsuneDE Rofi Anime Launcher - Crimson Shonen */
+* {
+    bg:      #09090dE6;
+    surface: #131118;
+    primary: #ff1e42;
+    accent:  #ff7b54;
+    fg:      #f8fafc;
+    muted:   #94a3b8;
+    font:    "JetBrainsMono Nerd Font 12";
+}
+
+window {
+    width: 560px;
+    background-color: @bg;
+    border: 2px;
+    border-color: @primary;
+    border-radius: 12px;
+    padding: 18px;
+}
+
+inputbar {
+    children: [prompt, entry];
+    background-color: @surface;
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-color: @fg;
+}
+
+prompt {
+    text-color: @primary;
+    padding: 0 10px 0 0;
+}
+
+listview {
+    lines: 7;
+    spacing: 6px;
+    margin: 12px 0 0 0;
+}
+
+element selected {
+    background-color: @primary;
+    text-color: #09090d;
+    border-radius: 8px;
+}

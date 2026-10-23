@@ -112,7 +112,7 @@ func (s *Server) registerRoutes() error {
 	s.mux.HandleFunc("/api/fs/write", s.fsHandler.HandleWrite)
 
 	s.mux.HandleFunc("/download/kitsune-de-arch-linux.zip", func(w http.ResponseWriter, r *http.Request) {
-		zipPath := filepath.Join(s.workDir, "kitsune-de-arch-linux.zip")
+		zipPath := filepath.Join(s.workDir, "release", "kitsune-de-arch-linux.zip")
 		w.Header().Set("Content-Type", "application/zip")
 		w.Header().Set("Content-Disposition", `attachment; filename="kitsune-de-arch-linux.zip"`)
 		http.ServeFile(w, r, zipPath)

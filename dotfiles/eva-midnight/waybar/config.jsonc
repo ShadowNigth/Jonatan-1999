@@ -1,0 +1,39 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 38,
+  "margin-top": 8,
+  "margin-left": 14,
+  "margin-right": 14,
+  "modules-left": ["custom/arch", "hyprland/workspaces", "hyprland/window"],
+  "modules-center": ["clock"],
+  "modules-right": ["pulseaudio", "cpu", "memory", "network", "custom/kitsune"],
+  "custom/arch": {
+    "format": "󰣇  KitsuneDE",
+    "on-click": "rofi -show drun",
+    "tooltip": false
+  },
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "format-icons": {
+      "1": "一",
+      "2": "二",
+      "3": "三",
+      "4": "四",
+      "5": "五",
+      "default": "狐"
+    }
+  },
+  "clock": {
+    "format": "󰥔  {:%H:%M  •  %d/%m}",
+    "tooltip-format": "<big>{:%Y %B}</big>\n<tt>{calendar}</tt>"
+  },
+  "cpu": { "format": "󰻠 {usage}%" },
+  "memory": { "format": "󰍛 {percentage}%" },
+  "pulseaudio": { "format": "󰕾 {volume}%" },
+  "network": { "format-wifi": "󰤨 {essid}", "format-ethernet": "󰈀 ETH", "format-disconnected": "󰤭 Offline" },
+  "custom/kitsune": {
+    "format": "狐 Rice",
+    "on-click": "kitsune-ctl theme next"
+  }
+}

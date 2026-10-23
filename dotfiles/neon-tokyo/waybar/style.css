@@ -1,0 +1,45 @@
+/* KitsuneDE Waybar CSS - Cyberpunk Neon Tokyo */
+* {
+  font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+}
+
+window#waybar {
+  background: rgba(15, 13, 28, 0.72);
+  color: #eef6ff;
+  border-radius: 12px;
+  border: 1px solid #00f0ff;
+}
+
+#custom-arch {
+  background: linear-gradient(135deg, #00f0ff, #ff2a85);
+  color: #0b0916;
+  padding: 4px 14px;
+  margin: 4px 6px;
+  border-radius: 10px;
+  font-weight: 800;
+}
+
+#workspaces button {
+  color: #8f9bb8;
+  padding: 2px 10px;
+  margin: 4px 3px;
+  border-radius: 8px;
+  background: #131026;
+}
+
+#workspaces button.active {
+  color: #0b0916;
+  background: #00f0ff;
+  box-shadow: 0 0 12px #00f0ff;
+}
+
+#clock, #cpu, #memory, #pulseaudio, #network, #custom-kitsune {
+  background: #131026;
+  color: #eef6ff;
+  padding: 4px 12px;
+  margin: 4px 4px;
+  border-radius: 9px;
+}
