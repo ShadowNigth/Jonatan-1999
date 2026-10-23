@@ -710,6 +710,22 @@ type check struct {
 	fix      string
 }
 
+// footIssueDetail describe el problema del foot.ini instalado, si lo hay.
+func footIssueDetail() string {
+	if issue := setup.FootConfigIssue(); issue != "" {
+		return issue
+	}
+	return "colores y secciones al día"
+}
+
+// swayBindDetail avisa de teclas asignadas dos veces en la configuración.
+func swayBindDetail() string {
+	if tecla := setup.SwayDuplicateBinding(); tecla != "" {
+		return tecla + " está asignada dos veces"
+	}
+	return "sin teclas repetidas"
+}
+
 func cmdDoctor(args []string) {
 	cfg, err := config.Load()
 	must(err)
@@ -763,6 +779,10 @@ func cmdDoctor(args []string) {
 			detail: "necesario para las notificaciones", fix: "arranca la sesión con dbus"},
 		{name: "swayfx", required: false, ok: setup.IsSwayfx(),
 			detail: "desenfoque y esquinas redondeadas", fix: "opcional: swayfx en el AUR"},
+		{name: "foot.ini", required: false, ok: setup.FootConfigIssue() == "",
+			detail: footIssueDetail(), fix: "swaydesk init --force --only foot"},
+		{name: "atajos de sway", required: false, ok: setup.SwayDuplicateBinding() == "",
+			detail: swayBindDetail(), fix: "swaydesk init --force --only sway"},
 	}
 
 	okMark := ui.Style{Fg: th.Palette.Ok}.B().Render("✔")

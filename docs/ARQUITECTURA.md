@@ -176,6 +176,12 @@ app (Chromium, pacman…)              swaynotify
   el resto de la franja deja pasar el ratón a las ventanas de debajo.
 - **Sin mako**: el autostart arranca `swaynotify` si `notify.enabled` y si no
   hay otro servidor; en caso contrario, `mako`.
+- **Autostart idempotente**: sway lanza `autostart.sh` con `exec_always`, es
+  decir, también en cada `swaymsg reload`. El script arranca cada servicio con
+  `once` (solo si `pgrep -x` no lo encuentra) y lo que es de una sola vez por
+  sesión (animación de arranque, bienvenida) con `una_vez`, cuya marca lleva el
+  `SWAYSOCK` del arranque. Resultado: recargar no duplica la barra ni los
+  demonios, y un servicio caído se recupera al recargar.
 
 ## Flujo de `swaydesk init`
 

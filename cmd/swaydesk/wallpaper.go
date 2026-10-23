@@ -98,7 +98,8 @@ func printWallpaperHelp() {
   set <fondo> [modo]      Aplica un fondo (escena, imagen, gif o vídeo)
   gallery                 Galería interactiva con vista previa animada
   play [fondo]            Reproduce el fondo a pantalla completa en la terminal
-  daemon                  Demonio de fondo animado (wlr-layer-shell, detrás de todo)
+  daemon [--if-needed]    Demonio de fondo animado (--if-needed: no reiniciar
+                          si ya está en marcha, para el autostart)
   stop                    Detiene el demonio
   status                  Estado del fondo actual
   mode <fill|fit|...>     Modo de ajuste de imágenes y vídeos
@@ -453,6 +454,12 @@ func currentSpec(cfg *config.Config) (wallpaper.Spec, error) {
 // runWallpaperDaemon arranca el fondo animado real (detrás de las ventanas).
 func runWallpaperDaemon(cfg *config.Config, args []string) error {
 	if wallpaper.RunningPID(cfg.Cache) != 0 {
+		// `--if-needed` se usa desde el autostart, que se ejecuta en cada
+		// `swaymsg reload`: si ya hay demonio, no se reinicia (nada de
+		// parpadeos ni de dos capas de fondo peleándose).
+		if hasFlag(args, "--if-needed") {
+			return nil
+		}
 		wallpaper.StopDaemon(cfg.Cache)
 	}
 	if hasFlag(args, "--foreground") || hasFlag(args, "-f") {

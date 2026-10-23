@@ -142,3 +142,164 @@ func TestDetectFont(t *testing.T) {
 		t.Fatal("DetectFont nunca debe devolver vacío")
 	}
 }
+
+// El render no debe dejar marcadores sin sustituir ni escribir directivas que
+// solo entiende swayfx cuando no está instalado.
+func TestRenderSwaySinSwayfx(t *testing.T) {
+	cfg := config.Default()
+	files, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sway := files["sway/config"]
+	for _, marcador := range []string{"{{", "}}"} {
+		if strings.Contains(sway, marcador) {
+			t.Fatalf("marcador sin sustituir en sway/config: %s", marcador)
+		}
+	}
+	swayfxOnly := []string{"default_border_color", "floating_border_color", "focused_border_color", "urgent_border_color"}
+	for _, d := range swayfxOnly {
+		if IsSwayfx() {
+			continue
+		}
+		for _, line := range strings.Split(sway, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, d) {
+				t.Fatalf("directiva de swayfx en sway puro: %q", line)
+			}
+		}
+	}
+	if !IsSwayfx() {
+		if !strings.Contains(sway, "client.focused") || !strings.Contains(sway, "client.urgent") {
+			t.Fatal("faltan los colores de borde client.* para sway puro")
+		}
+	}
+}
+
+// Ninguna tecla puede estar asignada dos veces: sway se queda con la última y
+// el usuario pierde un atajo sin enterarse.
+func TestSwayBindingsSinDuplicados(t *testing.T) {
+	files, err := Render(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]string{}
+	for _, line := range strings.Split(files["sway/config"], "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") || !strings.HasPrefix(line, "bindsym") {
+			continue
+		}
+		campos := strings.Fields(line)
+		if len(campos) < 3 {
+			continue
+		}
+		tecla := campos[1]
+		if previa, ok := seen[tecla]; ok {
+			t.Fatalf("%s está asignada dos veces:\n  %s\n  %s", tecla, previa, line)
+		}
+		seen[tecla] = line
+	}
+	if len(seen) < 30 {
+		t.Fatalf("solo se encontraron %d atajos", len(seen))
+	}
+}
+
+// El pie de foot necesita colores RGB sin '#' y una sección que exista en la
+// versión instalada.
+func TestRenderFootColores(t *testing.T) {
+	files, err := Render(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	foot := files["foot/foot.ini"]
+	if strings.Contains(foot, "[colors]") && !strings.Contains(foot, "[colors-dark]") {
+		t.Fatal("foot 1.26+ exige [colors-dark] en lugar de [colors]")
+	}
+	if !strings.Contains(foot, "[colors-dark]") && !strings.Contains(foot, "[colors]") {
+		t.Fatal("falta la sección de colores")
+	}
+	for _, line := range strings.Split(foot, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+			continue
+		}
+		partes := strings.SplitN(line, "=", 2)
+		clave := strings.TrimSpace(partes[0])
+		valor := strings.TrimSpace(partes[1])
+		esColor := clave == "background" || clave == "foreground" || clave == "cursor" ||
+			clave == "selection-background" || clave == "selection-foreground" ||
+			strings.HasPrefix(clave, "regular") || strings.HasPrefix(clave, "bright")
+		if !esColor {
+			continue
+		}
+		for _, v := range strings.Fields(valor) {
+			if strings.HasPrefix(v, "#") {
+				t.Fatalf("%s no admite '#': %s", clave, line)
+			}
+			if len(v) != 6 {
+				t.Fatalf("%s: color inesperado %q", clave, v)
+			}
+		}
+		if clave == "cursor" && len(strings.Fields(valor)) != 2 {
+			t.Fatalf("cursor necesita dos colores: %s", line)
+		}
+	}
+}
+
+func TestFootConfigIssue(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "foot"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "foot", "foot.ini")
+	// Sin archivo no hay nada que reprochar.
+	if issue := FootConfigIssue(); issue != "" {
+		t.Fatalf("sin foot.ini: %q", issue)
+	}
+	// Colores con '#'.
+	if err := os.WriteFile(path, []byte("[colors-dark]\nbackground=#1e1e2e\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if issue := FootConfigIssue(); !strings.Contains(issue, "background") {
+		t.Fatalf("no se detectó el '#': %q", issue)
+	}
+	// Correcto.
+	if err := os.WriteFile(path, []byte("[colors-dark]\nbackground=1e1e2e\ncursor=89b4fa 1e1e2e\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if issue := FootConfigIssue(); issue != "" {
+		t.Fatalf("archivo válido: %q", issue)
+	}
+}
+
+func TestSwayDuplicateBinding(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "sway"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "sway", "config")
+	ok := "bindsym $mod+d exec menu\nbindsym $mod+Return exec foot\n"
+	if err := os.WriteFile(path, []byte(ok), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if tecla := SwayDuplicateBinding(); tecla != "" {
+		t.Fatalf("duplicado inesperado: %q", tecla)
+	}
+	dup := ok + "bindsym $mod+d exec otra\n"
+	if err := os.WriteFile(path, []byte(dup), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if tecla := SwayDuplicateBinding(); tecla != "$mod+d" {
+		t.Fatalf("no se detectó el duplicado: %q", tecla)
+	}
+	// Los comentarios no cuentan.
+	comentado := ok + "# bindsym $mod+d exec otra\n"
+	if err := os.WriteFile(path, []byte(comentado), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if tecla := SwayDuplicateBinding(); tecla != "" {
+		t.Fatalf("un comentario no es un atajo: %q", tecla)
+	}
+}

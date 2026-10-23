@@ -193,6 +193,34 @@ quiet nm-applet
 quiet blueman-applet
 ```
 
+**Se puede ejecutar las veces que haga falta.** `exec_always` significa que sway
+también lo lanza en cada `swaymsg reload`; por eso el script usa dos ayudas:
+
+- `once <programa> [args…]` — arranca solo si no está ya en marcha (`pgrep -x`).
+  Así la barra, `swaynotify`, `swayosd watch`, `swayidle`, los vigilantes de
+  `wl-paste`, el agente de polkit y el portal no se duplican al recargar… y si
+  uno se cerró, el siguiente reload lo recupera.
+- `una_vez <clave>` — lo que solo debe pasar una vez por sesión: la animación de
+  arranque y el aviso de bienvenida. La marca lleva el `SWAYSOCK` de la sesión,
+  que cambia al reiniciar sway pero no al recargar.
+
+Si usas tus propios programas en el script, envuélvelos igual (`once firefox`)
+para que un reload no te abra una segunda ventana.
+
+```sh
+# Tras actualizar swaydesk: reinstala solo el script del autostart
+swaydesk init --force --only swaydesk/autostart.sh
+swaydesk reload
+```
+
+Si alguna vez te encuentras varias barras o varios demonios (por ejemplo, de
+antes de esta versión), límpialos una vez a mano:
+
+```sh
+pkill -x swaybar; pkill -x swaynotify; pkill -x swayosd; pkill -x swayidle
+~/.config/swaydesk/autostart.sh
+```
+
 ## 5. Fondos animados
 
 ```bash

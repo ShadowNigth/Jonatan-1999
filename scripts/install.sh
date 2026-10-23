@@ -91,15 +91,32 @@ info "Go $(go version | awk '{print $3}')"
 
 # ── Dependencias ──────────────────────────────────────────────────────────
 DEP_PKGS=(
-  sway waybar foot mako wl-clipboard grim slurp swayidle swaylock
+  waybar foot mako wl-clipboard grim slurp swayidle swaylock
   cliphist ttf-jetbrains-mono-nerd
   # kbd trae las fuentes de consola PSF que usa la barra propia (swaybar)
   kbd
 )
+
+# sway y swayfx están declarados en conflicto: quien ya usa swayfx (sway con
+# blur y esquinas redondeadas) no debe recibir el paquete sway, o pacman
+# aborta con «paquetes con conflictos sin resolver».
+if pacman -Qq swayfx >/dev/null 2>&1; then
+  info "swayfx detectado: se usa ese compositor y no se pide sway"
+elif pacman -Qq sway >/dev/null 2>&1; then
+  info "sway detectado"
+else
+  DEP_PKGS+=(sway)
+fi
+
 if [[ $WITH_DEPS -eq 1 ]]; then
   command -v pacman >/dev/null || die "pacman no está disponible"
   info "Instalando dependencias: ${DEP_PKGS[*]}"
-  sudo pacman -S --needed --noconfirm "${DEP_PKGS[@]}"
+  # Un fallo aquí no debe impedir compilar: puede que ya esté todo y solo
+  # falte un paquete opcional, o que el usuario no tenga permisos de sudo.
+  if ! sudo pacman -S --needed --noconfirm "${DEP_PKGS[@]}"; then
+    warn "no se pudieron instalar todas las dependencias; se continúa igualmente"
+    warn "puedes revisarlas después con: swaydesk doctor"
+  fi
 else
   MISSING=()
   for pkg in "${DEP_PKGS[@]}"; do

@@ -104,35 +104,52 @@ func templateData(cfg *config.Config) map[string]string {
 	if barSize <= 0 {
 		barSize = 13
 	}
+	// foot exige colores RRGGBB sin '#' y la sección [colors-dark] desde la
+	// versión 1.26 (en 1.28 [colors] ya ni siquiera existe).
+	rgb := func(c ui.Color) string { return strings.TrimPrefix(string(c), "#") }
 	return map[string]string{
-		"THEME_NAME":        p.Name,
-		"THEME_BG_HEX":      string(p.Bg),
-		"THEME_BG_HEX_Q":    "'" + string(p.Bg) + "'",
-		"THEME_BG_ALT_HEX":  string(p.BgAlt),
-		"THEME_BG_SEL_HEX":  string(p.BgSel),
-		"THEME_FG_HEX":      string(p.Fg),
-		"THEME_FG_DIM_HEX":  string(p.FgDim),
-		"THEME_MUTED_HEX":   string(p.Muted),
-		"THEME_ACCENT_HEX":  string(p.Accent),
-		"THEME_ACCENT2_HEX": string(p.Accent2),
-		"THEME_OK_HEX":      string(p.Ok),
-		"THEME_WARN_HEX":    string(p.Warn),
-		"THEME_ERR_HEX":     string(p.Err),
-		"THEME_BORDER_HEX":  string(p.Border),
+		"THEME_NAME":          p.Name,
+		"FOOT_COLORS_SECTION": footColorsSection(),
+		"THEME_BG_RGB":        rgb(p.Bg),
+		"THEME_BG_ALT_RGB":    rgb(p.BgAlt),
+		"THEME_BG_SEL_RGB":    rgb(p.BgSel),
+		"THEME_FG_RGB":        rgb(p.Fg),
+		"THEME_FG_DIM_RGB":    rgb(p.FgDim),
+		"THEME_MUTED_RGB":     rgb(p.Muted),
+		"THEME_ACCENT_RGB":    rgb(p.Accent),
+		"THEME_ACCENT2_RGB":   rgb(p.Accent2),
+		"THEME_OK_RGB":        rgb(p.Ok),
+		"THEME_WARN_RGB":      rgb(p.Warn),
+		"THEME_ERR_RGB":       rgb(p.Err),
+		"THEME_BORDER_RGB":    rgb(p.Border),
+		"THEME_BG_HEX":        string(p.Bg),
+		"THEME_BG_HEX_Q":      "'" + string(p.Bg) + "'",
+		"THEME_BG_ALT_HEX":    string(p.BgAlt),
+		"THEME_BG_SEL_HEX":    string(p.BgSel),
+		"THEME_FG_HEX":        string(p.Fg),
+		"THEME_FG_DIM_HEX":    string(p.FgDim),
+		"THEME_MUTED_HEX":     string(p.Muted),
+		"THEME_ACCENT_HEX":    string(p.Accent),
+		"THEME_ACCENT2_HEX":   string(p.Accent2),
+		"THEME_OK_HEX":        string(p.Ok),
+		"THEME_WARN_HEX":      string(p.Warn),
+		"THEME_ERR_HEX":       string(p.Err),
+		"THEME_BORDER_HEX":    string(p.Border),
 
-		"TERM_OPACITY":       opacity(cfg.TerminalOpacity, 0.94),
-		"TERM_ALPHA_HEX":     alphaHex(cfg.TerminalOpacity, 0.94),
-		"BAR_OPACITY":        opacity(cfg.BarOpacity, 0.86),
-		"BAR_ALPHA_HEX":      alphaHex(cfg.BarOpacity, 0.86),
-		"ACTIVE_OPACITY":     opacity(cfg.ActiveOpacity, 1.0),
-		"ACTIVE_ALPHA_HEX":   alphaHex(cfg.ActiveOpacity, 1.0),
-		"INACTIVE_OPACITY":   opacity(cfg.InactiveOpacity, 0.94),
-		"INACTIVE_ALPHA_HEX": alphaHex(cfg.InactiveOpacity, 0.94),
-		"GAPS_INNER":         itoa(defaultInt(cfg.GapsInner, 6)),
-		"GAPS_OUTER":         itoa(defaultInt(cfg.GapsOuter, 8)),
-		"ROUNDING":           itoa(defaultInt(cfg.Rounding, 12)),
-		"FX_ROUNDING_LINE":   fxRounding(cfg),
-		"FX_BLUR_LINE":       fxBlur(cfg),
+		"TERM_OPACITY":        opacity(cfg.TerminalOpacity, 0.94),
+		"TERM_ALPHA_HEX":      alphaHex(cfg.TerminalOpacity, 0.94),
+		"BAR_OPACITY":         opacity(cfg.BarOpacity, 0.86),
+		"BAR_ALPHA_HEX":       alphaHex(cfg.BarOpacity, 0.86),
+		"ACTIVE_OPACITY":      opacity(cfg.ActiveOpacity, 1.0),
+		"ACTIVE_ALPHA_HEX":    alphaHex(cfg.ActiveOpacity, 1.0),
+		"INACTIVE_OPACITY":    opacity(cfg.InactiveOpacity, 0.94),
+		"INACTIVE_ALPHA_HEX":  alphaHex(cfg.InactiveOpacity, 0.94),
+		"GAPS_INNER":          itoa(defaultInt(cfg.GapsInner, 6)),
+		"GAPS_OUTER":          itoa(defaultInt(cfg.GapsOuter, 8)),
+		"ROUNDING":            itoa(defaultInt(cfg.Rounding, 12)),
+		"FX_ROUNDING_LINE":    fxRounding(cfg),
+		"FX_BLUR_LINE":        fxBlur(cfg),
+		"BORDER_COLORS_BLOCK": borderColorsBlock(cfg),
 
 		"FONT":               font,
 		"FONT_SIZE":          itoa(fontSize - 1),
@@ -199,6 +216,50 @@ func alphaHex(v, def float64) string {
 	return fmt.Sprintf("%02x", a)
 }
 
+// footColorsSection devuelve el nombre de la sección de colores que acepta el
+// foot instalado: [colors-dark] desde 1.26 y [colors] en versiones anteriores.
+func footColorsSection() string {
+	out, err := exec.Command("foot", "--version").Output()
+	if err != nil {
+		return "[colors-dark]"
+	}
+	// La salida es «foot version 1.28.0-...» o «foot 1.16.2».
+	fields := strings.Fields(string(out))
+	for _, f := range fields {
+		if v, ok := parseVersion(f); ok {
+			if v[0] > 1 || (v[0] == 1 && v[1] >= 26) {
+				return "[colors-dark]"
+			}
+			return "[colors]"
+		}
+	}
+	return "[colors-dark]"
+}
+
+// parseVersion lee «1.28.0» o «1.2» y devuelve mayor y menor.
+func parseVersion(s string) ([2]int, bool) {
+	var out [2]int
+	s = strings.TrimSpace(s)
+	parts := strings.Split(s, ".")
+	if len(parts) < 2 {
+		return out, false
+	}
+	for i := 0; i < 2; i++ {
+		n := 0
+		for _, r := range parts[i] {
+			if r < '0' || r > '9' {
+				if n == 0 && i == 0 {
+					return out, false
+				}
+				break
+			}
+			n = n*10 + int(r-'0')
+		}
+		out[i] = n
+	}
+	return out, true
+}
+
 // IsSwayfx indica si el compositor es swayfx (sway con blur y esquinas).
 func IsSwayfx() bool {
 	out, err := exec.Command("sway", "--version").Output()
@@ -214,6 +275,19 @@ func fxRounding(cfg *config.Config) string {
 		return "# esquinas redondeadas: requiere swayfx (corner_radius)"
 	}
 	return fmt.Sprintf("corner_radius %d", defaultInt(cfg.Rounding, 12))
+}
+
+// borderColorsBlock escribe los colores de borde que entiende el compositor
+// instalado: en swayfx son directivas globales; en sway puro esas cuatro no
+// existen (sway las rechaza) y los colores van por clase de ventana con
+// client.*, que ya está más abajo en la plantilla.
+func borderColorsBlock(cfg *config.Config) string {
+	if !IsSwayfx() {
+		return "# sway puro: sin default_border_color; los bordes se tiñen con client.* (más abajo)"
+	}
+	p := ui.PaletteByName(cfg.Theme)
+	return fmt.Sprintf("default_border_color %s\nfloating_border_color %s\nfocused_border_color %s\nurgent_border_color %s",
+		p.Border, p.Border, p.Accent, p.Err)
 }
 
 // fxBlur genera la línea de desenfoque de fondo solo en swayfx.
@@ -374,10 +448,15 @@ func ApplySwayColors(cfg *config.Config) error {
 		fmt.Sprintf(`client.focused_inactive %s %s %s %s %s`, p.BgSel, p.BgSel, p.Fg, p.BgSel, p.BgSel),
 		fmt.Sprintf(`client.unfocused %s %s %s %s %s`, p.BgAlt, p.BgAlt, p.FgDim, p.BgAlt, p.BgAlt),
 		fmt.Sprintf(`client.urgent %s %s %s %s %s`, p.Err, p.Err, p.Bg, p.Err, p.Err),
-		fmt.Sprintf(`default_border_color %s`, p.Border),
-		fmt.Sprintf(`floating_border_color %s`, p.Border),
-		fmt.Sprintf(`focused_border_color %s`, p.Accent),
-		fmt.Sprintf(`urgent_border_color %s`, p.Err),
+	}
+	// Estas cuatro solo existen en swayfx: en sway puro darían error.
+	if IsSwayfx() {
+		cmds = append(cmds,
+			fmt.Sprintf(`default_border_color %s`, p.Border),
+			fmt.Sprintf(`floating_border_color %s`, p.Border),
+			fmt.Sprintf(`focused_border_color %s`, p.Accent),
+			fmt.Sprintf(`urgent_border_color %s`, p.Err),
+		)
 	}
 	return c.CommandOK(strings.Join(cmds, "; "))
 }
