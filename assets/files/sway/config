@@ -78,6 +78,8 @@ for_window [app_id="^swaydesk-wallpapers$"] floating enable, border pixel 2, res
 for_window [app_id="^swaydesk-dialog$"] floating enable, border pixel 2, resize set 560 220, move position center
 # Animación de arranque: ventana a pantalla completa sin bordes ni decoración.
 for_window [app_id="^swaydesk-boot$"] fullscreen enable, border none
+# La barra propia no se enfoca ni aparece en el árbol de ventanas.
+for_window [app_id="^swaydesk-bar$"] border none
 
 ### Translucidez por aplicación ############################################
 # El fondo animado se ve a través de las ventanas compatibles.
@@ -137,6 +139,8 @@ bindsym $mod+t exec $themes
 bindsym $mod+Shift+t exec $themes
 bindsym $mod+Shift+w exec $wall
 bindsym $mod+Shift+b exec $boot
+# Reiniciar la barra (por ejemplo, al cambiar la configuración)
+bindsym $mod+Ctrl+b exec sh -c 'pkill -x swaybar; pkill -x waybar; sleep 0.2; ~/.config/swaydesk/autostart.sh >/dev/null 2>&1 &' 
 bindsym $mod+c exec --no-startup-id $clip
 bindsym $mod+i exec --no-startup-id $ctl
 bindsym $mod+Shift+l exec $lock

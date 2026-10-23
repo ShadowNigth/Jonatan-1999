@@ -43,6 +43,8 @@ info "Go $(go version | awk '{print $3}')"
 DEP_PKGS=(
   sway waybar foot mako wl-clipboard grim slurp swayidle swaylock
   cliphist ttf-jetbrains-mono-nerd
+  # kbd trae las fuentes de consola PSF que usa la barra propia (swaybar)
+  kbd
 )
 if [[ $WITH_DEPS -eq 1 ]]; then
   command -v pacman >/dev/null || die "pacman no está disponible"
@@ -66,7 +68,7 @@ cd "$REPO_DIR"
 make build
 
 info "Instalando en $PREFIX/bin"
-for bin in swaydesk swaymenu swayctl swayclip; do
+for bin in swaydesk swaymenu swayctl swayclip swaybar; do
   install -Dm755 "$REPO_DIR/bin/$bin" "$PREFIX/bin/$bin"
 done
 

@@ -18,7 +18,11 @@ if have swaydesk; then
 fi
 
 # --- Barra de estado -------------------------------------------------------
-if have waybar; then
+# swaydesk trae su propia barra (swaybar). Si `bar.enabled = true` en
+# config.toml y swaybar está instalado, se usa esa; si no, se usa waybar.
+if have swaybar && swaydesk bar --enabled >/dev/null 2>&1; then
+    quiet swaybar
+elif have waybar; then
     pkill -SIGUSR2 -x waybar >/dev/null 2>&1
     sleep 0.3
     quiet waybar

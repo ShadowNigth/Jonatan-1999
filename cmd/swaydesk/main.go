@@ -18,6 +18,7 @@ import (
 	"github.com/ShadowNigth/swaydesk/internal/actions"
 	"github.com/ShadowNigth/swaydesk/internal/adaptive"
 	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/font"
 	"github.com/ShadowNigth/swaydesk/internal/gallery"
 	"github.com/ShadowNigth/swaydesk/internal/host"
 	"github.com/ShadowNigth/swaydesk/internal/launcher"
@@ -69,6 +70,8 @@ func main() {
 		cmdBoot(args)
 	case "opacity", "opacidad", "transparencia":
 		cmdOpacity(args)
+	case "bar", "barra":
+		cmdBar(args)
 	case "version", "-v", "--version":
 		fmt.Printf("swaydesk %s (go %s, %s/%s)\n", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	case "help", "-h", "--help":
@@ -107,6 +110,7 @@ Sesión
   wallpaper --scenes [--json] Escenas animadas disponibles
   boot [--style=s] [--duration=ms]  Animación de arranque de la sesión
   opacity [list|presets|add|remove|all]  Translucidez por aplicación
+  bar [status|on|off|preview|modules]     Barra de estado propia (swaybar)
   lock                        Bloquea la pantalla
   reload                      Recarga la configuración de sway
   power [acción]              Menú de energía (lock, suspend, logout, reboot, poweroff)
@@ -707,6 +711,10 @@ func cmdDoctor(args []string) {
 			detail: "fondos de vídeo (mp4, webm)", fix: "sudo pacman -S ffmpeg"},
 		{name: "wlr-layer-shell", required: false, ok: wallpaper.DetectDisplayServer().LayerShell,
 			detail: "fondo animado detrás de las ventanas", fix: "usa sway (incluye wlr-layer-shell)"},
+		{name: "swaybar (propia)", required: false, ok: launcher.HasCommand("swaybar") && cfg.BarEnabled,
+			detail: "barra de estado de swaydesk", fix: "make build && make install"},
+		{name: "fuentes de consola", required: false, ok: font.Available(),
+			detail: "texto de swaybar (PSF)", fix: "sudo pacman -S kbd"},
 		{name: "swayfx", required: false, ok: setup.IsSwayfx(),
 			detail: "desenfoque y esquinas redondeadas", fix: "opcional: swayfx en el AUR"},
 	}

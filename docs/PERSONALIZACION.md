@@ -303,7 +303,62 @@ descubrir el `app_id` real de una ventana:
 swaymsg -t get_tree | grep app_id
 ```
 
-## 8. Barra de estado (waybar)
+## 8. Barra de estado propia (`swaybar`)
+
+Desde la versión con `swaybar`, el escritorio trae su propia barra: un solo
+binario que dibuja islas redondeadas, translúcidas, con tipografía de mapa de
+bits (PSF) y los colores del tema activo. No necesita waybar, GTK ni ninguna
+librería gráfica. Todo se configura en `[bar]` de `~/.config/swaydesk/config.toml`:
+
+```toml
+[bar]
+enabled = true             # false = vuelve a waybar automáticamente
+position = "top"           # top · bottom
+height = 38                # alto en píxeles
+margin = 6                 # separación con los bordes de la pantalla
+padding = 14               # relleno interior de cada isla
+gap = 10                   # hueco entre islas
+radius = 0                 # 0 = pastilla completa
+opacity = 0.88             # transparencia de las islas
+islands = true             # false = una sola barra continua
+logo = true
+font = ""                  # ruta a un .psf / .psf.gz; vacío = fuente del sistema
+font_scale = 1.0
+shadow = true              # sombra suave bajo las islas
+exclusive = true           # las ventanas no se solapan con la barra
+modules = ["media", "cpu", "ram", "volume", "network", "battery", "clock"]
+```
+
+Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
+(indicador de `wf-recorder`), `cpu`, `ram`, `disk`, `temp`, `uptime`,
+`volume`, `network`, `battery`, `updates`, `title` (ventana enfocada), `clock`,
+`clock24` y `date`.
+
+```bash
+swaydesk bar                  # estado y módulos actuales
+swaydesk bar modules cpu ram volume network battery clock
+swaydesk bar off              # desactiva swaybar; el autostart usa waybar
+swaydesk bar preview --width 1600 --out ~/barra.png   # PNG sin sesión gráfica
+swaybar --demo --preview      # datos de ejemplo, útil para probar el diseño
+```
+
+Plantea la barra con varios anchos y comprueba que el centro no se solapa; si
+quieres la barra flotante estilo "isla", deja `islands = true` y sube `margin`.
+
+### Añadir un módulo nuevo
+
+Los módulos viven en `internal/bar/render.go` (`rightItems`) y los datos en
+`cmd/swaybar/data.go`. Un módulo es una entrada de texto con color opcional y
+un estado alternativo (`ok`/`warn`/`error`) para casos como batería baja o red
+caída.
+
+### Todo el camino de vuelta a waybar
+
+Si prefieres waybar y sus módulos personalizados, pon `enabled = false` en
+`[bar]` (o ejecuta `swaydesk bar off`) y reinicia la sesión: la plantilla de
+waybar sigue instalada y se colorea con el tema igual que antes.
+
+## 8b. Barra de estado (waybar)
 
 `waybar/config.json` y `waybar/style.css` son plantillas. Los módulos de sistema
 llaman a `swaydesk status --module`:

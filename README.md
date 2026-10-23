@@ -6,7 +6,7 @@
 
 Lanzador de aplicaciones, panel de control, portapapeles, barra de estado, temas
 adaptativos, fondos animados (GIF y *live wallpapers*) y sesión — todo en
-**cuatro binarios estáticos**, sin dependencias externas de Go y sin un solo
+**cinco binarios estáticos**, sin dependencias externas de Go y sin un solo
 script de shell.
 
 ![Lanzador de aplicaciones](docs/screenshot-menu.png)
@@ -29,6 +29,7 @@ terceros.
 | `swayctl` | Panel de control: estado del sistema, workspaces, ventanas, temas y chuleta de atajos |
 | `swayclip` | Historial del portapapeles (cliphist / clipman) con búsqueda y vista previa |
 | `swaydesk` | CLI central: instala la configuración, aplica temas, diagnostica, controla la sesión |
+| `swaybar` | Barra de estado propia dibujada en píxeles sobre `wlr-layer-shell` (sustituye a waybar) |
 
 ```
 ╭── swaydesk · lanzador ─────────────────────────────────────────────╮
@@ -72,6 +73,12 @@ terceros.
   sin librerías.
 - **Selector de fondos** (`Super+Shift+w`): galería con vista previa animada en
   vivo, metadatos (duración, tamaño, tipo) y exploración de tus carpetas.
+- **Barra de estado propia** (`swaybar`): islas redondeadas y translúcidas
+  dibujadas píxel a píxel — sin GTK, Qt ni Cairo. Workspaces con la ventana
+  enfocada, título, CPU, RAM, volumen, red, batería, reproductor y reloj;
+  tipografía de mapa de bits con fuentes PSF del sistema e iconos siempre
+  visibles; se adapta sola a la paleta activa, se refresca al instante con los
+  eventos de sway y se configura entera desde `[bar]` en `config.toml`.
 - **Animación de arranque** (`Super+Shift+b`): logotipo con degradado, pétalos
   o lluvia de neón, lista de componentes que se activan en vivo y barra de
   progreso. Cuatro estilos (`sakura`, `neon`, `matrix`, `minimal`), duración
@@ -95,21 +102,21 @@ terceros.
 |---|---|
 | ![Panel](docs/screenshot-panel-estado.png) | ![Portapapeles](docs/screenshot-portapapeles.png) |
 
-| Cambio de tema | Calculadora |
+| Barra de estado propia | Animación de arranque |
+|---|---|
+| ![Barra](docs/screenshot-barra.png) | ![Arranque](docs/screenshot-arranque.png) |
+
+| Galería de temas (vista previa en vivo) | Selector de fondos animados |
+|---|---|
+| ![Galería de temas](docs/screenshot-galeria-temas.png) | ![Selector de fondos](docs/screenshot-selector-fondos.png) |
+
+| Escenas animadas disponibles | Paletas por categoría |
+|---|---|
+| ![Escenas](docs/screenshot-escenas.png) | ![Paletas](docs/screenshot-paletas.png) |
+
+| Temas anime | Calculadora |
 |---|---|
 | ![Temas](docs/screenshot-temas.png) | ![Calculadora](docs/screenshot-calculadora.png) |
-
-| Animación de arranque | Galería de temas (vista previa en vivo) |
-|---|---|---|
-| ![Arranque](docs/screenshot-arranque.png) | ![Galería de temas](docs/screenshot-galeria-temas.png) |
-
-| Selector de fondos animados | Escenas animadas disponibles |
-|---|---|---|
-| ![Selector de fondos](docs/screenshot-selector-fondos.png) | ![Escenas](docs/screenshot-escenas.png) |
-
-| Paletas por categoría | Temas anime por categoría |
-|---|---|
-| ![Paletas](docs/screenshot-paletas.png) | ![Temas](docs/screenshot-temas.png) |
 
 | Ventanas | Atajos |
 |---|---|
@@ -188,6 +195,12 @@ Sesión
   volume <up|down|mute>          Volumen
   screenshot [region|full]       Captura con grim
   lock | reload | power [acción] Sesión y energía
+
+Barra propia
+  bar                        Estado de la barra (o `bar status`)
+  bar on | off               Usar swaybar o volver a waybar
+  bar preview [--width N]    Vista previa en PNG
+  bar modules cpu ram clock  Elige los módulos de la derecha
 ```
 
 ### Atajos por defecto
@@ -230,6 +243,29 @@ La chuleta completa está en `Super+i` → *Atajos*, y en
   `m` pantalla completa, `n` envía al scratchpad.
 - **Apariencia** — aplica cualquiera de las 8 paletas al escritorio completo.
 - **Atajos** — referencia rápida de todos los binds.
+
+### Barra de estado (`swaybar`)
+
+La barra es un único proceso que se conecta a sway por IPC, se dibuja en
+memoria y vuelca los píxeles en una superficie `wlr-layer-shell` con reserva de
+espacio. Se redibuja con cada evento de sway (workspaces, título, foco) y cada
+segundo para el reloj y las métricas; si no hay cambios no consume CPU apenas.
+
+| Parte | Contenido |
+|---|---|
+| Izquierda | Logotipo, workspaces (el enfocado resaltado, los ocupados en color), ventanas flotantes |
+| Centro | Título de la ventana enfocada y `app_id`, recortado al hueco libre |
+| Derecha | Reproductor, CPU, RAM, volumen, red, batería y reloj |
+
+- `panel del tema` — los colores salen de la paleta activa; al cambiar de tema
+  la barra se recolorea sola (escucha la señal `SIGUSR2`).
+- `módulos` — se eligen con `swaydesk bar modules …` o con `modules = [...]`
+  en `[bar]`. Si falta un dato (sin batería, sin red, sin reproductor) el módulo
+  desaparece en vez de mostrar un hueco.
+- `recorte inteligente` — si el título no cabe, se acorta por caracteres
+  completos; si ni así, se sacrifica primero el reproductor y después la isla
+  central, para no solaparse nunca con la derecha.
+- `HiDPI` — escala al doble con `--no-hidpi` para desactivarlo.
 
 ---
 
@@ -275,6 +311,22 @@ fps = 30
 protocol = "auto"          # auto · kitty · sixel · ansi (para la vista en terminal)
 adaptive = false           # genera un tema desde los colores del fondo
 dir = "~/Imágenes/Fondos"  # carpeta que explora el selector
+
+[bar]
+enabled = true             # false = volver a waybar
+position = "top"           # top · bottom
+height = 38                # píxeles
+margin = 6
+padding = 14
+gap = 10
+radius = 0                 # 0 = pastilla completa
+opacity = 0.88             # transparencia de las islas
+islands = true             # islas separadas o barra continua
+logo = true
+font = ""                  # fuente PSF (vacío = automática)
+shadow = true
+exclusive = true           # las ventanas no se solapan con la barra
+modules = ["media", "cpu", "ram", "volume", "network", "battery", "clock"]
 
 [boot]
 enabled = true             # animación al iniciar sesión
@@ -329,6 +381,8 @@ internal/
   wayland/      cliente Wayland puro: xdg-shell, shm y wlr-layer-shell
   wallpaper/    motor de fondos: escenas, GIF, vídeo, protocolos kitty/sixel
   boot/         animación de arranque (logo, partículas, progreso)
+  bar/          barra de estado: lienzo RGBA, islas, módulos y layout
+  font/         fuentes de mapa de bits (PSF1/PSF2 + 5x7 incorporada)
   gallery/      selectores compartidos: galería de temas y de fondos
   adaptive/     paletas derivadas de imágenes (cuantización + HSL + contraste)
   ui/           toolkit TUI: estilos, colores, entrada, paneles, listas, decoración

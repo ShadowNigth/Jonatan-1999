@@ -7,7 +7,7 @@
 GO      ?= go
 PREFIX  ?= $(HOME)/.local
 BINDIR   = $(PREFIX)/bin
-BINS     = swaydesk swaymenu swayctl swayclip
+BINS     = swaydesk swaymenu swayctl swayclip swaybar
 
 VERSION := $(shell sed -n 's/.*const Version = "\(.*\)"/\1/p' cmd/swaydesk/main.go)
 LDFLAGS := -s -w

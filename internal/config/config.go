@@ -49,6 +49,24 @@ type Config struct {
 	BootDuration int    // milisegundos; 0 = automática
 	BootLogo     bool
 
+	// Barra de estado propia (swaybar)
+	BarEnabled  bool
+	BarPosition string // top, bottom
+	BarHeight   int    // alto en píxeles
+	BarMargin   int    // margen con el borde de la pantalla
+	BarPadding  int    // relleno interno de las islas
+	BarGap      int    // separación entre islas
+	BarRadius   int    // radio de esquina (0 = pastilla)
+	// alfa del fondo de las islas (el de waybar es effects.bar_opacity)
+	BarBackgroundOpacity float64
+	BarIslands           bool     // islas separadas
+	BarLogo              bool     // mostrar el nombre del tema a la izquierda
+	BarFont              string   // ruta de una fuente PSF (vacío = automática)
+	BarFontScale         int      // escala de la fuente (0 = automática)
+	BarShadow            bool     // sombra bajo las islas
+	BarExclusive         bool     // reservar espacio (las ventanas no se solapan)
+	BarModules           []string // módulos de la derecha
+
 	// Efectos de escritorio
 	TerminalOpacity float64
 	BarOpacity      float64
@@ -116,6 +134,21 @@ func Default() *Config {
 		GapsInner:         6,
 		GapsOuter:         8,
 		Rounding:          12,
+
+		BarEnabled:           true,
+		BarPosition:          "top",
+		BarHeight:            38,
+		BarMargin:            6,
+		BarPadding:           14,
+		BarGap:               10,
+		BarRadius:            0,
+		BarBackgroundOpacity: 0.88,
+		BarIslands:           true,
+		BarLogo:              true,
+		BarFontScale:         0,
+		BarShadow:            true,
+		BarExclusive:         true,
+		BarModules:           []string{"media", "cpu", "ram", "volume", "network", "battery", "clock"},
 
 		BootEnabled:  true,
 		BootStyle:    "sakura",
@@ -227,6 +260,31 @@ func (c *Config) apply() {
 	str("wallpaper.protocol", &c.WallpaperProto)
 	num("wallpaper.fps", &c.WallpaperFPS)
 	bl("wallpaper.adaptive", &c.WallpaperAdaptive)
+	bl("bar.enabled", &c.BarEnabled)
+	str("bar.position", &c.BarPosition)
+	num("bar.height", &c.BarHeight)
+	num("bar.margin", &c.BarMargin)
+	num("bar.padding", &c.BarPadding)
+	num("bar.gap", &c.BarGap)
+	if v, ok := c.values["bar.radius"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.BarRadius = n
+		}
+	}
+	flo("bar.opacity", &c.BarBackgroundOpacity)
+	bl("bar.islands", &c.BarIslands)
+	bl("bar.logo", &c.BarLogo)
+	str("bar.font", &c.BarFont)
+	bl("bar.shadow", &c.BarShadow)
+	bl("bar.exclusive", &c.BarExclusive)
+	if v, ok := c.values["bar.modules"]; ok {
+		c.BarModules = toStringList(v)
+	}
+	if v, ok := c.values["bar.font_scale"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.BarFontScale = n
+		}
+	}
 	bl("boot.enabled", &c.BootEnabled)
 	str("boot.style", &c.BootStyle)
 	num("boot.duration_ms", &c.BootDuration)
@@ -380,6 +438,33 @@ adaptive = %t
 # carpeta donde se buscan fondos
 dir = %q
 
+[bar]
+# barra de estado propia (swaybar). Pon enabled = false para usar waybar.
+enabled = %t
+# top o bottom
+position = %q
+height = %d
+margin = %d
+padding = %d
+gap = %d
+# radio de las esquinas en píxeles (0 = pastilla completa)
+radius = %d
+# opacidad del fondo de las islas (0-1)
+opacity = %.2f
+# islas separadas (izquierda, centro y derecha) o una barra continua
+islands = %t
+logo = %t
+# fuente PSF de consola (vacío = la mejor disponible del sistema)
+font = %q
+# escala de la fuente (0 = automática según el alto)
+font_scale = %d
+shadow = %t
+# reservar espacio para que las ventanas no se solapen
+exclusive = %t
+# módulos de la derecha: media, recording, cpu, ram, disk, temp, uptime,
+# volume, network, battery, updates, title, clock, date
+modules = [%s]
+
 [boot]
 # animación que se muestra al iniciar la sesión
 enabled = %t
@@ -403,9 +488,46 @@ rounding = %d
 `, c.KeyboardLayout,
 		c.WallpaperKind, c.WallpaperName, c.WallpaperPath, c.WallpaperMode,
 		c.WallpaperFPS, c.WallpaperProto, c.WallpaperAdaptive, c.WallpaperDir,
+		c.BarEnabled, c.BarPosition, c.BarHeight, c.BarMargin, c.BarPadding,
+		c.BarGap, c.BarRadius, c.BarBackgroundOpacity, c.BarIslands, c.BarLogo, c.BarFont,
+		c.BarFontScale, c.BarShadow, c.BarExclusive, tomlList(c.BarModules),
 		c.BootEnabled, c.BootStyle, c.BootDuration, c.BootLogo,
 		c.TerminalOpacity, c.BarOpacity, c.ActiveOpacity, c.InactiveOpacity,
 		c.Blur, c.GapsInner, c.GapsOuter, c.Rounding)
+}
+
+// toStringList normaliza una lista de cadenas leída del TOML.
+func toStringList(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, x := range t {
+			if s, ok := x.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		var out []string
+		for _, part := range strings.Split(t, ",") {
+			if p := strings.TrimSpace(part); p != "" {
+				out = append(out, p)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// tomlList serializa una lista de cadenas para el archivo de configuración.
+func tomlList(list []string) string {
+	parts := make([]string, 0, len(list))
+	for _, s := range list {
+		parts = append(parts, strconv.Quote(s))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func paletteNames() []string {

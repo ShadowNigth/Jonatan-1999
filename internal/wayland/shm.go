@@ -172,6 +172,58 @@ func (s *Shm) Close() {
 	}
 }
 
+// FillRGBA copia un fotograma RGBA (4 bytes por píxel, alfa no premultiplicado)
+// al búfer ARGB8888 premultiplicando el color, como exige Wayland.
+func (b *Buffer) FillRGBA(pix []uint8, srcW, srcH int) {
+	if srcW <= 0 || srcH <= 0 || len(pix) < srcW*srcH*4 {
+		return
+	}
+	if srcW == b.W && srcH == b.H {
+		for y := 0; y < b.H; y++ {
+			srcRow := pix[y*srcW*4:]
+			dstRow := b.Mem[y*b.Stride:]
+			for x := 0; x < b.W; x++ {
+				si := x * 4
+				di := x * 4
+				a := uint32(srcRow[si+3])
+				if a == 0 || a == 255 {
+					dstRow[di] = srcRow[si+2]
+					dstRow[di+1] = srcRow[si+1]
+					dstRow[di+2] = srcRow[si]
+					dstRow[di+3] = srcRow[si+3]
+					continue
+				}
+				dstRow[di] = uint8(uint32(srcRow[si+2]) * a / 255)
+				dstRow[di+1] = uint8(uint32(srcRow[si+1]) * a / 255)
+				dstRow[di+2] = uint8(uint32(srcRow[si]) * a / 255)
+				dstRow[di+3] = uint8(a)
+			}
+		}
+		return
+	}
+	// Escalado por muestreo del vecino más cercano.
+	for y := 0; y < b.H; y++ {
+		sy := y * srcH / b.H
+		if sy >= srcH {
+			sy = srcH - 1
+		}
+		dstRow := b.Mem[y*b.Stride:]
+		for x := 0; x < b.W; x++ {
+			sx := x * srcW / b.W
+			if sx >= srcW {
+				sx = srcW - 1
+			}
+			si := (sy*srcW + sx) * 4
+			di := x * 4
+			a := uint32(pix[si+3])
+			dstRow[di] = uint8(uint32(pix[si+2]) * a / 255)
+			dstRow[di+1] = uint8(uint32(pix[si+1]) * a / 255)
+			dstRow[di+2] = uint8(uint32(pix[si]) * a / 255)
+			dstRow[di+3] = uint8(a)
+		}
+	}
+}
+
 // Fill copia una imagen RGB (3 bytes por píxel) escalándola al tamaño del búfer.
 //
 // El búfer es opaco (alfa = 255).

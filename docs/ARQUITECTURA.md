@@ -26,6 +26,7 @@ cmd/swaydesk     CLI principal y orquestación (init/apply/theme/status/doctor)
 cmd/swaymenu     lanzador: busca, puntúa y lanza
 cmd/swayctl      panel de control: 5 pestañas y acciones sobre sway
 cmd/swayclip     portapapeles: lista, filtra, copia, borra
+cmd/swaybar      barra de estado: CLI, recogida de datos y bucle de dibujo
 
 internal/wayland cliente Wayland puro: conexión, registry, xdg-shell, shm y
                  wlr-layer-shell (capa background para el fondo animado)
@@ -41,6 +42,16 @@ internal/gallery selectores compartidos (galería de temas y de fondos)
 internal/boot    animación de arranque: logotipo en bloques con degradado,
                  partículas por estilo, pasos en vivo y barra de progreso
 internal/adaptive paletas derivadas de imágenes: cuantización, HSL, contraste
+internal/bar     barra de estado dibujada en píxeles
+  canvas.go      lienzo RGBA: rectángulos, esquinas redondeadas, degradados,
+                 texto, escalado y composición sobre el fondo
+  render.go      Snapshot de datos → tres islas (izquierda/centro/derecha) con
+                 separadores, colores del tema y recorte según el espacio
+internal/font    fuentes de mapa de bits
+  psf.go         PSF1/PSF2, con gzip y tabla Unicode opcional
+  builtin.go     fuente 5x7 incorporada (ASCII + símbolos de la barra)
+  font.go        cara activa: Best/Builtin/Load/LoadSystem y escalado
+  draw.go        volcado de texto sobre un lienzo RGBA
 
 internal/ui      toolkit TUI (lo más grande del proyecto)
   width.go       ancho de celdas (CJK, emoji, combinantes), truncado, wrap
@@ -66,6 +77,28 @@ internal/setup   plantillas embebidas → archivos del sistema
 internal/calc    evaluador de expresiones (descenso recursivo)
 assets/files     plantillas con marcadores {{CLAVE}}
 ```
+
+## La barra propia
+
+```
+sway IPC ──eventos──▶ cmd/swaybar/run.go ──Snapshot──▶ internal/bar/render.go
+   │                        │                               │
+   └── estado ──────────────┘                               ▼
+   host/playerctl ── métricas                        Canvas RGBA (píxeles)
+                                                           │
+                              wlr-layer-shell ◀── shm ◀─────┘
+```
+
+- **Una sola suscripción**: `watchSway` escucha `workspace`, `window::focus`,
+  `window::title` y `mode` por IPC; los eventos despiertan el bucle de dibujo en
+  lugar de sondear sway cada segundo.
+- **Sin toolkit gráfico**: la superficie es un `wl_shm` que se rellena a mano.
+  `internal/wayland.Panel` envuelve `zwlr_layer_shell_v1` (anclas, zona
+  exclusiva, `ack_configure`, redimensionado).
+- **Sin fuentes externas obligatorias**: si no hay ningún `.psf` en el sistema,
+  se usa la fuente 5×7 embebida; así la barra funciona en una instalación limpia.
+- **Degradación**: si con todos los módulos el centro no cabe, se quita el
+  reproductor y después el título antes que solapar islas.
 
 ## Flujo de `swaydesk init`
 
@@ -183,6 +216,12 @@ que lo usado ayer gana a lo usado cien veces hace un mes.
 | `blur`/`rounding` solo en swayfx | Sway no implementa desenfoque ni esquinas; se detecta el compositor y las líneas quedan comentadas si no aplica. |
 
 ## Pruebas
+
+Además de los tests del toolkit y de los protocolos, `internal/bar` y
+`internal/font` tienen sus propias suites: colores y composición alfa, esquinas
+redondeadas, medidas de texto, elección de variantes cuando falta espacio, y
+carga de PSF1/PSF2 sintéticos (con gzip y tabla Unicode) incluyendo archivos
+corruptos.
 
 ```bash
 go test ./...          # incluye decenas de miles de comprobaciones internas

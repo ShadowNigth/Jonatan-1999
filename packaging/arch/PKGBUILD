@@ -9,7 +9,8 @@ license=('MIT')
 depends=('sway')
 makedepends=('go')
 optdepends=(
-  'waybar: barra de estado'
+  'waybar: barra de estado alternativa (swaydesk trae la suya: swaybar)'
+  'kbd: fuentes de consola PSF para swaybar'
   'foot: terminal por defecto'
   'mako: notificaciones'
   'swaylock: bloqueo de pantalla'
