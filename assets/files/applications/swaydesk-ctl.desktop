@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=swaydesk panel de control
+Name[es]=swaydesk panel de control
+Comment=Estado del sistema, ventanas y temas
+Comment[es]=Estado del sistema, ventanas y temas
+Exec=foot --app-id=swaydesk-ctl -e swayctl
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Settings;
+Keywords=panel;control;estado;tema;ventanas;
+StartupNotify=false

@@ -1,0 +1,32 @@
+# swaydesk · mako (notificaciones)
+# Paleta generada a partir del tema activo: {{THEME_NAME}}
+
+font={{FONT}} {{NOTIF_FONT_SIZE}}
+background-color={{THEME_BG_HEX}}ee
+text-color={{THEME_FG_HEX}}
+border-color={{THEME_ACCENT_HEX}}
+progress-color=over {{THEME_BG_SEL_HEX}}ff
+border-size=2
+border-radius=12
+padding=12
+margin=8
+width=380
+height=140
+max-visible=5
+anchor=top-right
+default-timeout=6000
+ignore-timeout=0
+max-icon-size=48
+icons=1
+markup=1
+actions=1
+history=20
+
+[urgency=low]
+border-color={{THEME_OK_HEX}}
+default-timeout=4000
+
+[urgency=critical]
+border-color={{THEME_ERR_HEX}}
+text-color={{THEME_ERR_HEX}}
+default-timeout=0

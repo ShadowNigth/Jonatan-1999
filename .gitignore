@@ -1,0 +1,10 @@
+# Binarios compilados
+/bin/
+/dist/
+
+# Respaldos de configuración generados por `swaydesk init --force`
+*.bak-*
+
+# Basura del sistema
+.DS_Store
+*.swp

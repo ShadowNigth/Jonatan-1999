@@ -1,0 +1,59 @@
+# Maintainer: Jonatan <shadow@example.com>
+pkgname=swaydesk
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Escritorio completo para sway escrito en Go: lanzador, panel, portapapeles y temas"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ShadowNigth/swaydesk"
+license=('MIT')
+depends=('sway')
+makedepends=('go')
+optdepends=(
+  'waybar: barra de estado'
+  'foot: terminal por defecto'
+  'mako: notificaciones'
+  'swaylock: bloqueo de pantalla'
+  'swayidle: bloqueo por inactividad'
+  'grim: capturas de pantalla'
+  'slurp: selección de región para capturas'
+  'wl-clipboard: portapapeles'
+  'cliphist: historial del portapapeles'
+  'ttf-jetbrains-mono-nerd: iconos de la barra'
+  'playerctl: control de reproducción'
+  'brightnessctl: brillo de pantalla'
+)
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  export CGO_ENABLED=0
+  for bin in swaydesk swaymenu swayctl swayclip; do
+    go build -trimpath -ldflags="-s -w" -o "build/$bin" "./cmd/$bin"
+  done
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  for bin in swaydesk swaymenu swayctl swayclip; do
+    install -Dm755 "build/$bin" "$pkgdir/usr/bin/$bin"
+  done
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 docs/ARQUITECTURA.md "$pkgdir/usr/share/doc/$pkgname/ARQUITECTURA.md"
+  install -Dm644 docs/PERSONALIZACION.md "$pkgdir/usr/share/doc/$pkgname/PERSONALIZACION.md"
+  install -Dm644 assets/files/applications/swaydesk-menu.desktop \
+    "$pkgdir/usr/share/applications/swaydesk-menu.desktop"
+
+  cat > "$pkgdir/usr/share/doc/$pkgname/INSTALACION" <<'INST'
+Tras instalar el paquete ejecuta:
+
+  swaydesk init
+  swaymsg reload
+
+Y comprueba las dependencias con:
+
+  swaydesk doctor
+INST
+}

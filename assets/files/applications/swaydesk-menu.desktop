@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=swaydesk menú
+Name[es]=swaydesk menú
+Comment=Launcher de aplicaciones con búsqueda difusa
+Comment[es]=Lanzador de aplicaciones con búsqueda difusa
+Exec=swaymenu --float
+Icon=system-search
+Terminal=false
+Categories=System;Utility;
+Keywords=launcher;menu;run;buscar;lanzar;
+StartupNotify=false
