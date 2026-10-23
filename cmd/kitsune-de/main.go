@@ -74,7 +74,7 @@ func main() {
 	theme := store.ActiveTheme()
 	st := store.Settings()
 	fmt.Printf("\n╭──────────────────────────────────────────────────────────────────╮\n")
-	fmt.Printf("│  🦊 Kitsune Go Wayland v2.0.1 // Escritorio Anime Tabbed Puro     │\n")
+	fmt.Printf("│  🦊 Kitsune Go Wayland v2.0.2 // Escritorio Anime Tabbed Puro     │\n")
 	fmt.Printf("├──────────────────────────────────────────────────────────────────┤\n")
 	fmt.Printf("│  Escuchando en : http://%s\n", *addrFlag)
 	fmt.Printf("│  Motor         : Kitsune Go Wayland (Sin Sway / Sin Dock inferior)\n")

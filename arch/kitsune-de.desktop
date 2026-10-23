@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Kitsune Go
+Name[es]=Kitsune Go
 Comment=Escritorio Anime Tabbed en Go para Wayland (Waybar Kanji, Rofi, Blur y Bordes Luminosos — sin Dock inferior)
 Exec=/usr/bin/kitsune-session
-TryExec=/usr/bin/kitsune-session
 Type=Application
 DesktopNames=KitsuneGoWayland

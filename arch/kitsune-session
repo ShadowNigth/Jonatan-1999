@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 🦊 Kitsune Go Wayland v2.0.1 — Lanzador de Sesión Wayland A Prueba de Fallos
-# Compatible con SDDM, GDM, LightDM, greetd, ly, Hardware Real (Intel/AMD/NVIDIA)
+# 🦊 Kitsune Go Wayland v2.0.2 — Lanzador de Sesión Wayland A Prueba de Fallos
+# Compatible con SDDM, GDM, LightDM, greetd, ly, Hardware Real (AMD/Intel/NVIDIA)
 # y Máquinas Virtuales (VirtualBox, VMware, QEMU/KVM).
 # Diagnóstico completo guardado automáticamente en: ~/.cache/kitsune-session.log
 # ==============================================================================
@@ -19,7 +19,7 @@ exec >>"${LOG_FILE}" 2>&1
 
 echo ""
 echo "=================================================================="
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Iniciando sesión Kitsune Go Wayland v2.0.1"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Iniciando sesión Kitsune Go Wayland v2.0.2"
 echo "Usuario=$(id -un) (UID=$(id -u)) HOME=${HOME:-unset}"
 echo "XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-unset} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-unset} DISPLAY=${DISPLAY:-unset}"
 
@@ -35,9 +35,13 @@ if [[ -z "${XDG_RUNTIME_DIR:-}" || ! -d "${XDG_RUNTIME_DIR}" || ! -w "${XDG_RUNT
 fi
 echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
 
-# 3. Garantizar bus de sesión D-Bus (SDDM/LightDM/TTY a veces no lo inician para sesiones custom)
-if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && -z "${KITSUNE_DBUS_WRAPPED:-}" ]]; then
-  if command -v dbus-run-session >/dev/null 2>&1; then
+# 3. Usar primero el bus systemd nativo (/run/user/$UID/bus) creado por SDDM/PAM;
+#    solo usar dbus-run-session si no existe dicho socket.
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+  if [[ -S "${XDG_RUNTIME_DIR}/bus" ]]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+    echo "[dbus] Conectado al bus systemd de usuario: ${DBUS_SESSION_BUS_ADDRESS}"
+  elif [[ -z "${KITSUNE_DBUS_WRAPPED:-}" ]] && command -v dbus-run-session >/dev/null 2>&1; then
     export KITSUNE_DBUS_WRAPPED=1
     echo "[dbus] Envolviendo sesión en dbus-run-session..."
     exec dbus-run-session -- "$0" "$@"
@@ -152,7 +156,7 @@ if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
       CAGE_ARGS+=("-s")
     fi
 
-    # Intento 1: Aceleración por GPU Wayland (con WLR_NO_HARDWARE_CURSORS=1)
+    # Intento 1: Aceleración por GPU Wayland (AMD / Intel / Mesa nativo)
     echo "[wayland] Intento 1: Cage + GPU Wayland..."
     START_TS=$SECONDS
     if [[ "${BROWSER_KIND}" == "chromium" ]]; then
@@ -165,14 +169,12 @@ if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
     RC=$?
     ELAPSED=$(( SECONDS - START_TS ))
     echo "[wayland] Intento 1 finalizó con código=${RC} tras ${ELAPSED}s"
-
-    # Si duró 8 segundos o más, fue una sesión real cerrada por el usuario
     if [[ "${ELAPSED}" -ge 8 ]]; then
       exit 0
     fi
 
-    # Intento 2: Modo Compatibilidad Universal Wayland (VirtualBox / VMware / QEMU / NVIDIA)
-    echo "[wayland] Activando Intento 2: Modo Compatibilidad Universal (Pixman + DRM No-Atomic + Software GL)..."
+    # Intento 2: Cage + XWayland / Software Rasterizer (máxima compatibilidad Chromium)
+    echo "[wayland] Intento 2: Cage + Modo Compatibilidad Universal..."
     clean_browser_locks
     START_TS=$SECONDS
     if [[ "${BROWSER_KIND}" == "chromium" ]]; then
@@ -182,7 +184,7 @@ if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
       WLR_RENDERER_ALLOW_SOFTWARE=1 \
       LIBGL_ALWAYS_SOFTWARE=1 \
       cage "${CAGE_ARGS[@]}" -- \
-        "${BROWSER_BIN}" --ozone-platform=wayland --enable-features=UseOzonePlatform --disable-gpu "${COMMON_CHROME_FLAGS[@]}"
+        "${BROWSER_BIN}" --ozone-platform=x11 --disable-gpu "${COMMON_CHROME_FLAGS[@]}"
     else
       WLR_NO_HARDWARE_CURSORS=1 \
       WLR_DRM_NO_ATOMIC=1 \
@@ -200,12 +202,23 @@ if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
       exit 0
     fi
   else
-    echo "[aviso] 'cage' no está instalado; probando compositor Wayland de respaldo (weston)..."
+    echo "[aviso] 'cage' no está instalado; probando compositores Wayland alternativos..."
   fi
 
-  # Intento 3: Respaldo con Weston Kiosk Shell (útil en GPUs NVIDIA sin soporte wlroots)
+  # Intento 3: Respaldo con labwc (compositor wlroots ligero)
+  if command -v labwc >/dev/null 2>&1; then
+    echo "[wayland] Intento 3: labwc..."
+    clean_browser_locks
+    if [[ "${BROWSER_KIND}" == "chromium" ]]; then
+      WLR_NO_HARDWARE_CURSORS=1 labwc -s "${BROWSER_BIN} --ozone-platform=wayland --enable-features=UseOzonePlatform ${COMMON_CHROME_FLAGS[*]@Q}" && exit 0
+    else
+      WLR_NO_HARDWARE_CURSORS=1 MOZ_ENABLE_WAYLAND=1 labwc -s "${BROWSER_BIN} --kiosk ${KITSUNE_URL}" && exit 0
+    fi
+  fi
+
+  # Intento 4: Respaldo con Weston Kiosk Shell
   if command -v weston >/dev/null 2>&1; then
-    echo "[wayland] Intento 3: Weston Kiosk Shell..."
+    echo "[wayland] Intento 4: Weston Kiosk Shell..."
     clean_browser_locks
     CLIENT_SH="${DATA_DIR}/weston-client.sh"
     if [[ "${BROWSER_KIND}" == "chromium" ]]; then
@@ -235,7 +248,7 @@ EOF
     weston --config="${WESTON_INI}" && exit 0
   fi
 
-  echo "[error] No se pudo abrir pantalla Wayland (revisa drivers DRM/GPU o prueba 'Kitsune Go (X11 Fallback)' en el login)."
+  echo "[error] No se pudo abrir pantalla Wayland (revisa ~/.cache/kitsune-session.log o selecciona 'Kitsune Go (X11)')."
   exit 1
 fi
 
@@ -258,38 +271,36 @@ if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
 fi
 
 # ==============================================================================
-# CASO C: Sesión X11 activa (ej. "Kitsune Go (X11 Fallback)" en SDDM / LightDM)
+# CASO C: Sesión X11 (Respaldo 'Kitsune Go (X11)' en SDDM / LightDM)
 # ==============================================================================
-if [[ -n "${DISPLAY:-}" ]]; then
-  echo "[x11] Sesión X11 detectada en DISPLAY=${DISPLAY}"
-  command -v xset >/dev/null 2>&1 && xset s off -dpms 2>/dev/null || true
-  command -v xsetroot >/dev/null 2>&1 && xsetroot -cursor_name left_ptr 2>/dev/null || true
-  if command -v openbox >/dev/null 2>&1; then
-    openbox &
-    sleep 0.2
-  fi
+echo "[x11] DISPLAY=${DISPLAY:-unset} detectado — iniciando modo pantalla completa X11"
+command -v xset >/dev/null 2>&1 && { xset s off -dpms 2>/dev/null || true; }
+command -v xsetroot >/dev/null 2>&1 && { xsetroot -solid "#0b0716" 2>/dev/null || true; }
 
-  SW=1920
-  SH=1080
-  if command -v xrandr >/dev/null 2>&1; then
-    RES="$(xrandr 2>/dev/null | awk '/\*/ {print $1; exit}')"
-    if [[ "${RES}" == *x* ]]; then
-      SW="${RES%x*}"
-      SH="${RES#*x}"
-    fi
-  fi
-
-  if [[ "${BROWSER_KIND}" == "chromium" ]]; then
-    START_TS=$SECONDS
-    "${BROWSER_BIN}" --ozone-platform=x11 --window-position=0,0 --window-size="${SW},${SH}" --start-fullscreen "${COMMON_CHROME_FLAGS[@]}"
-    if [[ $(( SECONDS - START_TS )) -lt 5 ]]; then
-      clean_browser_locks
-      "${BROWSER_BIN}" --ozone-platform=x11 --disable-gpu --window-position=0,0 --window-size="${SW},${SH}" --start-fullscreen "${COMMON_CHROME_FLAGS[@]}"
-    fi
-  else
-    "${BROWSER_BIN}" --kiosk "${KITSUNE_URL}"
-  fi
-  exit 0
+OB_PID=""
+if command -v openbox >/dev/null 2>&1; then
+  openbox >/dev/null 2>&1 &
+  OB_PID=$!
+  sleep 0.3
 fi
 
-wait "${DE_PID}"
+SCREEN_RES="1920,1080"
+if command -v xrandr >/dev/null 2>&1; then
+  DETECTED_RES="$(xrandr --current 2>/dev/null | awk '/\*/ {print $1; exit}' | tr 'x' ',')"
+  if [[ -n "${DETECTED_RES}" ]]; then
+    SCREEN_RES="${DETECTED_RES}"
+  fi
+fi
+
+if [[ "${BROWSER_KIND}" == "chromium" ]]; then
+  "${BROWSER_BIN}" \
+    --ozone-platform=x11 \
+    --window-position=0,0 \
+    --window-size="${SCREEN_RES}" \
+    --start-fullscreen \
+    "${COMMON_CHROME_FLAGS[@]}"
+else
+  "${BROWSER_BIN}" --kiosk "${KITSUNE_URL}"
+fi
+
+[[ -n "${OB_PID}" ]] && kill "${OB_PID}" 2>/dev/null || true

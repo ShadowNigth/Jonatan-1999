@@ -1,6 +1,6 @@
 # Maintainer: Kitsune Go Wayland Contributors
 pkgname=kitsune-go-wayland
-pkgver=2.0.1
+pkgver=2.0.2
 pkgrel=1
 pkgdesc="Escritorio Anime Tabbed puro en Go para Wayland (Waybar Kanji, Rofi, Rice Studio, Btop++, Yazi y Neovim Go — sin Sway ni Dock)"
 arch=('x86_64' 'aarch64')
