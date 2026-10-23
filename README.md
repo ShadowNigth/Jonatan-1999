@@ -107,6 +107,11 @@ terceros.
   (`NotificationReplied` en *unicast*). El centro (`Super+n` o clic en la
   pastilla de la barra) lista lo que hay en pantalla y el historial, con filtro
   incremental —sin distinguir mayúsculas ni acentos— y acciones por teclado.
+- **Un fondo por workspace**: cada workspace puede tener su propia escena,
+  imagen, GIF o vídeo (`[wallpaper.workspaces]`), con el fondo global como
+  reserva. El demonio escucha los eventos de sway y cambia al vuelo con
+  **transición animada** —fundido, deslizamiento, barrido o zoom, de 0 a 5 s—,
+  congelando el fotograma anterior y fundiéndolo con el nuevo fondo en marcha.
 - **Animación de arranque** (`Super+Shift+b`): logotipo con degradado, pétalos
   o lluvia de neón, lista de componentes que se activan en vivo y barra de
   progreso. Cuatro estilos (`sakura`, `neon`, `matrix`, `minimal`), duración
@@ -137,6 +142,10 @@ terceros.
 | Notificaciones propias | Aviso de volumen (OSD) |
 |---|---|
 | ![Notificaciones](docs/screenshot-notificaciones.png) | ![OSD de volumen](docs/screenshot-osd.png) |
+
+| Un fondo por workspace | Transiciones entre fondos |
+|---|---|
+| ![Fondos por workspace](docs/screenshot-fondos-workspace.png) | ![Transiciones](docs/screenshot-transiciones.png) |
 
 | Galería de temas (vista previa en vivo) | Selector de fondos animados |
 |---|---|
@@ -219,6 +228,8 @@ Fondos de pantalla
   wallpaper play [fondo]    Reproduce el fondo a pantalla completa en la terminal
   wallpaper adaptive [img]  Genera y aplica un tema desde los colores del fondo
   wallpaper mode <modo>     fill · fit · stretch · center · tile
+  wallpaper workspaces ...  Un fondo por workspace (list · set · unset · clear)
+  wallpaper transition ...  fade · slide · wipe · zoom · none y duración en ms
 
 Sesión
   status [--json] [--module M]   Estado (sway, CPU, RAM, disco, batería…)

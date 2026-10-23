@@ -77,6 +77,10 @@ func cmdWallpaper(args []string) {
 		must(adaptiveTheme(cfg, theme, rest))
 	case "mode", "modo":
 		must(setWallpaperMode(cfg, rest))
+	case "workspaces", "espacios":
+		must(wallpaperWorkspaces(cfg, rest))
+	case "transition", "transicion", "transición":
+		must(setWallpaperTransition(cfg, rest))
 	case "clean", "limpiar":
 		must(cleanWallpaper(cfg))
 	case "help", "--help", "-h":
@@ -98,6 +102,13 @@ func printWallpaperHelp() {
   stop                    Detiene el demonio
   status                  Estado del fondo actual
   mode <fill|fit|...>     Modo de ajuste de imágenes y vídeos
+  workspaces [list]       Fondos por workspace y transición actual
+  workspaces set <ws> <fondo>
+                          Fondo propio para un workspace (nombre, número o
+                          sufijo tras ':')
+  workspaces unset <ws>   Quita el fondo propio de un workspace
+  workspaces clear        Quita todos los fondos por workspace
+  transition <tipo> [ms]  fade · slide · wipe · zoom · none
   adaptive [archivo]      Genera un tema adaptado a los colores del fondo
   clean                   Elimina los archivos generados del fondo
 
@@ -473,7 +484,164 @@ func startWallpaperDaemon(cfg *config.Config) error {
 	if !wallpaper.WaylandReady() {
 		return fmt.Errorf("no hay compositor Wayland con wlr-layer-shell")
 	}
-	return wallpaper.RunDaemon(engine, nil, 0)
+	return wallpaper.RunDaemonOptions(wallpaper.DaemonOptions{
+		Engine:     engine,
+		Workspaces: workspacePlan(cfg, spec),
+		Transition: wallpaper.NewTransition(cfg.WallpaperTransition, cfg.WallpaperTransitionMS),
+		Palette:    ui.PaletteByName(cfg.Theme),
+		FPS:        cfg.WallpaperFPS,
+	}, nil)
+}
+
+// workspacePlan construye el mapa de fondos por workspace; el fondo base es el
+// que está configurado para toda la sesión.
+func workspacePlan(cfg *config.Config, spec wallpaper.Spec) *wallpaper.WorkspaceMap {
+	return wallpaper.NewWorkspaceMap(spec.Source(), cfg.WallpaperWorkspaces)
+}
+
+// restartWallpaperDaemon aplica los cambios si el demonio estaba en marcha.
+func restartWallpaperDaemon(cfg *config.Config) {
+	if wallpaper.RunningPID(cfg.Cache) == 0 {
+		return
+	}
+	wallpaper.StopDaemon(cfg.Cache)
+	if err := startWallpaperDaemon(cfg); err != nil {
+		fmt.Printf("  %s\n", ui.Dim("el demonio animado no pudo reiniciarse: "+err.Error()))
+		return
+	}
+	fmt.Printf("  %s\n", ui.Dim("demonio reiniciado con la nueva configuración"))
+}
+
+// wallpaperWorkspaces muestra y edita los fondos por workspace.
+func wallpaperWorkspaces(cfg *config.Config, args []string) error {
+	spec, err := currentSpec(cfg)
+	if err != nil {
+		return err
+	}
+	plan := workspacePlan(cfg, spec)
+	action := "list"
+	if len(args) > 0 {
+		action = strings.ToLower(args[0])
+		args = args[1:]
+	}
+	switch action {
+	case "set", "add", "poner":
+		if len(args) < 2 {
+			return fmt.Errorf("uso: swaydesk wallpaper workspaces set <workspace> <fondo>")
+		}
+		ws := args[0]
+		target, err := resolveSpec(cfg, strings.Join(args[1:], " "))
+		if err != nil {
+			return err
+		}
+		if err := plan.Set(ws, target.Source()); err != nil {
+			return err
+		}
+		cfg.WallpaperWorkspaces = plan.Raw()
+		if err := cfg.Save(); err != nil {
+			return err
+		}
+		fmt.Printf("✔ %s → %s\n", ui.Style{Fg: ui.PaletteByName(cfg.Theme).Accent}.B().Render(ws),
+			ui.Style{Fg: ui.PaletteByName(cfg.Theme).Ok}.Render(target.Source()))
+		restartWallpaperDaemon(cfg)
+		return nil
+	case "unset", "remove", "quitar":
+		if len(args) < 1 {
+			return fmt.Errorf("uso: swaydesk wallpaper workspaces unset <workspace>")
+		}
+		if !plan.Unset(args[0]) {
+			return fmt.Errorf("el workspace %q no tiene un fondo propio", args[0])
+		}
+		cfg.WallpaperWorkspaces = plan.Raw()
+		if err := cfg.Save(); err != nil {
+			return err
+		}
+		fmt.Printf("✔ %s vuelve al fondo base\n", args[0])
+		restartWallpaperDaemon(cfg)
+		return nil
+	case "clear", "limpiar":
+		if plan.Len() == 0 {
+			fmt.Println("· no hay fondos por workspace")
+			return nil
+		}
+		plan.Clear()
+		cfg.WallpaperWorkspaces = plan.Raw()
+		if err := cfg.Save(); err != nil {
+			return err
+		}
+		fmt.Println("✔ fondos por workspace eliminados")
+		restartWallpaperDaemon(cfg)
+		return nil
+	case "list", "ls", "lista":
+	default:
+		return fmt.Errorf("órdenes: list, set, unset, clear")
+	}
+
+	pal := ui.PaletteByName(cfg.Theme)
+	st := ui.Style{Fg: pal.Accent}
+	fmt.Println()
+	fmt.Printf("  %s %s\n", ui.Style{Fg: pal.Accent, Bg: pal.Bg}.B().Render("fondos por workspace"),
+		ui.Dim("· "+wallpaper.NewTransition(cfg.WallpaperTransition, cfg.WallpaperTransitionMS).String()))
+	fmt.Printf("  %-14s %s\n", ui.Dim("base"), ui.Dim(spec.Source()))
+	curKey := ""
+	if num, name, ok := wallpaper.FocusedWorkspace(); ok {
+		if src, key, found := plan.Lookup(num, name); found {
+			curKey = key
+			fmt.Printf("  %-14s %s → %s\n", ui.Dim("ahora"), ui.Dim(name), src)
+		} else {
+			fmt.Printf("  %-14s %s → %s\n", ui.Dim("ahora"), ui.Dim(name), ui.Dim("fondo base"))
+		}
+	}
+	entries := plan.Entries()
+	if len(entries) == 0 {
+		fmt.Printf("  %s\n", ui.Dim("ningún workspace tiene fondo propio (workspaces set 1 scene:petals)"))
+	}
+	for _, e := range entries {
+		mark := " "
+		if e.Key == curKey {
+			mark = "›"
+		}
+		fmt.Printf("  %s %-14s %s\n", st.Render(mark), e.Key, e.Source)
+	}
+	if pid := wallpaper.RunningPID(cfg.Cache); pid != 0 {
+		fmt.Printf("  %-14s %s\n", ui.Dim("demonio"), ui.Style{Fg: pal.Ok}.Render(fmt.Sprintf("activo (pid %d)", pid)))
+	} else {
+		fmt.Printf("  %-14s %s\n", ui.Dim("demonio"), ui.Style{Fg: pal.Warn}.Render("detenido"))
+	}
+	fmt.Println()
+	return nil
+}
+
+// setWallpaperTransition cambia el tipo y la duración de la transición.
+func setWallpaperTransition(cfg *config.Config, args []string) error {
+	if len(args) == 0 {
+		t := wallpaper.NewTransition(cfg.WallpaperTransition, cfg.WallpaperTransitionMS)
+		fmt.Printf("transición actual: %s\n", t.String())
+		fmt.Printf("tipos: %s\n", strings.Join(wallpaper.TransitionNames(), " · "))
+		return nil
+	}
+	kind := args[0]
+	if !wallpaper.ValidTransition(kind) {
+		return fmt.Errorf("transición desconocida %q (usa %s)", kind,
+			strings.Join(wallpaper.TransitionNames(), ", "))
+	}
+	ms := cfg.WallpaperTransitionMS
+	if len(args) > 1 {
+		n, err := strconv.Atoi(args[1])
+		if err != nil || n < 0 || n > 5000 {
+			return fmt.Errorf("duración inválida %q (0–5000 ms)", args[1])
+		}
+		ms = n
+	}
+	cfg.WallpaperTransition = kind
+	cfg.WallpaperTransitionMS = ms
+	if err := cfg.Save(); err != nil {
+		return err
+	}
+	t := wallpaper.NewTransition(kind, ms)
+	fmt.Printf("✔ transición: %s\n", t.String())
+	restartWallpaperDaemon(cfg)
+	return nil
 }
 
 func wallpaperStatus(cfg *config.Config, theme *ui.Theme) {
@@ -491,6 +659,10 @@ func wallpaperStatus(cfg *config.Config, theme *ui.Theme) {
 	}
 	if where == "" {
 		where = "(según el tema)"
+	}
+	fmt.Printf("  %-12s %s\n", ui.Dim("transición"), wallpaper.NewTransition(cfg.WallpaperTransition, cfg.WallpaperTransitionMS).String())
+	if n := len(cfg.WallpaperWorkspaces); n > 0 {
+		fmt.Printf("  %-12s %d con fondo propio (swaydesk wallpaper workspaces)\n", ui.Dim("workspaces"), n)
 	}
 	fmt.Printf("  %-12s %s\n", ui.Dim("tipo"), kind)
 	fmt.Printf("  %-12s %s\n", ui.Dim("origen"), where)

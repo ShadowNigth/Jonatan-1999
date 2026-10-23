@@ -38,8 +38,11 @@ internal/wallpaper motor de fondos de pantalla
   video.go       decodificación con ffmpeg → tramas RGB24 en memoria
   render.go      protocolos kitty y sixel, PNG, escalado y recorte
   engine.go      Spec/Engine: una sola API para escena, imagen, GIF y vídeo
+  workspace.go   reglas workspace → fondo (nombre, sufijo tras ':' y número)
+                 y transiciones: tipos, curva suave y mezcla de dos lienzos
   run.go         reproducción en terminal y demonio sobre layer-shell
-  daemon.go      PID, arranque/parada y tamaño de la salida vía IPC
+  daemon.go      PID, arranque/parada, tamaño de la salida vía IPC y el bucle
+                 que cambia de fondo al cambiar de workspace
 internal/gallery selectores compartidos (galería de temas y de fondos)
 internal/boot    animación de arranque: logotipo en bloques con degradado,
                  partículas por estilo, pasos en vivo y barra de progreso
@@ -355,7 +358,12 @@ Cobertura destacada:
   de eventos, descriptores y detección de compositor sin servidor.
 - `wallpaper`: las 11 escenas (tamaño, búfer y no-negro), `ParseSpec` con sus
   formatos y errores, ciclo de vida del motor para escena e imagen, GIF animado
-  de dos fotogramas, protocolos kitty (troceado) y sixel, vista previa y escalado.
+  de dos fotogramas, protocolos kitty (troceado) y sixel, vista previa y escalado;
+  y —nuevo— las reglas por workspace (precedencia nombre → sufijo → número,
+  normalización, edición y orden de las entradas) y las transiciones (nombres en
+  español e inglés, duración acotada, progreso y curva de suavizado, las cuatro
+  mezclas con sus píxeles esperados y el reescalado cuando los fondos tienen
+  tamaños distintos).
 - `adaptive`: paleta generada desde una imagen tris-color, colores válidos,
   gradiente, guardado en TOML y error con archivo inexistente.
 - `boot`: estilos válidos, logotipo rectangular (todas las filas del mismo

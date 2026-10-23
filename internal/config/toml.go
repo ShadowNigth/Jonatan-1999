@@ -32,7 +32,7 @@ func parseTOML(text string) (map[string]any, error) {
 		if eq < 0 {
 			return nil, fmt.Errorf("línea %d: falta '=' en %q", i+1, line)
 		}
-		key := strings.TrimSpace(line[:eq])
+		key := unquoteKey(strings.TrimSpace(line[:eq]))
 		valText := strings.TrimSpace(line[eq+1:])
 		if key == "" {
 			return nil, fmt.Errorf("línea %d: clave vacía", i+1)
@@ -47,6 +47,22 @@ func parseTOML(text string) (map[string]any, error) {
 		values[key] = val
 	}
 	return values, nil
+}
+
+// unquoteKey admite claves entre comillas (necesario para nombres de
+// workspace con ':' o espacios: "3:web", "chat de tarde").
+func unquoteKey(key string) string {
+	if len(key) >= 2 {
+		if key[0] == '"' && key[len(key)-1] == '"' {
+			if s, err := strconv.Unquote(key); err == nil {
+				return s
+			}
+		}
+		if key[0] == '\'' && key[len(key)-1] == '\'' {
+			return key[1 : len(key)-1]
+		}
+	}
+	return key
 }
 
 // stripComment elimina un comentario # que no esté dentro de comillas.

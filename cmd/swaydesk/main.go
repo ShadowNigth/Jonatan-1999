@@ -128,6 +128,7 @@ Sesión
   wallpaper <fondo> [modo]    Fondo estático o animado (ver "swaydesk wallpaper help")
   wallpaper --gallery         Selector de fondos con vista previa animada
   wallpaper daemon | --stop   Inicia/detiene el fondo animado (live wallpaper)
+  wallpaper workspaces ...    Un fondo distinto por workspace, con transición
   wallpaper --scenes [--json] Escenas animadas disponibles
   boot [--style=s] [--duration=ms]  Animación de arranque de la sesión
   opacity [list|presets|add|remove|all]  Translucidez por aplicación

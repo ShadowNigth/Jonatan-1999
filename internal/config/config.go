@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -42,6 +43,11 @@ type Config struct {
 	WallpaperProto    string // auto, kitty, sixel, ansi
 	WallpaperAdaptive bool
 	WallpaperDir      string
+	// Fondos por workspace: clave (nombre, número o sufijo tras ':') → fondo.
+	WallpaperWorkspaces map[string]string
+	// Transición al cambiar de workspace: fade, slide, wipe, zoom, none.
+	WallpaperTransition   string
+	WallpaperTransitionMS int
 
 	// Animación de arranque
 	BootEnabled  bool
@@ -159,14 +165,18 @@ func Default() *Config {
 		WallpaperProto:    "auto",
 		WallpaperAdaptive: false,
 		WallpaperDir:      filepath.Join(home, "Imágenes", "Fondos"),
-		TerminalOpacity:   0.94,
-		BarOpacity:        0.86,
-		ActiveOpacity:     1.0,
-		InactiveOpacity:   0.94,
-		Blur:              false,
-		GapsInner:         6,
-		GapsOuter:         8,
-		Rounding:          12,
+
+		WallpaperWorkspaces:   map[string]string{},
+		WallpaperTransition:   "fade",
+		WallpaperTransitionMS: 450,
+		TerminalOpacity:       0.94,
+		BarOpacity:            0.86,
+		ActiveOpacity:         1.0,
+		InactiveOpacity:       0.94,
+		Blur:                  false,
+		GapsInner:             6,
+		GapsOuter:             8,
+		Rounding:              12,
 
 		BarEnabled:           true,
 		BarPosition:          "top",
@@ -322,6 +332,13 @@ func (c *Config) apply() {
 	str("wallpaper.protocol", &c.WallpaperProto)
 	num("wallpaper.fps", &c.WallpaperFPS)
 	bl("wallpaper.adaptive", &c.WallpaperAdaptive)
+	str("wallpaper.transition", &c.WallpaperTransition)
+	if v, ok := c.values["wallpaper.transition_ms"]; ok {
+		if n, ok := v.(int); ok && n >= 0 {
+			c.WallpaperTransitionMS = n
+		}
+	}
+	c.WallpaperWorkspaces = parseWorkspaceRules(c.values)
 	bl("bar.enabled", &c.BarEnabled)
 	str("bar.position", &c.BarPosition)
 	num("bar.height", &c.BarHeight)
@@ -552,7 +569,10 @@ protocol = %q
 adaptive = %t
 # carpeta donde se buscan fondos
 dir = %q
-
+# transición al cambiar de workspace: fade, slide, wipe, zoom, none
+transition = %q
+transition_ms = %d
+%s
 [bar]
 # barra de estado propia (swaybar). Pon enabled = false para usar waybar.
 enabled = %t
@@ -659,6 +679,7 @@ rounding = %d
 `, c.KeyboardLayout,
 		c.WallpaperKind, c.WallpaperName, c.WallpaperPath, c.WallpaperMode,
 		c.WallpaperFPS, c.WallpaperProto, c.WallpaperAdaptive, c.WallpaperDir,
+		c.WallpaperTransition, c.WallpaperTransitionMS, workspaceSection(c),
 		c.BarEnabled, c.BarPosition, c.BarHeight, c.BarMargin, c.BarPadding,
 		c.BarGap, c.BarRadius, c.BarBackgroundOpacity, c.BarIslands, c.BarLogo, c.BarFont,
 		c.BarFontScale, c.BarShadow, c.BarExclusive, tomlList(c.BarModules),
@@ -672,6 +693,53 @@ rounding = %d
 		c.OSDFont, c.OSDFontScale,
 		c.TerminalOpacity, c.BarOpacity, c.ActiveOpacity, c.InactiveOpacity,
 		c.Blur, c.GapsInner, c.GapsOuter, c.Rounding)
+}
+
+// parseWorkspaceRules recoge las reglas de [wallpaper.workspaces] (una clave
+// por workspace) y la forma compacta workspaces = ["1=scene:petals", ...].
+func parseWorkspaceRules(values map[string]any) map[string]string {
+	out := map[string]string{}
+	add := func(k, v string) {
+		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
+		if k != "" && v != "" {
+			out[k] = v
+		}
+	}
+	for key, raw := range values {
+		if strings.HasPrefix(key, "wallpaper.workspaces.") {
+			if s, ok := raw.(string); ok {
+				add(strings.TrimPrefix(key, "wallpaper.workspaces."), s)
+			}
+			continue
+		}
+		if key != "wallpaper.workspaces" {
+			continue
+		}
+		for _, item := range toStringList(raw) {
+			if i := strings.Index(item, "="); i > 0 {
+				add(item[:i], item[i+1:])
+			}
+		}
+	}
+	return out
+}
+
+// workspaceSection genera el bloque [wallpaper.workspaces] del archivo.
+func workspaceSection(c *Config) string {
+	var b strings.Builder
+	b.WriteString("\n[wallpaper.workspaces]\n")
+	b.WriteString("# un fondo por workspace: nombre, número o sufijo tras ':'\n")
+	b.WriteString("# 1 = \"scene:petals\"\n")
+	b.WriteString("# 3:web = \"image:~/Imágenes/Fondos/ciudad.png\"\n")
+	keys := make([]string, 0, len(c.WallpaperWorkspaces))
+	for k := range c.WallpaperWorkspaces {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Fprintf(&b, "%s = %q\n", strconv.Quote(k), c.WallpaperWorkspaces[k])
+	}
+	return b.String()
 }
 
 // toStringList normaliza una lista de cadenas leída del TOML.

@@ -221,6 +221,72 @@ Para que sway dibuje el respaldo estático se escribe
 `~/.config/sway/config.d/50-wallpaper.conf`; puedes sobrescribirlo con tus
 propias reglas `output * bg ...`.
 
+### Un fondo por workspace
+
+El fondo puede cambiar según el workspace que estés mirando. Las reglas van en
+`[wallpaper.workspaces]` y la clave puede ser el **nombre** del workspace, su
+**número** o el **sufijo tras `:`** (así `web` vale para `3:web`):
+
+```toml
+[wallpaper]
+kind = "scene"
+name = "aurora"            # fondo base para el resto de workspaces
+transition = "slide"       # fade · slide · wipe · zoom · none
+transition_ms = 450        # 0–5000
+
+[wallpaper.workspaces]
+"1" = "scene:petals"
+"2" = "image:~/Imágenes/Fondos/ciudad.png"
+"3:web" = "scene:grid"
+dev = "video:~/Vídeos/lofi.mp4"
+```
+
+No hace falta reiniciar para probarlo:
+
+```bash
+swaydesk wallpaper workspaces                     # reglas, workspace actual y demonio
+swaydesk wallpaper workspaces set 3:web scene:grid
+swaydesk wallpaper workspaces set dev ~/Vídeos/lofi.mp4
+swaydesk wallpaper workspaces unset 2
+swaydesk wallpaper workspaces clear
+swaydesk wallpaper transition slide 450           # tipo y duración
+swaydesk wallpaper transition                     # la actual
+```
+
+Al guardar, el demonio se reinicia solo si estaba en marcha. También se acepta
+la forma compacta `workspaces = ["1=scene:petals", "dev=scene:city"]` dentro de
+`[wallpaper]`.
+
+Cómo se comporta:
+
+- La resolución va por **nombre completo** (sin distinguir mayúsculas), luego
+  por el **sufijo tras `:`** y por último por el **número**; si nada coincide se
+  usa el fondo base. `3:web` prefiere su regla exacta antes que la de `web`.
+- El demonio escucha los **eventos de workspace de sway** por IPC (sin sondear)
+  y cambia en el acto. Si sway no está, sigue dibujando el fondo actual y
+  reintenta la conexión cada dos segundos.
+- Durante la transición se **congela el último fotograma** del fondo viejo y se
+  mezcla con los fotogramas nuevos a ~60 fps; al terminar se libera el motor
+  anterior (los vídeos cierran su tubería de ffmpeg). Con `transition = "none"`
+  o `transition_ms = 0` el cambio es instantáneo.
+- El fondo es una sola capa para toda la pantalla, así que manda el workspace
+  **enfocado**. Con varios monitores, cada uno con su workspace enfocado, se
+  dibuja el del último foco; para fondos distintos por pantalla conviene una
+  regla de salida en sway.
+- Al arrancar se aplica ya el fondo del workspace enfocado, sin transición.
+
+| Transición | Efecto |
+| --- | --- |
+| `fade` | fundido cruzado con curva suave (el clásico) |
+| `slide` | el fondo viejo se va a la izquierda y el nuevo entra por la derecha |
+| `wipe` | barrido de izquierda a derecha con borde difuminado |
+| `zoom` | el fondo nuevo crece desde el centro mientras aparece |
+| `none` | corte seco |
+
+![Fondos por workspace](screenshot-fondos-workspace.png)
+
+![Transiciones](screenshot-transiciones.png)
+
 ### Vista previa en la terminal
 
 ```bash

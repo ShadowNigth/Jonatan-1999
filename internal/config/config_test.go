@@ -297,3 +297,83 @@ func TestLoadOSDSection(t *testing.T) {
 		t.Fatalf("se aceptaron valores negativos: radio %d, fundido %d", cfg.OSDRadius, cfg.OSDFade)
 	}
 }
+
+func TestWallpaperWorkspacesSection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := `[wallpaper]
+transition = "slide"
+transition_ms = 700
+
+[wallpaper.workspaces]
+"1" = "scene:petals"
+"3:web" = "image:~/fondos/ciudad.png"
+web = "scene:grid"
+`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WallpaperTransition != "slide" || cfg.WallpaperTransitionMS != 700 {
+		t.Fatalf("transición = %q %d", cfg.WallpaperTransition, cfg.WallpaperTransitionMS)
+	}
+	want := map[string]string{
+		"1":     "scene:petals",
+		"3:web": "image:~/fondos/ciudad.png",
+		"web":   "scene:grid",
+	}
+	if len(cfg.WallpaperWorkspaces) != len(want) {
+		t.Fatalf("reglas = %v", cfg.WallpaperWorkspaces)
+	}
+	for k, v := range want {
+		if cfg.WallpaperWorkspaces[k] != v {
+			t.Fatalf("%q = %q, se esperaba %q", k, cfg.WallpaperWorkspaces[k], v)
+		}
+	}
+}
+
+func TestWallpaperWorkspacesInline(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := "[wallpaper]\nworkspaces = [\"1=scene:petals\", \"web=scene:city\", \"sin-igual\"]\n"
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WallpaperWorkspaces["1"] != "scene:petals" || cfg.WallpaperWorkspaces["web"] != "scene:city" {
+		t.Fatalf("forma compacta mal leída: %v", cfg.WallpaperWorkspaces)
+	}
+	if len(cfg.WallpaperWorkspaces) != 2 {
+		t.Fatalf("entradas sobrantes: %v", cfg.WallpaperWorkspaces)
+	}
+}
+
+func TestDefaultFileRoundTripsWorkspaces(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	cfg := Default()
+	cfg.WallpaperWorkspaces = map[string]string{"1": "scene:petals", "chat de tarde": "image:~/a.png"}
+	cfg.WallpaperTransition = "wipe"
+	cfg.WallpaperTransitionMS = 250
+	cfg.Path = path
+	cfg.Dir = dir
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	back, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("el archivo guardado no se puede volver a leer: %v", err)
+	}
+	if back.WallpaperTransition != "wipe" || back.WallpaperTransitionMS != 250 {
+		t.Fatalf("transición perdida: %q %d", back.WallpaperTransition, back.WallpaperTransitionMS)
+	}
+	if len(back.WallpaperWorkspaces) != 2 || back.WallpaperWorkspaces["chat de tarde"] != "image:~/a.png" {
+		t.Fatalf("reglas perdidas: %v", back.WallpaperWorkspaces)
+	}
+}

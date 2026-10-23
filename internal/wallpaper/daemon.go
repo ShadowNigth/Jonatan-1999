@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
+	"github.com/ShadowNigth/swaydesk/internal/ui"
 	"github.com/ShadowNigth/swaydesk/internal/wayland"
 )
 
@@ -54,8 +55,39 @@ func OutputSize() (int, int) {
 	return w, h
 }
 
-// runDaemon implementa el bucle del fondo animado sobre wlr-layer-shell.
-func runDaemon(eng *Engine, stop <-chan struct{}, sig <-chan os.Signal, scale int) error {
+// DaemonOptions ajusta el demonio de fondo animado.
+type DaemonOptions struct {
+	// Engine es el fondo con el que arranca (el de la configuración).
+	Engine *Engine
+	// Workspaces resuelve el fondo de cada workspace (puede ser nil).
+	Workspaces *WorkspaceMap
+	// Transition anima el cambio de workspace.
+	Transition Transition
+	// Palette es la paleta con la que se interpretan los fondos nuevos.
+	Palette ui.Palette
+	// FPS es el valor de reserva para los fondos sin FPS propio.
+	FPS int
+	// Scale reduce la resolución interna (0 = automática).
+	Scale int
+}
+
+// daemonState guarda el fondo activo y la transición en curso.
+type daemonState struct {
+	opt   DaemonOptions
+	bg    *wayland.Background
+	scale int
+
+	eng  *Engine
+	from *Canvas // último fotograma del fondo anterior, congelado
+	last *Canvas // último fotograma dibujado
+
+	source string
+	start  time.Time
+	moving bool
+}
+
+// runDaemonOptions implementa el bucle del fondo animado sobre wlr-layer-shell.
+func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Signal) error {
 	conn, err := wayland.NewConn()
 	if err != nil {
 		return err
@@ -72,76 +104,241 @@ func runDaemon(eng *Engine, stop <-chan struct{}, sig <-chan os.Signal, scale in
 	}
 	defer bg.Close()
 
-	if scale < 1 {
-		scale = ScaleFor(w, h)
+	if opt.Scale < 1 {
+		opt.Scale = ScaleFor(w, h)
 	}
-	sw, sh := bg.Size()
-	renderW, renderH := sw/scale, sh/scale
-	if renderW < 16 {
-		renderW = 16
-	}
-	if renderH < 16 {
-		renderH = 16
-	}
-	// El lienzo usa dos píxeles por fila cuando la escena es procedural.
-	if eng.Kind() == KindScene {
-		renderH = renderH / 2
-	}
-
 	if err := bg.InitShm(2); err != nil {
 		return err
 	}
 	writePID()
+	defer removePID()
 
-	interval := eng.Interval()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	d := &daemonState{opt: opt, bg: bg, scale: opt.Scale, eng: opt.Engine}
+	defer d.closeEngines()
+	d.source = d.eng.Spec().Source()
 
-	// Primer fotograma inmediato.
-	first := eng.Frame(renderW, renderH)
-	if err := bg.Draw(first.Pix, first.W, first.H); err != nil {
-		return err
+	// Si el workspace enfocado tiene su propio fondo, se aplica ya al arrancar.
+	if opt.Workspaces != nil {
+		if num, name, ok := FocusedWorkspace(); ok {
+			if source, _ := opt.Workspaces.SourceFor(num, name); source != "" && source != d.source {
+				if err := d.install(source, false); err != nil {
+					fmt.Fprintf(os.Stderr, "swaydesk: %v\n", err)
+				}
+			}
+		}
 	}
 
+	// Los eventos de sway llegan por un canal aparte para no bloquear el dibujo.
+	events := workspaceStream(stop)
+
 	for {
+		wait := d.eng.Interval()
+		if d.moving {
+			wait = 16 * time.Millisecond
+		}
 		select {
-		case s := <-sig:
-			_ = s
-			removePID()
+		case <-sig:
 			return nil
 		case <-stop:
-			removePID()
 			return nil
-		case <-ticker.C:
+		case ev, ok := <-events:
+			if !ok {
+				// Sin canal de eventos: se sigue dibujando el fondo actual.
+				events = nil
+				continue
+			}
+			d.onWorkspace(ev)
+		case <-time.After(wait):
 			if bg.Closed() {
-				removePID()
 				return nil
 			}
 			if bg.NeedsResize() {
 				if err := bg.ReinitShm(2); err != nil {
 					return err
 				}
-				sw, sh = bg.Size()
-				renderW, renderH = sw/scale, sh/scale
-				if renderW < 16 {
-					renderW = 16
-				}
-				if renderH < 16 {
-					renderH = 16
-				}
-				if eng.Kind() == KindScene {
-					renderH = renderH / 2
-				}
+				// Una transición a medias con otro tamaño se descarta.
+				d.moving = false
+				d.from = nil
 			}
-			c := eng.Frame(renderW, renderH)
-			if err := bg.Draw(c.Pix, c.W, c.H); err != nil {
-				removePID()
+			if err := d.frame(); err != nil {
 				return err
 			}
 			// Se procesan los eventos pendientes (release de búferes, configure).
 			_ = bg.Dispatch(0)
 		}
 	}
+}
+
+func (d *daemonState) closeEngines() {
+	if d.eng != nil {
+		d.eng.Close()
+		d.eng = nil
+	}
+}
+
+// dims calcula el tamaño del lienzo para un tipo de fondo. Las escenas usan
+// media altura: se dibujan a resolución de terminal (2 píxeles por fila).
+func (d *daemonState) dims(kind Kind) (int, int) {
+	sw, sh := d.bg.Size()
+	w, h := sw/d.scale, sh/d.scale
+	if w < 16 {
+		w = 16
+	}
+	if h < 16 {
+		h = 16
+	}
+	if kind == KindScene {
+		h /= 2
+		if h < 16 {
+			h = 16
+		}
+	}
+	return w, h
+}
+
+// install cambia el fondo activo, con transición si animate lo permite.
+func (d *daemonState) install(source string, animate bool) error {
+	spec, err := ParseSpec(source, d.opt.Palette)
+	if err != nil {
+		return err
+	}
+	if spec.FPS == 0 {
+		spec.FPS = d.opt.FPS
+	}
+	next, err := NewEngine(spec)
+	if err != nil {
+		return err
+	}
+	if !animate || !d.opt.Transition.Active() || d.last == nil || d.eng == nil {
+		if d.eng != nil {
+			d.eng.Close()
+		}
+		d.eng = next
+		d.from = nil
+		d.moving = false
+		d.source = source
+		return nil
+	}
+	// El motor anterior ya no se dibuja: su último fotograma queda congelado
+	// en d.from y el vídeo puede cerrar su tubería de ffmpeg.
+	if d.eng != nil {
+		d.eng.Close()
+	}
+	d.eng = next
+	d.from = d.last
+	d.start = time.Now()
+	d.moving = true
+	d.source = source
+	return nil
+}
+
+// frame dibuja el siguiente fotograma (con transición si hace falta).
+func (d *daemonState) frame() error {
+	w, h := d.dims(d.eng.Kind())
+	c := d.eng.Frame(w, h)
+	if d.moving {
+		p := d.opt.Transition.Progress(time.Since(d.start))
+		out := Blend(d.from, c, EaseInOut(p), d.opt.Transition.Kind)
+		d.last = out
+		if err := d.bg.Draw(out.Pix, out.W, out.H); err != nil {
+			return err
+		}
+		if p >= 1 {
+			d.moving = false
+			d.from = nil
+		}
+		return nil
+	}
+	d.last = c
+	return d.bg.Draw(c.Pix, c.W, c.H)
+}
+
+// onWorkspace reacciona a un cambio de workspace de sway.
+func (d *daemonState) onWorkspace(ev swayipc.WorkspaceEvent) {
+	if d.opt.Workspaces == nil {
+		return
+	}
+	switch ev.Change {
+	case "", "focus", "init":
+	default:
+		return
+	}
+	if ev.Current.Name == "" {
+		return
+	}
+	source, _ := d.opt.Workspaces.SourceFor(ev.Current.Num, ev.Current.Name)
+	if source == "" || source == d.source {
+		return
+	}
+	prev := d.source
+	d.source = source
+	if err := d.install(source, true); err != nil {
+		d.source = prev
+		fmt.Fprintf(os.Stderr, "swaydesk: fondo de %q: %v\n", ev.Current.Name, err)
+	}
+}
+
+// workspaceStream escucha los cambios de workspace de sway y los entrega por
+// un canal. Si sway no está, reintenta cada dos segundos sin bloquear el fondo.
+func workspaceStream(stop <-chan struct{}) <-chan swayipc.WorkspaceEvent {
+	out := make(chan swayipc.WorkspaceEvent, 8)
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			c, err := swayipc.Dial()
+			if err != nil {
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			if err := c.Subscribe("workspace"); err != nil {
+				c.Close()
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			for ev := range c.Events(8) {
+				if ev.Type != swayipc.EventWorkspace {
+					continue
+				}
+				var we swayipc.WorkspaceEvent
+				if err := ev.Decode(&we); err != nil {
+					continue
+				}
+				select {
+				case out <- we:
+				case <-stop:
+					c.Close()
+					return
+				}
+			}
+			c.Close()
+			time.Sleep(time.Second)
+		}
+	}()
+	return out
+}
+
+// FocusedWorkspace devuelve el número y el nombre del workspace enfocado.
+func FocusedWorkspace() (int, string, bool) {
+	c, err := swayipc.Dial()
+	if err != nil {
+		return 0, "", false
+	}
+	defer c.Close()
+	ws, err := c.Workspaces()
+	if err != nil {
+		return 0, "", false
+	}
+	for _, x := range ws {
+		if x.Focused {
+			return x.Num, x.Name, true
+		}
+	}
+	return 0, "", false
 }
 
 // ─── Archivo PID ───────────────────────────────────────────────────────────

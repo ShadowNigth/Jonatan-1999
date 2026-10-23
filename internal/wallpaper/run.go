@@ -181,13 +181,21 @@ func resetTicker(old *time.Ticker, fps int) *time.Ticker {
 //
 // El bucle termina al recibir una señal o cuando stop se cierra.
 func RunDaemon(eng *Engine, stop <-chan struct{}, scale int) error {
+	return RunDaemonOptions(DaemonOptions{Engine: eng, Scale: scale}, stop)
+}
+
+// RunDaemonOptions arranca el demonio con fondos por workspace y transiciones.
+func RunDaemonOptions(opt DaemonOptions, stop <-chan struct{}) error {
 	if !depsAvailable() {
 		return fmt.Errorf("no se encontró un compositor Wayland con wlr-layer-shell")
+	}
+	if opt.Engine == nil {
+		return fmt.Errorf("falta el fondo inicial")
 	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	defer signal.Stop(sig)
-	return runDaemon(eng, stop, sig, scale)
+	return runDaemonOptions(opt, stop, sig)
 }
 
 // WaitForSignal permite ejecutar el demonio en primer plano desde un servicio.
