@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 🦊 Kitsune Go Wayland v2.0.0 — Instalador Oficial para Arch Linux
+# 🦊 Kitsune Go Wayland v2.0.1 — Instalador & Reparador de Sesión Wayland (Arch)
 # Escritorio Anime Tabbed puro en Go para Wayland (SIN Sway, SwayFX ni Hyprland
-# y SIN Dock inferior). Instala todas las dependencias necesarias para que luzca
-# 100% idéntico con sus 4 temas Anime, Blur y Bordes Luminosos en vivo.
+# y SIN Dock inferior). Incluye soporte automático para Hardware Real (AMD/Intel/
+# NVIDIA) y Máquinas Virtuales (VirtualBox, VMware, QEMU) en SDDM/GDM/LightDM.
 # ==============================================================================
 set -euo pipefail
 
@@ -15,7 +15,7 @@ FORCE_BUILD=0
 
 usage() {
   cat <<EOF
-🦊 Kitsune Go Wayland v2.0.0 — Instalador para Arch Linux
+🦊 Kitsune Go Wayland v2.0.1 — Instalador para Arch Linux
 
 Uso:
   ./INSTALAR_EN_ARCH.sh [opciones]
@@ -86,6 +86,7 @@ else
     SUDO="sudo"
   fi
 fi
+REAL_GROUP="$(id -gn "${REAL_USER}" 2>/dev/null || echo "${REAL_USER}")"
 
 run_as_user() {
   if [[ "${EUID}" -eq 0 && "${REAL_USER}" != "root" ]]; then
@@ -100,7 +101,7 @@ pacman_has_pkg() {
 }
 
 echo "╭──────────────────────────────────────────────────────────────────────╮"
-echo "│  🦊 Kitsune Go Wayland v2.0.0 // Escritorio Anime Tabbed (Sin Dock)  │"
+echo "│  🦊 Kitsune Go Wayland v2.0.1 // Instalador & Fix Sesión Login       │"
 echo "╰──────────────────────────────────────────────────────────────────────╯"
 echo "  • Usuario destino : ${REAL_USER} (${REAL_HOME})"
 echo "  • Motor Wayland   : Kitsune Go Wayland (Sin Sway / SwayFX / Hyprland)"
@@ -112,17 +113,19 @@ BIN_DE=""
 BIN_CTL=""
 
 # ==============================================================================
-# 1. Instalar dependencias puras de Kitsune Go Wayland (0% Sway / Hyprland)
+# 1. Instalar dependencias obligatorias de sesión Wayland + respaldos DRM/X11
 # ==============================================================================
 if [[ "${SKIP_PACMAN}" -eq 0 ]] && command -v pacman >/dev/null 2>&1; then
   echo ":: Sincronizando base de datos de paquetes de Arch Linux..."
   ${SUDO} pacman -Sy --noconfirm
 
   DESIRED_PKGS=(
-    # Base & utilidades
-    base-devel git curl jq
-    # Servidor de pantalla Wayland minimalista + motor GPU Ozone Wayland
-    cage chromium xorg-xwayland
+    # Bus de sesión, permisos de asiento DRM/GPU y Mesa
+    base-devel git curl jq dbus polkit mesa
+    # Compositores Wayland de sesión (cage + weston fallback) + motor GPU Ozone
+    cage weston chromium xorg-xwayland
+    # Respaldo X11 de compatibilidad (por si NVIDIA no tiene modeset Wayland)
+    openbox xorg-xrandr xorg-xset xorg-xsetroot
     # Suite de aplicaciones integrada y sincronizada
     btop yazi neovim kitty fastfetch pavucontrol
     # Portapapeles y capturas Wayland
@@ -141,9 +144,16 @@ if [[ "${SKIP_PACMAN}" -eq 0 ]] && command -v pacman >/dev/null 2>&1; then
   done
 
   if [[ "${#PACMAN_INSTALL[@]}" -gt 0 ]]; then
-    echo ":: Instalando dependencias de Kitsune Go Wayland con pacman (${#PACMAN_INSTALL[@]} paquetes)..."
+    echo ":: Instalando paquetes de sesión Wayland con pacman (${#PACMAN_INSTALL[@]} paquetes)..."
     ${SUDO} pacman -S --needed --noconfirm "${PACMAN_INSTALL[@]}"
   fi
+
+  # Asegurar que el usuario tenga acceso directo a /dev/dri (GPU/DRM/input)
+  for grp in video render input seat; do
+    if getent group "${grp}" >/dev/null 2>&1; then
+      ${SUDO} usermod -aG "${grp}" "${REAL_USER}" 2>/dev/null || true
+    fi
+  done
 
   # Cursor Bibata opcional desde AUR
   AUR_HELPER=""
@@ -199,7 +209,7 @@ else
 fi
 
 # ==============================================================================
-# 3. Instalar binarios, wallpapers y sesión única Kitsune Go Wayland
+# 3. Instalar binarios, wallpapers y sesión Wayland reparada
 # ==============================================================================
 echo ":: Instalando Kitsune Go Wayland en /usr/bin y /usr/share/wayland-sessions..."
 ${SUDO} install -Dm755 "${BIN_DE}" /usr/bin/kitsune-de
@@ -217,9 +227,15 @@ ${SUDO} rm -f /usr/bin/kitsune-sway-session \
   /usr/share/wayland-sessions/kitsune-swayfx.desktop 2>/dev/null || true
 
 # ==============================================================================
-# 4. Copiar fondos Anime y configurar modo Tabbed inicial del usuario
+# 4. Reparar permisos de usuario en ~/.config y limpiar bloqueos de sesión
 # ==============================================================================
-run_as_user mkdir -p "${REAL_HOME}/.config/kitsune-de/wallpapers"
+echo ":: Reparando permisos de ${REAL_USER} en ~/.config/kitsune-de y ~/.cache..."
+${SUDO} mkdir -p "${REAL_HOME}/.config/kitsune-de/wallpapers" "${REAL_HOME}/.config/kitsune-de/shell-profile" "${REAL_HOME}/.cache"
+${SUDO} rm -f "${REAL_HOME}/.config/kitsune-de/shell-profile/SingletonLock" \
+              "${REAL_HOME}/.config/kitsune-de/shell-profile/SingletonCookie" \
+              "${REAL_HOME}/.config/kitsune-de/shell-profile/SingletonSocket" 2>/dev/null || true
+${SUDO} chown -R "${REAL_USER}:${REAL_GROUP}" "${REAL_HOME}/.config/kitsune-de" "${REAL_HOME}/.cache" 2>/dev/null || true
+
 for wall in "${ROOT_DIR}/internal/ui/static/wallpapers/"*.jpg; do
   run_as_user cp -f "${wall}" "${REAL_HOME}/.config/kitsune-de/wallpapers/"
 done
@@ -236,12 +252,9 @@ if [[ "${WITH_DOTFILES}" -eq 1 ]]; then
       run_as_user cp -r "${REAL_HOME}/.config/${dir}" "${BACKUP_ROOT}/${dir}"
     fi
   done
-  if [[ -d "${BACKUP_ROOT}" ]]; then
-    echo "   [backup] Configuraciones previas respaldadas en ${BACKUP_ROOT}"
-  fi
-
   echo ":: Exportando configuraciones de Kitsune Go Wayland (${THEME}) en ${REAL_HOME}/.config..."
   run_as_user "${BIN_CTL}" export --theme "${THEME}" --out "${REAL_HOME}/.config"
+  ${SUDO} chown -R "${REAL_USER}:${REAL_GROUP}" "${REAL_HOME}/.config" 2>/dev/null || true
 fi
 
 if command -v gsettings >/dev/null 2>&1; then
@@ -252,9 +265,8 @@ fi
 
 echo ""
 echo "╭──────────────────────────────────────────────────────────────────────╮"
-echo "│  ✅ Kitsune Go Wayland v2.0.0 instalado correctamente                │"
+echo "│  ✅ Kitsune Go Wayland v2.0.1 listo — Sesión de Login Reparada       │"
 echo "╰──────────────────────────────────────────────────────────────────────╯"
-echo "  • Sesión en SDDM / GDM / LightDM / greetd : Kitsune Go Wayland"
-echo "  • Comando directo desde TTY               : kitsune-session"
-echo "  • Modo predeterminado                     : Tabbed (Sin Dock inferior)"
-echo "  • Atajos rápidos                          : Alt+Space (Rofi), Alt+Tab (Pestañas), Alt+1..5 (一..五)"
+echo "  • En el login selecciona : Kitsune Go (Wayland)"
+echo "  • Alternativa NVIDIA/VM  : Kitsune Go (X11)"
+echo "  • Log de diagnóstico     : ${REAL_HOME}/.cache/kitsune-session.log"

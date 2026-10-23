@@ -1,6 +1,6 @@
-# 🦊 Kitsune Go Wayland `v2.0.0` — Escritorio Anime Tabbed Puro en Go para Arch Linux
+# 🦊 Kitsune Go Wayland `v2.0.1` — Escritorio Anime Tabbed Puro en Go para Arch Linux
 
-**Kitsune Go Wayland** (`v2.0.0`) es un entorno de escritorio independiente para **Wayland** en **Arch Linux**, desarrollado íntegramente en **Go** (`0` dependencias externas en Go y binario único con `//go:embed`), **sin Sway, sin SwayFX, sin Hyprland y sin Dock inferior**.
+**Kitsune Go Wayland** (`v2.0.1`) es un entorno de escritorio independiente para **Wayland** en **Arch Linux**, desarrollado íntegramente en **Go** (`0` dependencias externas en Go y binario único con `//go:embed`), **sin Sway, sin SwayFX, sin Hyprland y sin Dock inferior**.
 
 Está diseñado alrededor de un flujo de trabajo limpio en **modo `Tabbed` (por pestañas)** a pantalla completa, con **barra superior estilo Waybar** con *workspaces* kanji (`一 二 三 四 五`), lanzador **Rofi**, **bordes luminosos** y **desenfoque *blur* ajustables en vivo**.
 
@@ -32,22 +32,19 @@ Está diseñado alrededor de un flujo de trabajo limpio en **modo `Tabbed` (por 
 
 ---
 
-## 🚀 Descarga e Instalación en Arch Linux (`v2.0.0`)
+## 🚀 Descarga e Instalación en Arch Linux (`v2.0.1`)
 
 ```bash
-curl -fLO https://github.com/ShadowNigth/Jonatan-1999/raw/v2.0.0/release/kitsune-go-wayland-arch-linux.zip
-unzip kitsune-go-wayland-arch-linux.zip
+curl -fLO https://github.com/ShadowNigth/Jonatan-1999/raw/v2.0.1/release/kitsune-go-wayland-arch-linux.zip
+unzip -o kitsune-go-wayland-arch-linux.zip
 cd kitsune-go-wayland-arch-linux
 chmod +x INSTALAR_EN_ARCH.sh
 
-# Instala automáticamente todas las dependencias de Kitsune Go Wayland y las tipografías Kanji:
+# Instala dependencias Wayland (cage, weston, chromium, dbus, polkit, mesa) y repara permisos:
 ./INSTALAR_EN_ARCH.sh --theme neon-tokyo
 ```
 
-En tu gestor de inicio de sesión (**SDDM, GDM, LightDM, greetd**) selecciona **`Kitsune Go Wayland`**, o ejecútalo directamente desde una TTY con:
-```bash
-kitsune-session
-```
+En tu gestor de inicio de sesión (**SDDM, GDM, LightDM, greetd**) selecciona **`Kitsune Go (Wayland)`** (o **`Kitsune Go (X11)`** si usas drivers propietarios NVIDIA sin `nvidia_drm.modeset=1`). Cualquier registro de arranque queda guardado automáticamente en `~/.cache/kitsune-session.log`.
 
 ---
 

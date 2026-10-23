@@ -1,6 +1,6 @@
 # Maintainer: Kitsune Go Wayland Contributors
 pkgname=kitsune-go-wayland
-pkgver=2.0.0
+pkgver=2.0.1
 pkgrel=1
 pkgdesc="Escritorio Anime Tabbed puro en Go para Wayland (Waybar Kanji, Rofi, Rice Studio, Btop++, Yazi y Neovim Go — sin Sway ni Dock)"
 arch=('x86_64' 'aarch64')
@@ -8,18 +8,27 @@ url="https://github.com/ShadowNigth/Jonatan-1999"
 license=('MIT')
 provides=('kitsune-de')
 conflicts=('kitsune-de')
-depends=('glibc')
+depends=(
+  'glibc'
+  'bash'
+  'dbus'
+  'polkit'
+  'mesa'
+  'cage'
+  'weston'
+  'chromium'
+  'xorg-xwayland'
+  'ttf-jetbrains-mono-nerd'
+  'noto-fonts-cjk'
+  'noto-fonts-emoji'
+)
 makedepends=('go')
 optdepends=(
-  'cage: Servidor de pantalla Wayland minimalista para sesión nativa Kitsune Go Wayland'
-  'chromium: Renderizador GPU Ozone Wayland para cristal blur, bordes luminosos y partículas 60fps'
   'btop: Monitor de recursos Btop++ sincronizado con la paleta Anime'
   'yazi: Gestor de archivos Yazi sincronizado con la paleta Anime'
   'neovim: Editor modal Neovim Go Studio'
   'kitty: Emulador de terminal GPU'
-  'ttf-jetbrains-mono-nerd: Tipografía principal con iconos Nerd Font'
-  'noto-fonts-cjk: Tipografía japonesa Kanji (一 二 三 四 五 / ネオ東京)'
-  'noto-fonts-emoji: Emojis a color'
+  'openbox: Soporte de pantalla completa para la sesión X11 de respaldo'
   'papirus-icon-theme: Tema de iconos oscuro'
   'bibata-cursor-theme-bin: Cursor Bibata-Modern-Ice (AUR)'
 )
