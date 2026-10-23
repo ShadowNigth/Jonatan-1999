@@ -176,7 +176,8 @@ func buildItems(cfg *config.Config, theme *ui.Theme, withCommands bool) ([]ui.It
 func iconFor(app launcher.Entry, ic ui.Icons) string {
 	cats := strings.ToLower(app.Categories + " " + app.Name + " " + app.Exec)
 	switch {
-	case strings.Contains(cats, "web") && strings.Contains(cats, "browser"), strings.Contains(cats, "firefox"):
+	case strings.Contains(cats, "web") && strings.Contains(cats, "browser"),
+		strings.Contains(cats, "chromium"), strings.Contains(cats, "chrome"), strings.Contains(cats, "firefox"):
 		return ic.Browser
 	case strings.Contains(cats, "terminal"), strings.Contains(cats, "shell"):
 		return ic.Terminal

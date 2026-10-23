@@ -38,6 +38,8 @@ internal/wallpaper motor de fondos de pantalla
   run.go         reproducción en terminal y demonio sobre layer-shell
   daemon.go      PID, arranque/parada y tamaño de la salida vía IPC
 internal/gallery selectores compartidos (galería de temas y de fondos)
+internal/boot    animación de arranque: logotipo en bloques con degradado,
+                 partículas por estilo, pasos en vivo y barra de progreso
 internal/adaptive paletas derivadas de imágenes: cuantización, HSL, contraste
 
 internal/ui      toolkit TUI (lo más grande del proyecto)
@@ -156,7 +158,7 @@ pantalla alternativa (`\x1b[?1049h`), restaurada con `defer sc.Close()`.
 xterm-256 más cercano comparando con el cubo 6×6×6 y la rampa de grises; si
 `NO_COLOR` está definido o `TERM=dumb`, todo se degrada a texto plano.
 
-**Búsqueda difusa.** `Fuzzy("ffx", "Firefox")` comprueba subsecuencia y puntúa:
+**Búsqueda difusa.** `Fuzzy("chrm", "Chromium")` comprueba subsecuencia y puntúa:
 +20 al inicio, +15 tras separador, +12 por caracteres consecutivos, −2 por hueco,
 +200 por coincidencia exacta. `FilterItems` puntúa cada campo y ordena estable.
 
@@ -207,3 +209,8 @@ Cobertura destacada:
   de dos fotogramas, protocolos kitty (troceado) y sixel, vista previa y escalado.
 - `adaptive`: paleta generada desde una imagen tris-color, colores válidos,
   gradiente, guardado en TOML y error con archivo inexistente.
+- `boot`: estilos válidos, logotipo rectangular (todas las filas del mismo
+  ancho, imprescindible para centrarlo), partículas acotadas a la pantalla,
+  fotogramas completos a cualquier progreso y barra con su porcentaje.
+- `config`: valores por defecto de `[boot]` y `[effects]`, y carga de la
+  sección completa desde un archivo.

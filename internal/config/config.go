@@ -43,6 +43,12 @@ type Config struct {
 	WallpaperAdaptive bool
 	WallpaperDir      string
 
+	// Animación de arranque
+	BootEnabled  bool
+	BootStyle    string // sakura, neon, matrix, minimal
+	BootDuration int    // milisegundos; 0 = automática
+	BootLogo     bool
+
 	// Efectos de escritorio
 	TerminalOpacity float64
 	BarOpacity      float64
@@ -83,7 +89,7 @@ func Default() *Config {
 		Launcher:       "swaymenu --float",
 		Editor:         "nvim",
 		FileManager:    "thunar",
-		Browser:        "firefox",
+		Browser:        "chromium",
 		Mod:            "Super",
 		FontSize:       11,
 		BarFontSize:    13,
@@ -110,6 +116,11 @@ func Default() *Config {
 		GapsInner:         6,
 		GapsOuter:         8,
 		Rounding:          12,
+
+		BootEnabled:  true,
+		BootStyle:    "sakura",
+		BootDuration: 2600,
+		BootLogo:     true,
 
 		Dir:    cfgDir,
 		Path:   filepath.Join(cfgDir, "config.toml"),
@@ -216,6 +227,10 @@ func (c *Config) apply() {
 	str("wallpaper.protocol", &c.WallpaperProto)
 	num("wallpaper.fps", &c.WallpaperFPS)
 	bl("wallpaper.adaptive", &c.WallpaperAdaptive)
+	bl("boot.enabled", &c.BootEnabled)
+	str("boot.style", &c.BootStyle)
+	num("boot.duration_ms", &c.BootDuration)
+	bl("boot.logo", &c.BootLogo)
 	num("effects.gaps_inner", &c.GapsInner)
 	num("effects.gaps_outer", &c.GapsOuter)
 	num("effects.rounding", &c.Rounding)
@@ -365,6 +380,16 @@ adaptive = %t
 # carpeta donde se buscan fondos
 dir = %q
 
+[boot]
+# animación que se muestra al iniciar la sesión
+enabled = %t
+# estilo: sakura (pétalos), neon (lluvia), matrix (glifos), minimal (sin partículas)
+style = %q
+# duración en milisegundos (0 = automática según el estilo)
+duration_ms = %d
+# dibujar el logotipo grande
+logo = %t
+
 [effects]
 # transparencia de las ventanas (0 = opaco, 1 = invisible)
 terminal_opacity = %.2f
@@ -378,6 +403,7 @@ rounding = %d
 `, c.KeyboardLayout,
 		c.WallpaperKind, c.WallpaperName, c.WallpaperPath, c.WallpaperMode,
 		c.WallpaperFPS, c.WallpaperProto, c.WallpaperAdaptive, c.WallpaperDir,
+		c.BootEnabled, c.BootStyle, c.BootDuration, c.BootLogo,
 		c.TerminalOpacity, c.BarOpacity, c.ActiveOpacity, c.InactiveOpacity,
 		c.Blur, c.GapsInner, c.GapsOuter, c.Rounding)
 }

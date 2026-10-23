@@ -190,3 +190,51 @@ func contains(haystack, needle string) bool {
 	}
 	return false
 }
+
+func TestBootAndEffectsDefaults(t *testing.T) {
+	c := Default()
+	if !c.BootEnabled {
+		t.Fatal("la animación de arranque debería venir activada")
+	}
+	if c.BootStyle != "sakura" {
+		t.Fatalf("estilo por defecto = %q", c.BootStyle)
+	}
+	if c.BootDuration <= 0 || !c.BootLogo {
+		t.Fatalf("valores de arranque inesperados: %+v", c)
+	}
+	if c.Browser != "chromium" {
+		t.Fatalf("navegador por defecto = %q", c.Browser)
+	}
+	if c.TerminalOpacity <= 0 || c.TerminalOpacity > 1 {
+		t.Fatalf("opacidad de terminal = %v", c.TerminalOpacity)
+	}
+	if c.WallpaperFPS <= 0 || c.WallpaperKind == "" {
+		t.Fatalf("fondo por defecto incompleto: %+v", c)
+	}
+	// El archivo generado incluye las secciones nuevas y sin marcadores.
+	text := DefaultFile(c)
+	for _, want := range []string{"[boot]", "style = \"sakura\"", "[effects]", "[wallpaper]"} {
+		if !contains(text, want) {
+			t.Fatalf("falta %q en la configuración generada", want)
+		}
+	}
+	if contains(text, "{{") {
+		t.Fatal("la configuración generada contiene marcadores sin sustituir")
+	}
+}
+
+func TestLoadBootSection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := "[boot]\nenabled = false\nstyle = \"matrix\"\nduration_ms = 1200\nlogo = false\n"
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BootEnabled || cfg.BootStyle != "matrix" || cfg.BootDuration != 1200 || cfg.BootLogo {
+		t.Fatalf("sección [boot] mal aplicada: %+v", cfg)
+	}
+}

@@ -34,7 +34,7 @@ terceros.
 ╭── swaydesk · lanzador ─────────────────────────────────────────────╮
 │ ⌕ fire                                                             │
 │────────────────────────────────────────────────────────────────────│
-│▌ ◍ Firefox                                        Navegador web    │
+│▌ ◍ Chromium                                        Navegador web    │
 │  ◍ Firejail                          Ejecuta apps en una jaula      │
 │                                                                     │
 ╰──────────────────────────── ↵ elegir · ↑↓ mover · esc cerrar ──────╯
@@ -72,6 +72,10 @@ terceros.
   sin librerías.
 - **Selector de fondos** (`Super+Shift+w`): galería con vista previa animada en
   vivo, metadatos (duración, tamaño, tipo) y exploración de tus carpetas.
+- **Animación de arranque** (`Super+Shift+b`): logotipo con degradado, pétalos
+  o lluvia de neón, lista de componentes que se activan en vivo y barra de
+  progreso. Cuatro estilos (`sakura`, `neon`, `matrix`, `minimal`), duración
+  configurable y se salta con cualquier tecla.
 - **Translucidez en todo el escritorio**: opacidad configurable para terminal,
   barra, notificaciones, ventanas activas e inactivas, reglas `for_window` para
   decenas de aplicaciones y desenfoque/esquinas cuando el compositor es swayfx.
@@ -95,13 +99,17 @@ terceros.
 |---|---|
 | ![Temas](docs/screenshot-temas.png) | ![Calculadora](docs/screenshot-calculadora.png) |
 
-| Galería de temas (vista previa en vivo) | Selector de fondos animados |
-|---|---|
-| ![Galería de temas](docs/screenshot-galeria-temas.png) | ![Selector de fondos](docs/screenshot-selector-fondos.png) |
+| Animación de arranque | Galería de temas (vista previa en vivo) |
+|---|---|---|
+| ![Arranque](docs/screenshot-arranque.png) | ![Galería de temas](docs/screenshot-galeria-temas.png) |
 
-| Escenas animadas disponibles | Paletas por categoría |
+| Selector de fondos animados | Escenas animadas disponibles |
+|---|---|---|
+| ![Selector de fondos](docs/screenshot-selector-fondos.png) | ![Escenas](docs/screenshot-escenas.png) |
+
+| Paletas por categoría | Temas anime por categoría |
 |---|---|
-| ![Escenas](docs/screenshot-escenas.png) | ![Paletas](docs/screenshot-paletas.png) |
+| ![Paletas](docs/screenshot-paletas.png) | ![Temas](docs/screenshot-temas.png) |
 
 | Ventanas | Atajos |
 |---|---|
@@ -144,7 +152,7 @@ swaydesk doctor
 
 | Obligatorio | Recomendado | Opcional |
 |---|---|---|
-| `sway`, `go` (solo para compilar) | `waybar`, `foot`, `mako`, `swaylock`, `grim`, `slurp`, `wl-clipboard`, `cliphist`, `swayidle` | `pavucontrol`, `playerctl`, `brightnessctl`, `nm-connection-editor`, `wf-recorder`, `ffmpeg` (vídeos de fondo), `swayfx` (blur y esquinas) |
+| `sway`, `go` (solo para compilar) | `waybar`, `foot`, `mako`, `swaylock`, `grim`, `slurp`, `wl-clipboard`, `cliphist`, `swayidle`, `chromium` | `pavucontrol`, `playerctl`, `brightnessctl`, `nm-connection-editor`, `wf-recorder`, `ffmpeg` (vídeos de fondo), `swayfx` (blur y esquinas) |
 
 Ninguna de las recomendadas es necesaria para que `swaydesk` funcione: cada
 acción comprueba si su binario existe y se oculta del menú si no está.
@@ -196,6 +204,7 @@ Sesión
 | `Super+h/j/k/l` | Foco | `Super+Shift+hjkl` | Mover ventana |
 | `Super+r` | Modo redimensionar | `Super+1..0` | Workspaces |
 | `Super+Shift+1..0` | Mover al workspace | `Super+Shift+c` | Recargar sway |
+| `Super+Shift+b` | Repetir la animación de arranque | `Super+Shift+w` | Selector de fondos |
 
 La chuleta completa está en `Super+i` → *Atajos*, y en
 [`assets/files/sway/config`](assets/files/sway/config).
@@ -204,7 +213,7 @@ La chuleta completa está en `Super+i` → *Atajos*, y en
 
 | Tecla | Acción |
 |---|---|
-| Escribir | Filtro difuso (tolera letras salteadas: `ffx` → Firefox) |
+| Escribir | Filtro difuso (tolera letras salteadas: `chrm` → Chromium) |
 | `=` al principio | Calculadora: `=2^10`, `=sqrt(16)*3`, `=20*1.19` |
 | `↑` `↓` / `Ctrl+p` `Ctrl+n` | Mover selección |
 | `Enter` | Lanzar / copiar el resultado al portapapeles |
@@ -243,7 +252,7 @@ terminal = "foot"          # foot, kitty, alacritty, wezterm, ghostty, xterm, st
 launcher = "swaymenu --float"
 editor = "nvim"
 file_manager = "thunar"
-browser = "firefox"
+browser = "chromium"
 confirm_power = true
 
 [ui]
@@ -266,6 +275,12 @@ fps = 30
 protocol = "auto"          # auto · kitty · sixel · ansi (para la vista en terminal)
 adaptive = false           # genera un tema desde los colores del fondo
 dir = "~/Imágenes/Fondos"  # carpeta que explora el selector
+
+[boot]
+enabled = true             # animación al iniciar sesión
+style = "sakura"           # sakura · neon · matrix · minimal
+duration_ms = 2600         # 0 = automática
+logo = true                # logotipo grande en bloques
 
 [effects]
 terminal_opacity = 0.94    # foot
@@ -313,6 +328,7 @@ internal/
   swayipc/      cliente IPC de sway escrito desde cero (protocolo i3-ipc)
   wayland/      cliente Wayland puro: xdg-shell, shm y wlr-layer-shell
   wallpaper/    motor de fondos: escenas, GIF, vídeo, protocolos kitty/sixel
+  boot/         animación de arranque (logo, partículas, progreso)
   gallery/      selectores compartidos: galería de temas y de fondos
   adaptive/     paletas derivadas de imágenes (cuantización + HSL + contraste)
   ui/           toolkit TUI: estilos, colores, entrada, paneles, listas, decoración

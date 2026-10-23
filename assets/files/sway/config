@@ -15,6 +15,7 @@ set $themes swaydesk theme --gallery
 set $wall swaydesk wallpaper --gallery
 set $ctl swayctl
 set $clip swayclip
+set $boot swaydesk boot --force
 set $lock swaylock -f -c '{{THEME_BG_HEX}}'
 set $browser {{BROWSER}}
 set $files {{FILES}}
@@ -75,6 +76,8 @@ for_window [app_id="^swaydesk-run$"] floating enable, border pixel 2, resize set
 for_window [app_id="^swaydesk-themes$"] floating enable, border pixel 2, resize set 1040 700, move position center
 for_window [app_id="^swaydesk-wallpapers$"] floating enable, border pixel 2, resize set 1180 740, move position center
 for_window [app_id="^swaydesk-dialog$"] floating enable, border pixel 2, resize set 560 220, move position center
+# Animación de arranque: ventana a pantalla completa sin bordes ni decoración.
+for_window [app_id="^swaydesk-boot$"] fullscreen enable, border none
 
 ### Translucidez por aplicación ############################################
 # El fondo animado se ve a través de las ventanas compatibles.
@@ -91,6 +94,24 @@ for_window [class="Code"] opacity {{INACTIVE_OPACITY}}
 for_window [app_id="code"] opacity {{INACTIVE_OPACITY}}
 for_window [class="Spotify"] opacity {{INACTIVE_OPACITY}}
 for_window [app_id="imv"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="chromium"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="google-chrome"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="brave-browser"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="obsidian"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="md.obsidian.Obsidian"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="org.telegram.desktop"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="Signal"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="discord"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="webcord"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="Element"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="dolphin"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="zathura"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="org.gnome.Evince"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="org.gnome.Calculator"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="blueman-manager"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="nm-connection-editor"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="org.gnome.TextEditor"] opacity {{INACTIVE_OPACITY}}
+for_window [app_id="com.raggesilver.BlackBox"] opacity {{TERM_OPACITY}}
 # Ventanas flotantes propias de swaydesk: siempre translúcidas.
 for_window [app_id="^swaydesk-menu$"] opacity {{TERM_OPACITY}}
 for_window [app_id="^swaydesk-ctl$"] opacity {{TERM_OPACITY}}
@@ -98,6 +119,7 @@ for_window [app_id="^swaydesk-clip$"] opacity {{TERM_OPACITY}}
 for_window [app_id="^swaydesk-run$"] opacity {{TERM_OPACITY}}
 for_window [app_id="^swaydesk-themes$"] opacity {{TERM_OPACITY}}
 for_window [app_id="^swaydesk-wallpapers$"] opacity {{TERM_OPACITY}}
+for_window [app_id="^swaydesk-boot$"] opacity 1.00
 
 ### Atajos de teclado ######################################################
 
@@ -114,6 +136,7 @@ bindsym $mod+p exec $power
 bindsym $mod+t exec $themes
 bindsym $mod+Shift+t exec $themes
 bindsym $mod+Shift+w exec $wall
+bindsym $mod+Shift+b exec $boot
 bindsym $mod+c exec --no-startup-id $clip
 bindsym $mod+i exec --no-startup-id $ctl
 bindsym $mod+Shift+l exec $lock

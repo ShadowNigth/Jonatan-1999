@@ -8,14 +8,14 @@ import (
 
 func TestParseDesktopFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "firefox.desktop")
+	path := filepath.Join(dir, "chromium.desktop")
 	content := `[Desktop Entry]
 Type=Application
-Name=Firefox
-Name[es]=Navegador Firefox
+Name=Chromium
+Name[es]=Navegador Chromium
 Comment=Explorar la web
-Exec=firefox %u
-Icon=firefox
+Exec=chromium %u
+Icon=chromium
 Terminal=false
 Categories=Network;WebBrowser;
 `
@@ -26,13 +26,13 @@ Categories=Network;WebBrowser;
 	if !ok {
 		t.Fatal("no se pudo parsear")
 	}
-	if entry.Name != "Firefox" && entry.Name != "Navegador Firefox" {
+	if entry.Name != "Chromium" && entry.Name != "Navegador Chromium" {
 		t.Fatalf("nombre inesperado: %q", entry.Name)
 	}
-	if entry.Exec != "firefox %u" || entry.Icon != "firefox" {
+	if entry.Exec != "chromium %u" || entry.Icon != "chromium" {
 		t.Fatalf("entrada inesperada: %+v", entry)
 	}
-	if entry.Key != "app:firefox" && entry.Key != "app:navegador firefox" {
+	if entry.Key != "app:chromium" && entry.Key != "app:navegador chromium" {
 		t.Fatalf("clave inesperada: %q", entry.Key)
 	}
 	if entry.Terminal {
@@ -59,7 +59,7 @@ func TestParseDesktopOculta(t *testing.T) {
 
 func TestExecArgs(t *testing.T) {
 	cases := map[string][]string{
-		`firefox %u`:                             {"firefox"},
+		`chromium %u`:                            {"chromium"},
 		`sh -c "echo hola mundo" %f`:             {"sh", "-c", "echo hola mundo"},
 		`code --new-window %F`:                   {"code", "--new-window"},
 		`env FOO=bar app %i --flag=1`:            {"env", "FOO=bar", "app", "--flag=1"},
@@ -85,22 +85,22 @@ func TestHistory(t *testing.T) {
 	h := LoadHistory(path, 3)
 	now := int64(1_700_000_000)
 
-	if h.Score("app:firefox", now) != 0 {
+	if h.Score("app:chromium", now) != 0 {
 		t.Fatal("una entrada nueva no debe puntuar")
 	}
-	h.Record("app:firefox", now)
-	h.Record("app:firefox", now)
-	if got := h.Score("app:firefox", now); got <= 0 {
+	h.Record("app:chromium", now)
+	h.Record("app:chromium", now)
+	if got := h.Score("app:chromium", now); got <= 0 {
 		t.Fatalf("puntuación = %d", got)
 	}
 	// Hace 30 días la puntuación debe decaer.
-	if h.Score("app:firefox", now+30*86400) >= h.Score("app:firefox", now) {
+	if h.Score("app:chromium", now+30*86400) >= h.Score("app:chromium", now) {
 		t.Fatal("la puntuación no decae con el tiempo")
 	}
 
 	// Persistencia y recorte a maxEntries.
 	h2 := LoadHistory(path, 3)
-	if h2.Score("app:firefox", now) == 0 {
+	if h2.Score("app:chromium", now) == 0 {
 		t.Fatal("el historial no se guardó en disco")
 	}
 	for i := 0; i < 10; i++ {

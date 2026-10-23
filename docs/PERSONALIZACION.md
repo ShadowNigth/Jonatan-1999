@@ -13,7 +13,7 @@ terminal = "kitty"          # foot, kitty, alacritty, wezterm, ghostty, xterm, s
 launcher = "swaymenu --float"
 editor = "nvim"
 file_manager = "thunar"
-browser = "firefox"
+browser = "chromium"
 confirm_power = true        # pedir confirmación antes de reiniciar/apagar
 
 [ui]
@@ -26,6 +26,12 @@ border = "rounded"          # rounded, square, double, thick, ascii
 
 [input]
 keyboard_layout = "latam"   # latam, us, es, de, fr, br...
+
+[boot]
+enabled = true              # animación al iniciar la sesión
+style = "sakura"            # sakura (pétalos), neon (lluvia), matrix, minimal
+duration_ms = 2600          # 0 = automática
+logo = true                 # logotipo grande en bloques
 
 [wallpaper]
 kind = "scene"              # scene, image, gif, video, none
@@ -182,7 +188,7 @@ Puedes borrar la entrada seleccionada con `Ctrl+d`.
 si te falta algo. Añade tus programas al final:
 
 ```sh
-quiet firefox
+quiet chromium
 quiet nm-applet
 quiet blueman-applet
 ```
@@ -226,7 +232,36 @@ Teclas en la reproducción: `q`/`Esc` salir, `espacio` pausar, `+`/`-` FPS,
 `i` ocultar la ayuda. En terminales con protocolo gráfico (kitty, Ghostty, foot)
 se envía la imagen real; si no, se dibuja con medios bloques.
 
-## 6. Translucidez
+## 6. Animación de arranque
+
+```bash
+swaydesk boot                     # la reproduce ahora mismo
+swaydesk boot --style=neon        # otro estilo sin tocar la configuración
+swaydesk boot --duration=1500     # más corta
+swaydesk boot --list              # estilos disponibles
+swaydesk boot --no-logo           # sin el logotipo grande
+```
+
+La lanza el autostart en una ventana de terminal a pantalla completa
+(`app_id=swaydesk-boot`), dentro de sway, con la clase ya configurada en
+`assets/files/sway/config`. Se salta con cualquier tecla y desaparece sola.
+
+Estilos:
+
+| Estilo | Efecto |
+|---|---|
+| `sakura` | pétalos y motas cayendo con la paleta del tema (por defecto) |
+| `neon` | lluvia vertical de trazos tipo lluvia digital |
+| `matrix` | glifos y dígitos verdes sobre negro |
+| `minimal` | sin partículas: solo logotipo, pasos y barra |
+
+La lista de pasos se genera en vivo (`boot.DefaultSteps`): compositor, barra,
+notificaciones, portapapeles, tema, fondo y ventanas; cada uno con su estado real.
+
+Para desactivarla del todo, `enabled = false` en `[boot]` (o borra la línea
+`swaydesk boot` del autostart). Vuelve a verla cuando quieras con `Super+Shift+b`.
+
+## 7. Translucidez
 
 La mayoría de las aplicaciones de Wayland respetan el alpha de sus propias
 superficies, así que swaydesk ajusta cada pieza por separado:
@@ -246,7 +281,29 @@ for_window [app_id="mi-app"] opacity 0.92
   `corner_radius` y, con `blur = true`, `blur enable`. En sway normal esas
   líneas quedan comentadas porque no existen.
 
-## 7. Barra de estado (waybar)
+### Añadir cualquier aplicación
+
+`swaydesk opacity` gestiona reglas de translucidez sin editar archivos a mano:
+
+```bash
+swaydesk opacity presets              # catálogo de apps conocidas
+swaydesk opacity all                  # escribe las ~40 reglas del catálogo
+swaydesk opacity add obsidian 0.92    # añade (o ajusta) una app
+swaydesk opacity add --class Spotify 0.9   # por clase en vez de app_id
+swaydesk opacity remove obsidian      # quita la regla
+swaydesk opacity list                 # reglas propias activas
+swaydesk opacity reset                # vuelve a la plantilla de sway
+```
+
+Las reglas se guardan en `~/.config/sway/config.d/60-opacity.conf` y se aplican
+en caliente por IPC a las ventanas abiertas, además de a las futuras. Para
+descubrir el `app_id` real de una ventana:
+
+```bash
+swaymsg -t get_tree | grep app_id
+```
+
+## 8. Barra de estado (waybar)
 
 `waybar/config.json` y `waybar/style.css` son plantillas. Los módulos de sistema
 llaman a `swaydesk status --module`:
@@ -275,7 +332,7 @@ Para ver el estado completo en JSON (útil para scripts):
 swaydesk status --json | jq '.system.cpu_percent, .sway.focused'
 ```
 
-## 8. Notificaciones e integración
+## 9. Notificaciones e integración
 
 ```bash
 swaydesk notify "Título" "Cuerpo" --urgency low
@@ -288,7 +345,7 @@ swaydesk power reboot
 Desde un script o un bind de sway puedes usar los binarios directamente:
 `swaymenu --float`, `swayctl`, `swayclip`.
 
-## 9. Fuentes
+## 10. Fuentes
 
 `swaydesk doctor` indica si hay Nerd Font. Recomendado en Arch:
 

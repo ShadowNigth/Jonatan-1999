@@ -65,6 +65,10 @@ func main() {
 		cmdConfig(args)
 	case "wallpaper", "fondo":
 		cmdWallpaper(args)
+	case "boot", "arranque", "splash":
+		cmdBoot(args)
+	case "opacity", "opacidad", "transparencia":
+		cmdOpacity(args)
 	case "version", "-v", "--version":
 		fmt.Printf("swaydesk %s (go %s, %s/%s)\n", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	case "help", "-h", "--help":
@@ -101,6 +105,8 @@ Sesión
   wallpaper --gallery         Selector de fondos con vista previa animada
   wallpaper daemon | --stop   Inicia/detiene el fondo animado (live wallpaper)
   wallpaper --scenes [--json] Escenas animadas disponibles
+  boot [--style=s] [--duration=ms]  Animación de arranque de la sesión
+  opacity [list|presets|add|remove|all]  Translucidez por aplicación
   lock                        Bloquea la pantalla
   reload                      Recarga la configuración de sway
   power [acción]              Menú de energía (lock, suspend, logout, reboot, poweroff)
@@ -112,6 +118,7 @@ Ejemplos:
   swaydesk theme --gallery
   swaydesk wallpaper set scene:petals && swaydesk wallpaper daemon
   swaydesk wallpaper set ~/Imágenes/lofi.gif --live
+  swaydesk boot --style=neon --duration=2000
   swaydesk status --module clock
 
 Atajos por defecto (Super = Mod4):

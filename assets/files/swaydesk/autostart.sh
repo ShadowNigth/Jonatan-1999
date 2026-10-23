@@ -10,6 +10,13 @@
 have() { command -v "$1" >/dev/null 2>&1; }
 quiet() { "$@" >/dev/null 2>&1 & }
 
+# --- Animación de arranque -------------------------------------------------
+# Se muestra a pantalla completa y termina sola (o al pulsar una tecla).
+# Desactívala con boot.enabled = false en ~/.config/swaydesk/config.toml.
+if have swaydesk; then
+    quiet swaydesk boot
+fi
+
 # --- Barra de estado -------------------------------------------------------
 if have waybar; then
     pkill -SIGUSR2 -x waybar >/dev/null 2>&1
