@@ -1,0 +1,23 @@
+# KitsuneDE Swaylock / Swaylock-Effects Anime Config - Cyberpunk Neon Tokyo
+image=~/.config/kitsune-de/wallpapers/neon-tokyo.jpg
+scaling=fill
+font=JetBrainsMono Nerd Font
+font-size=24
+indicator-radius=110
+indicator-thickness=10
+
+inside-color=131026CC
+ring-color=00f0ffFF
+line-color=00000000
+key-hl-color=ff2a85FF
+bs-hl-color=ff2a6dFF
+separator-color=00000000
+text-color=eef6ffFF
+
+inside-ver-color=131026CC
+ring-ver-color=ff2a85FF
+text-ver-color=eef6ffFF
+
+inside-wrong-color=131026CC
+ring-wrong-color=ff2a6dFF
+text-wrong-color=eef6ffFF

@@ -34,7 +34,8 @@ type Theme struct {
 // DesktopSettings holds live configurable window manager & visual parameters.
 type DesktopSettings struct {
 	ActiveTheme       string `json:"activeTheme"`
-	LayoutMode        string `json:"layoutMode"` // "tiling", "floating", "monocle"
+	Compositor        string `json:"compositor"` // "swayfx", "sway", "hyprland"
+	LayoutMode        string `json:"layoutMode"` // "tiling", "tabbed", "floating", "monocle"
 	ActiveWorkspace   int    `json:"activeWorkspace"`
 	GapsIn            int    `json:"gapsIn"`
 	GapsOut           int    `json:"gapsOut"`
@@ -142,6 +143,7 @@ func BuiltinThemes() []Theme {
 func DefaultSettings() DesktopSettings {
 	return DesktopSettings{
 		ActiveTheme:       "neon-tokyo",
+		Compositor:        "swayfx",
 		LayoutMode:        "tiling",
 		ActiveWorkspace:   1,
 		GapsIn:            8,
@@ -209,7 +211,10 @@ func (s *Store) persistLocked() {
 }
 
 func sanitizeSettings(cfg DesktopSettings) DesktopSettings {
-	if cfg.LayoutMode != "tiling" && cfg.LayoutMode != "floating" && cfg.LayoutMode != "monocle" {
+	if cfg.Compositor != "swayfx" && cfg.Compositor != "sway" && cfg.Compositor != "hyprland" {
+		cfg.Compositor = "swayfx"
+	}
+	if cfg.LayoutMode != "tiling" && cfg.LayoutMode != "tabbed" && cfg.LayoutMode != "floating" && cfg.LayoutMode != "monocle" {
 		cfg.LayoutMode = "tiling"
 	}
 	if cfg.ActiveWorkspace < 1 || cfg.ActiveWorkspace > 5 {
@@ -302,6 +307,8 @@ func (s *Store) SetLayout(mode string) (DesktopSettings, error) {
 	if mode == "toggle" {
 		switch s.settings.LayoutMode {
 		case "tiling":
+			mode = "tabbed"
+		case "tabbed":
 			mode = "floating"
 		case "floating":
 			mode = "monocle"
@@ -309,10 +316,31 @@ func (s *Store) SetLayout(mode string) (DesktopSettings, error) {
 			mode = "tiling"
 		}
 	}
-	if mode != "tiling" && mode != "floating" && mode != "monocle" {
+	if mode != "tiling" && mode != "tabbed" && mode != "floating" && mode != "monocle" {
 		return s.settings, errors.New("modo de layout inválido: " + mode)
 	}
 	s.settings.LayoutMode = mode
+	s.persistLocked()
+	return s.settings, nil
+}
+
+func (s *Store) SetCompositor(comp string) (DesktopSettings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if comp == "toggle" {
+		switch s.settings.Compositor {
+		case "swayfx":
+			comp = "sway"
+		case "sway":
+			comp = "hyprland"
+		default:
+			comp = "swayfx"
+		}
+	}
+	if comp != "swayfx" && comp != "sway" && comp != "hyprland" {
+		return s.settings, errors.New("compositor inválido (usa swayfx, sway o hyprland): " + comp)
+	}
+	s.settings.Compositor = comp
 	s.persistLocked()
 	return s.settings, nil
 }

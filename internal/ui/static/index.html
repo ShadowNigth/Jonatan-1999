@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KitsuneDE // Escritorio Arch Linux Anime en Go</title>
+  <title>KitsuneDE // Escritorio Arch Linux Sway &amp; SwayFX Anime en Go</title>
   <link rel="stylesheet" href="/css/desktop.css" />
 </head>
 <body class="booting">
@@ -18,11 +18,12 @@
   <div id="eww-widget" class="eww-widget">
     <div class="eww-jp" id="eww-jp">ネオ東京 // 2099</div>
     <div class="eww-clock" id="eww-clock">00:00</div>
-    <div class="eww-sub" id="eww-sub">Arch Linux • KitsuneDE Go Engine</div>
+    <div class="eww-sub" id="eww-sub">Arch Linux • Sway / SwayFX • KitsuneDE Go</div>
     <div class="eww-shortcuts">
       <span><kbd>Alt+Space</kbd> Rofi</span>
       <span><kbd>Alt+Enter</kbd> Kitty</span>
-      <span><kbd>Alt+T</kbd> Tiling/Float</span>
+      <span><kbd>Alt+W</kbd> Sway Tabbed</span>
+      <span><kbd>Alt+T</kbd> Layout</span>
       <span><kbd>Alt+1..5</kbd> Workspaces</span>
     </div>
   </div>
@@ -45,7 +46,12 @@
         <button class="ws-btn" data-ws="5" title="Workspace 5 (Alt+5)">五</button>
       </div>
 
-      <button id="btn-layout" class="wb-pill wb-layout" title="Alternar modo Tiling / Flotante / Monocle (Alt+T)">
+      <button id="btn-compositor" class="wb-pill wb-comp" title="Cambiar perfil de compositor: SwayFX / Sway / Hyprland">
+        <span>✨</span>
+        <span id="wb-comp-label">SWAYFX</span>
+      </button>
+
+      <button id="btn-layout" class="wb-pill wb-layout" title="Alternar modo Sway Split / Tabbed / Flotante / Monocle (Alt+T)">
         <span class="wb-dot"></span>
         <span id="wb-layout-label">TILING</span>
       </button>
@@ -91,8 +97,10 @@
     </div>
   </header>
 
-  <!-- Main Workspace Viewport where Tiled & Floating Windows live -->
-  <main id="desktop-stage" class="desktop-stage" aria-label="Área de escritorio"></main>
+  <!-- Main Workspace Viewport where Tiled, Tabbed & Floating Windows live -->
+  <main id="desktop-stage" class="desktop-stage" aria-label="Área de escritorio">
+    <div id="sway-tabbar" class="sway-tabbar hidden" role="tablist" aria-label="Pestañas Sway"></div>
+  </main>
 
   <!-- Bottom Floating Anime Dock -->
   <nav id="kitsune-dock" class="kitsune-dock" aria-label="Dock de aplicaciones">

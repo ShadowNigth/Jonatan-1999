@@ -14,7 +14,7 @@
     "separator",
     { "type": "os", "key": "󰣇 OS" },
     { "type": "kernel", "key": "󰌽 Kernel" },
-    { "type": "wm", "key": "󱂬 DE/WM", "format": "KitsuneDE (Go + Hyprland)" },
+    { "type": "wm", "key": "󰖲 WM", "format": "KitsuneDE + SwayFX (Go)" },
     { "type": "theme", "key": "🎨 Rice", "format": "Midnight Evangelion" },
     { "type": "uptime", "key": "󰥔 Uptime" },
     { "type": "packages", "key": "󰏖 Packages" },

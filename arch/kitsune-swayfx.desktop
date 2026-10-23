@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=KitsuneDE + SwayFX (Anime Wayland)
+Comment=Escritorio Anime con SwayFX (blur, corner_radius, sombras) impulsado por Go
+Exec=/usr/bin/kitsune-sway-session swayfx
+Type=Application
+DesktopNames=sway;KitsuneDE

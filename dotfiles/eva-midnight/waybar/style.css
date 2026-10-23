@@ -1,4 +1,4 @@
-/* KitsuneDE Waybar CSS - Midnight Evangelion */
+/* KitsuneDE Waybar CSS (Sway / SwayFX / Hyprland) - Midnight Evangelion */
 * {
   font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace;
   font-size: 13px;
@@ -7,7 +7,7 @@
 }
 
 window#waybar {
-  background: rgba(15, 13, 28, 0.72);
+  background: rgba(15, 13, 28, 0.74);
   color: #f0fdf4;
   border-radius: 12px;
   border: 1px solid #39ff14;
@@ -30,13 +30,28 @@ window#waybar {
   background: #190e2c;
 }
 
+#workspaces button.focused,
 #workspaces button.active {
   color: #10081c;
   background: #39ff14;
   box-shadow: 0 0 12px #39ff14;
 }
 
-#clock, #cpu, #memory, #pulseaudio, #network, #custom-kitsune {
+#workspaces button.urgent {
+  background: #ff0055;
+  color: #ffffff;
+}
+
+#mode {
+  background: #ff9e00;
+  color: #10081c;
+  padding: 4px 10px;
+  margin: 4px 4px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+#window, #clock, #cpu, #memory, #pulseaudio, #network, #custom-swaync, #custom-kitsune {
   background: #190e2c;
   color: #f0fdf4;
   padding: 4px 12px;

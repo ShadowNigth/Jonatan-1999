@@ -1,0 +1,59 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 38,
+  "margin-top": 8,
+  "margin-left": 14,
+  "margin-right": 14,
+  "modules-left": ["custom/arch", "sway/workspaces", "sway/mode", "sway/window"],
+  "modules-center": ["clock"],
+  "modules-right": ["pulseaudio", "cpu", "memory", "network", "custom/swaync", "custom/kitsune"],
+  "custom/arch": {
+    "format": "󰣇  Kitsune Sway",
+    "on-click": "rofi -show drun",
+    "tooltip": false
+  },
+  "sway/workspaces": {
+    "disable-scroll": false,
+    "all-outputs": true,
+    "format": "{icon}",
+    "format-icons": {
+      "1": "一",
+      "2": "二",
+      "3": "三",
+      "4": "四",
+      "5": "五",
+      "urgent": "",
+      "focused": "狐",
+      "default": "○"
+    }
+  },
+  "sway/mode": {
+    "format": "󰩨  {}",
+    "tooltip": false
+  },
+  "sway/window": {
+    "max-length": 42,
+    "rewrite": {
+      "(.*) — Mozilla Firefox": "󰈹 $1",
+      "(.*) - nvim": " $1"
+    }
+  },
+  "clock": {
+    "format": "󰥔  {:%H:%M  •  %d/%m}",
+    "tooltip-format": "<big>{:%Y %B}</big>\n<tt>{calendar}</tt>"
+  },
+  "cpu": { "format": "󰻠 {usage}%" },
+  "memory": { "format": "󰍛 {percentage}%" },
+  "pulseaudio": { "format": "󰕾 {volume}%" },
+  "network": { "format-wifi": "󰤨 {essid}", "format-ethernet": "󰈀 ETH", "format-disconnected": "󰤭 Offline" },
+  "custom/swaync": {
+    "format": "🔔",
+    "on-click": "swaync-client -t -sw",
+    "tooltip": false
+  },
+  "custom/kitsune": {
+    "format": "狐 Rice",
+    "on-click": "kitsune-ctl theme next"
+  }
+}

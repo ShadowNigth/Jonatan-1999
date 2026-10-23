@@ -1,0 +1,23 @@
+# KitsuneDE Swaylock / Swaylock-Effects Anime Config - Crimson Shonen
+image=~/.config/kitsune-de/wallpapers/crimson-shonen.jpg
+scaling=fill
+font=JetBrainsMono Nerd Font
+font-size=24
+indicator-radius=110
+indicator-thickness=10
+
+inside-color=131118CC
+ring-color=ff1e42FF
+line-color=00000000
+key-hl-color=ff7b54FF
+bs-hl-color=ff1e42FF
+separator-color=00000000
+text-color=f8fafcFF
+
+inside-ver-color=131118CC
+ring-ver-color=ff7b54FF
+text-ver-color=f8fafcFF
+
+inside-wrong-color=131118CC
+ring-wrong-color=ff1e42FF
+text-wrong-color=f8fafcFF

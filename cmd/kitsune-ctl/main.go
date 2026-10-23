@@ -34,10 +34,22 @@ func main() {
 		}
 		fmt.Println(prettyJSON(resp))
 
+	case "compositor", "comp":
+		val := "toggle"
+		if len(args) >= 2 {
+			val = strings.ToLower(args[1])
+		}
+		resp, err := sendCtl(baseURL, "set_compositor", val, "")
+		if err != nil {
+			fatalErr(err)
+		}
+		fmt.Println("✓ Compositor actualizado:")
+		fmt.Println(prettyJSON(resp))
+
 	case "theme":
 		if len(args) < 2 || args[1] == "list" {
 			store := config.NewStore("")
-			fmt.Println("🦊 Temas Anime incluidos en KitsuneDE:")
+			fmt.Println("🦊 Temas Anime incluidos en KitsuneDE (Sway / SwayFX / Hyprland):")
 			for _, t := range store.Themes() {
 				fmt.Printf("  • %-16s  %-18s  %s\n", t.ID, t.JapaneseName, t.Name)
 			}
@@ -91,7 +103,7 @@ func main() {
 			fatalMsg("Uso: kitsune-ctl notify <mensaje>")
 		}
 		msg := strings.Join(args[1:], " ")
-		if _, err := sendCtl(baseURL, "notify", msg, "狐 Kitsune CLI"); err != nil {
+		if _, err := sendCtl(baseURL, "notify", msg, "狐 Kitsune SwayNC"); err != nil {
 			fatalErr(err)
 		}
 		fmt.Printf("✓ Notificación enviada: %s\n", msg)
@@ -106,14 +118,19 @@ func main() {
 		fmt.Printf("✓ Abriendo aplicación en escritorio: %s\n", args[1])
 
 	case "export":
-		// Offline-capable Arch Linux dotfiles generator!
 		themeID := "neon-tokyo"
-		outDir := "./dotfiles-arch"
+		compositor := "swayfx"
+		outDir := "./dotfiles-sway"
 		for i := 1; i < len(args); i++ {
 			switch args[i] {
 			case "--theme", "-t":
 				if i+1 < len(args) {
 					themeID = args[i+1]
+					i++
+				}
+			case "--compositor", "-c":
+				if i+1 < len(args) {
+					compositor = strings.ToLower(args[i+1])
 					i++
 				}
 			case "--out", "-o":
@@ -132,11 +149,16 @@ func main() {
 		if !ok {
 			fatalMsg("Tema desconocido: " + themeID)
 		}
-		written, err := ricer.ExportToDir(outDir, theme, store.Settings())
+		settings := store.Settings()
+		if compositor == "swayfx" || compositor == "sway" || compositor == "hyprland" {
+			settings.Compositor = compositor
+		}
+		written, err := ricer.ExportToDir(outDir, theme, settings)
 		if err != nil {
 			fatalErr(err)
 		}
-		fmt.Printf("✓ Exportados %d archivos de configuración Arch Linux (%s) en %s:\n", len(written), theme.Name, outDir)
+		fmt.Printf("✓ Exportados %d archivos de configuración Arch Linux [%s • %s] en %s:\n",
+			len(written), strings.ToUpper(settings.Compositor), theme.Name, outDir)
 		for _, f := range written {
 			fmt.Println("  •", f)
 		}
@@ -175,18 +197,17 @@ func prettyJSON(raw []byte) string {
 }
 
 func printUsage() {
-	fmt.Println(`🦊 kitsune-ctl — Controlador IPC y Generador de Rice Arch Linux (Go)
+	fmt.Println(`🦊 kitsune-ctl — Controlador IPC y Generador de Rice Sway / SwayFX / Arch Linux (Go)
 
 Uso:
-  kitsune-ctl status                              Estado actual del escritorio y telemetría
-  kitsune-ctl theme list                          Listar temas anime incluidos
-  kitsune-ctl theme set <id>                      Aplicar tema (neon-tokyo, sakura-lofi, crimson-shonen, eva-midnight)
-  kitsune-ctl theme next                          Cambiar al siguiente tema anime
-  kitsune-ctl layout <tiling|floating|monocle|toggle>
-  kitsune-ctl workspace <1..5>                    Cambiar al workspace indicado
+  kitsune-ctl status                                                Estado actual del escritorio y telemetría
+  kitsune-ctl compositor <swayfx|sway|hyprland|toggle>              Cambiar perfil de compositor activo
+  kitsune-ctl theme [list | next | set <id>]                        Gestionar temas anime incluidos
+  kitsune-ctl layout <tiling|tabbed|floating|monocle|toggle>        Cambiar modo de contenedores Sway
+  kitsune-ctl workspace <1..5>                                      Cambiar al workspace indicado
   kitsune-ctl open <terminal|sysmon|files|settings|music|pacman|nvim>
-  kitsune-ctl notify "<mensaje>"                  Mostrar notificación anime en pantalla
-  kitsune-ctl export [--theme <id>] [--out <dir>] Generar configs reales de Hyprland, Waybar, Kitty y Rofi`)
+  kitsune-ctl notify "<mensaje>"                                    Mostrar notificación anime estilo SwayNC
+  kitsune-ctl export [--compositor swayfx|sway] [--theme <id>] [--out <dir>]`)
 }
 
 func fatalErr(err error) {

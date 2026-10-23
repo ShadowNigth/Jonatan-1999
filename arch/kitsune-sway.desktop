@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=KitsuneDE + Sway (Anime Wayland)
+Comment=Escritorio Anime con Sway Wayland estándar impulsado por Go
+Exec=/usr/bin/kitsune-sway-session sway
+Type=Application
+DesktopNames=sway;KitsuneDE

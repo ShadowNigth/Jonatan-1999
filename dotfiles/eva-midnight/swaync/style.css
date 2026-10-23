@@ -1,0 +1,27 @@
+/* KitsuneDE SwayNC Anime Notification Theme - Midnight Evangelion */
+* {
+  font-family: "JetBrainsMono Nerd Font", sans-serif;
+}
+
+.notification-row .notification-background .notification {
+  background: #190e2c;
+  color: #f0fdf4;
+  border-radius: 12px;
+  border: 2px solid #39ff14;
+  padding: 10px;
+}
+
+.control-center {
+  background: #10081cEE;
+  color: #f0fdf4;
+  border-radius: 12px;
+  border: 2px solid #39ff14;
+  padding: 14px;
+}
+
+.widget-title > button {
+  background: #39ff14;
+  color: #10081c;
+  border-radius: 8px;
+  padding: 4px 10px;
+}

@@ -266,6 +266,9 @@
           w.el.classList.remove('focused');
         }
       });
+      if (this.layoutMode === 'tabbed') {
+        this.renderSwayTabbar();
+      }
       this.notifyChange();
     }
 
@@ -321,7 +324,9 @@
 
       const vis = this.visibleWindows();
       const tiled = [];
+      const tabbed = [];
       const floating = [];
+      const tabbar = document.getElementById('sway-tabbar');
 
       vis.forEach((w) => {
         const btnFloat = w.el.querySelector('.btn-float');
@@ -336,6 +341,12 @@
           this.applyRect(w, go, go, stageW - go * 2, stageH - go * 2);
           return;
         }
+        if (this.layoutMode === 'tabbed' && !w.isFloatingOverride) {
+          w.modeTagEl.textContent = 'SWAY TAB';
+          btnFloat.classList.remove('active-float');
+          tabbed.push(w);
+          return;
+        }
         if (this.isEffectivelyFloating(w)) {
           w.modeTagEl.textContent = 'FLOAT';
           btnFloat.classList.add('active-float');
@@ -346,6 +357,23 @@
           tiled.push(w);
         }
       });
+
+      if (tabbar) {
+        if (this.layoutMode === 'tabbed' && tabbed.length > 0) {
+          tabbar.classList.remove('hidden');
+          tabbar.style.left = `${go}px`;
+          tabbar.style.top = `${go}px`;
+          tabbar.style.width = `${Math.max(260, stageW - go * 2)}px`;
+          this.tabbedWindows = tabbed;
+          this.renderSwayTabbar();
+          tabbed.forEach((w) => {
+            this.applyRect(w, go, go + 34, Math.max(260, stageW - go * 2), Math.max(180, stageH - go * 2 - 34));
+          });
+        } else {
+          tabbar.classList.add('hidden');
+          this.tabbedWindows = [];
+        }
+      }
 
       // Layout Hyprland Tiled Windows
       const areaX = go;
@@ -393,6 +421,21 @@
         const fx = Math.max(8, Math.min(stageW - fw - 8, w.floatRect.x));
         const fy = Math.max(6, Math.min(stageH - fh - 6, w.floatRect.y));
         this.applyRect(w, fx, fy, fw, fh);
+      });
+    }
+
+    renderSwayTabbar() {
+      const tabbar = document.getElementById('sway-tabbar');
+      if (!tabbar || !this.tabbedWindows || !this.tabbedWindows.length) return;
+      tabbar.innerHTML = this.tabbedWindows.map((w) => `
+        <button class="sway-tab ${w.id === this.focusedId ? 'active' : ''}" data-tab-win="${w.id}">
+          ${w.icon} ${w.title}
+        </button>
+      `).join('');
+      tabbar.querySelectorAll('.sway-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          this.focus(btn.dataset.tabWin);
+        });
       });
     }
 

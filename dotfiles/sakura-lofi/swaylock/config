@@ -1,0 +1,23 @@
+# KitsuneDE Swaylock / Swaylock-Effects Anime Config - Sakura Catppuccin
+image=~/.config/kitsune-de/wallpapers/sakura-lofi.jpg
+scaling=fill
+font=JetBrainsMono Nerd Font
+font-size=24
+indicator-radius=110
+indicator-thickness=10
+
+inside-color=1e1e2eCC
+ring-color=f5c2e7FF
+line-color=00000000
+key-hl-color=cba6f7FF
+bs-hl-color=f38ba8FF
+separator-color=00000000
+text-color=cdd6f4FF
+
+inside-ver-color=1e1e2eCC
+ring-ver-color=cba6f7FF
+text-ver-color=cdd6f4FF
+
+inside-wrong-color=1e1e2eCC
+ring-wrong-color=f38ba8FF
+text-wrong-color=cdd6f4FF

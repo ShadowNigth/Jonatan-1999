@@ -1,0 +1,27 @@
+/* KitsuneDE SwayNC Anime Notification Theme - Sakura Catppuccin */
+* {
+  font-family: "JetBrainsMono Nerd Font", sans-serif;
+}
+
+.notification-row .notification-background .notification {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 12px;
+  border: 2px solid #f5c2e7;
+  padding: 10px;
+}
+
+.control-center {
+  background: #181825EE;
+  color: #cdd6f4;
+  border-radius: 12px;
+  border: 2px solid #f5c2e7;
+  padding: 14px;
+}
+
+.widget-title > button {
+  background: #f5c2e7;
+  color: #181825;
+  border-radius: 8px;
+  padding: 4px 10px;
+}

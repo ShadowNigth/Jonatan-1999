@@ -39,10 +39,16 @@ func main() {
 	workDirFlag := flag.String("workdir", wd, "Directorio raíz para el explorador de archivos y terminal")
 	cfgFlag := flag.String("config", defaultCfg, "Ruta del archivo JSON de estado persistente")
 	themeFlag := flag.String("theme", "", "Tema anime inicial opcional (neon-tokyo, sakura-lofi, crimson-shonen, eva-midnight)")
+	compFlag := flag.String("compositor", "", "Perfil de compositor inicial (swayfx, sway, hyprland)")
 	kioskFlag := flag.Bool("kiosk", false, "Lanzar sesión gráfica nativa en pantalla completa en Arch Linux (Wayland/X11)")
 	flag.Parse()
 
 	store := config.NewStore(*cfgFlag)
+	if *compFlag != "" {
+		if _, err := store.SetCompositor(strings.ToLower(*compFlag)); err != nil {
+			log.Printf("[aviso] %v", err)
+		}
+	}
 	if *themeFlag != "" {
 		if _, _, err := store.SetTheme(*themeFlag); err != nil {
 			log.Printf("[aviso] %v", err)
@@ -67,11 +73,12 @@ func main() {
 
 	theme := store.ActiveTheme()
 	fmt.Printf("\n╭──────────────────────────────────────────────────────────────╮\n")
-	fmt.Printf("│  🦊 KitsuneDE // Arch Linux Anime Desktop Engine (Go)        │\n")
+	fmt.Printf("│  🦊 KitsuneDE // Arch Linux Sway & SwayFX Anime Engine (Go)  │\n")
 	fmt.Printf("├──────────────────────────────────────────────────────────────┤\n")
 	fmt.Printf("│  Escuchando en : http://%s\n", *addrFlag)
+	fmt.Printf("│  Compositor    : %s\n", strings.ToUpper(store.Settings().Compositor))
 	fmt.Printf("│  Tema Activo   : %s (%s)\n", theme.Name, theme.JapaneseName)
-	fmt.Printf("│  Modo Ventanas : %s (Híbrido Tiling + Flotante)\n", strings.ToUpper(store.Settings().LayoutMode))
+	fmt.Printf("│  Modo Ventanas : %s (Tiling / Tabbed / Flotante)\n", strings.ToUpper(store.Settings().LayoutMode))
 	fmt.Printf("╰──────────────────────────────────────────────────────────────╯\n\n")
 
 	if *kioskFlag {

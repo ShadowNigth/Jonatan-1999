@@ -1,0 +1,27 @@
+/* KitsuneDE SwayNC Anime Notification Theme - Crimson Shonen */
+* {
+  font-family: "JetBrainsMono Nerd Font", sans-serif;
+}
+
+.notification-row .notification-background .notification {
+  background: #131118;
+  color: #f8fafc;
+  border-radius: 12px;
+  border: 2px solid #ff1e42;
+  padding: 10px;
+}
+
+.control-center {
+  background: #09090dEE;
+  color: #f8fafc;
+  border-radius: 12px;
+  border: 2px solid #ff1e42;
+  padding: 14px;
+}
+
+.widget-title > button {
+  background: #ff1e42;
+  color: #09090d;
+  border-radius: 8px;
+  padding: 4px 10px;
+}

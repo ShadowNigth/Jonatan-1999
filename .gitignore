@@ -6,9 +6,11 @@
 *.exe
 *.out
 
-# Exported dotfiles & runtime state
+# Scratch exports & runtime state
 /dotfiles-export/
 /dotfiles-arch/
+/dotfiles-sway/
+/dotfiles-sway-export/
 state.json
 
 # Arch makepkg build artifacts & scratch zips
@@ -16,4 +18,5 @@ state.json
 /arch/src/
 /arch/*.pkg.tar.*
 /*.zip
+!release/kitsune-de-sway-arch-linux.zip
 !release/kitsune-de-arch-linux.zip

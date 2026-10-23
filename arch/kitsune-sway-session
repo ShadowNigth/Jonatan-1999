@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Lanzador de sesión Wayland para KitsuneDE sobre Sway o SwayFX en Arch Linux
+# Detecta automáticamente si /usr/bin/sway corresponde a SwayFX o Sway estándar.
+# ==============================================================================
+set -euo pipefail
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=sway
+export XDG_SESSION_DESKTOP=sway
+export MOZ_ENABLE_WAYLAND=1
+export QT_QPA_PLATFORM="wayland;xcb"
+export SDL_VIDEODRIVER=wayland
+export _JAVA_AWT_WM_NONREPARENTING=1
+
+MODE="${1:-auto}"
+
+# Generar configs iniciales si el usuario aún no tiene ~/.config/sway
+if [[ ! -f "${HOME}/.config/sway/config" && -x /usr/bin/kitsune-ctl ]]; then
+  /usr/bin/kitsune-ctl export --compositor sway --theme neon-tokyo --out "${HOME}/.config" >/dev/null 2>&1 || true
+fi
+if [[ ! -f "${HOME}/.config/swayfx/config" && -x /usr/bin/kitsune-ctl ]]; then
+  /usr/bin/kitsune-ctl export --compositor swayfx --theme neon-tokyo --out "${HOME}/.config" >/dev/null 2>&1 || true
+fi
+
+if ! command -v sway >/dev/null 2>&1; then
+  exec /usr/bin/kitsune-session
+fi
+
+IS_FX=0
+if sway --version 2>/dev/null | grep -qi "fx"; then
+  IS_FX=1
+fi
+
+if [[ "${MODE}" == "swayfx" || ( "${MODE}" == "auto" && "${IS_FX}" -eq 1 ) ]]; then
+  if [[ "${IS_FX}" -eq 1 && -f "${HOME}/.config/swayfx/config" ]]; then
+    exec sway -c "${HOME}/.config/swayfx/config"
+  fi
+fi
+
+exec sway -c "${HOME}/.config/sway/config"

@@ -47,7 +47,7 @@
       this.wm.focus(this.wm.windows[0]?.id);
 
       document.body.classList.remove('booting');
-      this.pushToast('狐 Bienvenido a KitsuneDE', 'Escritorio Arch Linux Anime impulsado por Go');
+      this.pushToast('狐 KitsuneDE // Sway & SwayFX', 'Escritorio Arch Linux Anime impulsado por Go');
     }
 
     onTelemetry(fn) {
@@ -87,7 +87,10 @@
 
       document.body.classList.toggle('no-anim', !s.animationsEnabled);
       document.body.classList.toggle('glow-off', !s.borderGlow);
+      document.body.classList.toggle('comp-sway', s.compositor === 'sway');
 
+      const compEl = document.getElementById('wb-comp-label');
+      if (compEl) compEl.textContent = (s.compositor || 'swayfx').toUpperCase();
       document.getElementById('wb-layout-label').textContent = (s.layoutMode || 'tiling').toUpperCase();
       document.querySelectorAll('.ws-btn').forEach((btn) => {
         btn.classList.toggle('active', parseInt(btn.dataset.ws, 10) === s.activeWorkspace);
@@ -183,6 +186,18 @@
           this.saveSettings({ ...this.settings, activeWorkspace: ws });
         });
       });
+
+      // Compositor profile cycle button (SwayFX -> Sway -> Hyprland)
+      const compBtn = document.getElementById('btn-compositor');
+      if (compBtn) {
+        compBtn.addEventListener('click', () => {
+          fetch('/api/ctl', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set_compositor', value: 'toggle' }),
+          });
+        });
+      }
 
       // Layout toggle button
       document.getElementById('btn-layout').addEventListener('click', () => {
@@ -317,6 +332,10 @@
         } else if (e.key === 'Enter') {
           e.preventDefault();
           window.KitsuneApps.open('terminal', { multiInstance: true });
+        } else if (k === 'w') {
+          e.preventDefault();
+          const next = this.settings.layoutMode === 'tabbed' ? 'tiling' : 'tabbed';
+          this.saveSettings({ ...this.settings, layoutMode: next });
         } else if (k === 't') {
           e.preventDefault();
           document.getElementById('btn-layout').click();
@@ -349,13 +368,16 @@
       const query = q.trim().toLowerCase();
       const entries = [
         { label: '>_  Kitty Terminal (Nueva ventana)', sub: 'Alt+Enter', run: () => window.KitsuneApps.open('terminal', { multiInstance: true }) },
-        { label: '🎨  Kitsune Rice Studio & Temas Anime', sub: 'Personalizar WM', run: () => window.KitsuneApps.open('settings') },
-        { label: '⚙️  Exportar Dotfiles Hyprland / Waybar', sub: 'Generador Go', run: () => window.KitsuneApps.open('settings', { tab: 'dotfiles' }) },
+        { label: '🎨  Kitsune Rice Studio (Sway / SwayFX)', sub: 'Personalizar WM', run: () => window.KitsuneApps.open('settings') },
+        { label: '⚙️  Exportar Configs Sway & SwayFX', sub: 'Generador Go', run: () => window.KitsuneApps.open('settings', { tab: 'dotfiles' }) },
+        { label: '🗂️  Activar Modo Sway Tabbed (Pestañas)', sub: 'Alt+W', run: () => this.saveSettings({ ...this.settings, layoutMode: 'tabbed' }) },
+        { label: '✨  Perfil SwayFX (Blur + Corner Radius)', sub: 'Compositor', run: () => this.saveSettings({ ...this.settings, compositor: 'swayfx' }) },
+        { label: '▣   Perfil Sway Puro (Bordes Clásicos)', sub: 'Compositor', run: () => this.saveSettings({ ...this.settings, compositor: 'sway' }) },
         { label: '📊  Btop++ Monitor de Recursos Linux', sub: '/proc Go', run: () => window.KitsuneApps.open('sysmon') },
         { label: '📁  Yazi Explorador de Archivos', sub: 'Gestor Arch', run: () => window.KitsuneApps.open('files') },
         { label: '📝  Neovim Go Code Studio', sub: 'Editor IDE', run: () => window.KitsuneApps.open('nvim') },
         { label: '🎵  Kitsune Synth Radio (Lo-Fi Anime)', sub: 'WebAudio', run: () => window.KitsuneApps.open('music') },
-        { label: '📦  Pacman / AUR & Instalador Arch Linux', sub: 'PKGBUILD', run: () => window.KitsuneApps.open('pacman') },
+        { label: '📦  Pacman / AUR & Instalador Sway/SwayFX', sub: 'PKGBUILD', run: () => window.KitsuneApps.open('pacman') },
         ...this.themes.map((t) => ({
           label: `🌸  Tema: ${t.name}`,
           sub: t.japaneseName,

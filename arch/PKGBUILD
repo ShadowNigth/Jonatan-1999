@@ -1,20 +1,22 @@
 # Maintainer: KitsuneDE Contributors
 pkgname=kitsune-de
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
-pkgdesc="Entorno de escritorio híbrido Tiling/Flotante estilo Anime para Arch Linux escrito en Go"
+pkgdesc="Escritorio y suite de ricing estilo Anime para Sway, SwayFX y Arch Linux escrito en Go"
 arch=('x86_64' 'aarch64')
 url="https://github.com/ShadowNigth/Jonatan-1999"
 license=('MIT')
 depends=('glibc')
 makedepends=('go')
 optdepends=(
-  'cage: Compositor Wayland ligero para sesión Kiosk nativa en SDDM/Greetd'
-  'chromium: Motor gráfico para modo sesión de escritorio completa'
-  'hyprland: Compositor Wayland compatible con los dotfiles generados por kitsune-ctl'
-  'waybar: Barra superior compatible con los temas exportados'
-  'kitty: Emulador de terminal GPU compatible con las paletas anime'
-  'swww: Demonio de wallpapers animados en Wayland'
+  'sway: Compositor Wayland oficial compatible vía $SWAYSOCK'
+  'swayfx: Fork de Sway con corner_radius, blur, shadows y layer_effects (AUR)'
+  'waybar: Barra superior configurada con sway/workspaces y sway/mode'
+  'swaybg: Fondo de pantalla nativo para Sway y SwayFX'
+  'swww: Transiciones animadas de wallpapers en Wayland'
+  'autotiling: División automática espiral para contenedores de Sway/SwayFX'
+  'kitty: Emulador de terminal GPU con paletas anime'
+  'cage: Modo sesión Kiosk standalone opcional'
   'ttf-jetbrains-mono-nerd: Fuente recomendada con iconos Nerd Font'
 )
 source=()
@@ -31,6 +33,10 @@ package() {
   install -Dm755 "${srcdir}/kitsune-de" "${pkgdir}/usr/bin/kitsune-de"
   install -Dm755 "${srcdir}/kitsune-ctl" "${pkgdir}/usr/bin/kitsune-ctl"
   install -Dm755 "${startdir}/kitsune-session" "${pkgdir}/usr/bin/kitsune-session"
+  install -Dm755 "${startdir}/kitsune-sway-session" "${pkgdir}/usr/bin/kitsune-sway-session"
+
+  install -Dm644 "${startdir}/kitsune-swayfx.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-swayfx.desktop"
+  install -Dm644 "${startdir}/kitsune-sway.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-sway.desktop"
   install -Dm644 "${startdir}/kitsune-de.desktop" "${pkgdir}/usr/share/wayland-sessions/kitsune-de.desktop"
   install -Dm644 "${startdir}/kitsune-de-x11.desktop" "${pkgdir}/usr/share/xsessions/kitsune-de-x11.desktop"
 

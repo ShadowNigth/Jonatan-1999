@@ -112,17 +112,17 @@
             <div class="term-wrap">
               <div class="term-quickbar">
                 <button class="term-chip" data-cmd="fastfetch">fastfetch</button>
-                <button class="term-chip" data-cmd="kitsune-ctl theme next">kitsune-ctl theme next</button>
-                <button class="term-chip" data-cmd="kitsune-ctl layout toggle">layout toggle</button>
-                <button class="term-chip" data-cmd="pacman -Syu">pacman -Syu</button>
-                <button class="term-chip" data-cmd="kitsune-ctl export ./dotfiles-arch">export dotfiles</button>
-                <button class="term-chip" data-cmd="go version">go version</button>
-                <button class="term-chip" data-cmd="ls -la">ls -la</button>
+                <button class="term-chip" data-cmd="swaymsg -t get_version">swaymsg version</button>
+                <button class="term-chip" data-cmd="swaymsg layout tabbed">swaymsg tabbed</button>
+                <button class="term-chip" data-cmd="swaymsg corner_radius 18">corner_radius 18</button>
+                <button class="term-chip" data-cmd="kitsune-ctl theme next">theme next</button>
+                <button class="term-chip" data-cmd="kitsune-ctl compositor toggle">SwayFX/Sway</button>
+                <button class="term-chip" data-cmd="yay -S swayfx">yay -S swayfx</button>
               </div>
               <div class="term-output"></div>
               <form class="term-input-row">
                 <span class="term-prompt">󰣇 kitsune <span class="tp-cwd">~</span> ❯</span>
-                <input class="term-cmd-input" type="text" placeholder="Escribe un comando Linux o kitsune-ctl..." autocomplete="off" spellcheck="false" />
+                <input class="term-cmd-input" type="text" placeholder="Escribe un comando Linux, swaymsg o kitsune-ctl..." autocomplete="off" spellcheck="false" />
               </form>
             </div>
           `;
@@ -217,13 +217,13 @@
     // ==================== 2. RICE STUDIO & DOTFILES ====================
     openSettings(ctx, extra = {}) {
       let activeTab = extra.tab || 'themes';
-      let selectedDotfile = 'hypr/hyprland.conf';
+      let selectedDotfile = 'swayfx/config';
       let cachedBundle = null;
       let unsubState = null;
 
       return ctx.wm.createWindow({
         appId: 'settings',
-        title: 'Kitsune Rice Studio — Temas Anime & Hyprland Config (Go)',
+        title: 'Kitsune Rice Studio — Sway, SwayFX & Temas Anime (Go)',
         icon: '🎨',
         width: 780,
         height: 510,
@@ -238,8 +238,8 @@
             body.innerHTML = `
               <div class="studio-wrap">
                 <div class="studio-tabs">
-                  <button class="studio-tab ${activeTab === 'themes' ? 'active' : ''}" data-tab="themes">🌸 Temas Anime &amp; Hyprland</button>
-                  <button class="studio-tab ${activeTab === 'dotfiles' ? 'active' : ''}" data-tab="dotfiles">⚙️ Generador Dotfiles Arch (Go)</button>
+                  <button class="studio-tab ${activeTab === 'themes' ? 'active' : ''}" data-tab="themes">🌸 Temas Anime &amp; Sway/SwayFX</button>
+                  <button class="studio-tab ${activeTab === 'dotfiles' ? 'active' : ''}" data-tab="dotfiles">⚙️ Configs Sway / SwayFX (Go)</button>
                 </div>
                 <div class="studio-content" id="studio-pane"></div>
               </div>
@@ -295,13 +295,20 @@
                   </div>
                 </div>
 
+                <div class="toggle-row" style="margin-bottom:6px">
+                  <button class="pill-toggle ${(s.compositor || 'swayfx') === 'swayfx' ? 'on' : ''}" data-comp="swayfx">✨ SwayFX (Blur + Corner Radius)</button>
+                  <button class="pill-toggle ${s.compositor === 'sway' ? 'on' : ''}" data-comp="sway">▣ Sway Puro (Bordes Clásicos)</button>
+                  <button class="pill-toggle ${s.compositor === 'hyprland' ? 'on' : ''}" data-comp="hyprland">💧 Hyprland</button>
+                </div>
+
                 <div class="toggle-row">
-                  <button class="pill-toggle ${s.layoutMode === 'tiling' ? 'on' : ''}" data-layout="tiling">⊞ Hyprland Tiling</button>
-                  <button class="pill-toggle ${s.layoutMode === 'floating' ? 'on' : ''}" data-layout="floating">⧉ Ventanas Flotantes</button>
-                  <button class="pill-toggle ${s.layoutMode === 'monocle' ? 'on' : ''}" data-layout="monocle">▣ Modo Monocle</button>
+                  <button class="pill-toggle ${s.layoutMode === 'tiling' ? 'on' : ''}" data-layout="tiling">⊞ Sway Split Tiling</button>
+                  <button class="pill-toggle ${s.layoutMode === 'tabbed' ? 'on' : ''}" data-layout="tabbed">🗂️ Sway Tabbed (Alt+W)</button>
+                  <button class="pill-toggle ${s.layoutMode === 'floating' ? 'on' : ''}" data-layout="floating">⧉ Flotante</button>
+                  <button class="pill-toggle ${s.layoutMode === 'monocle' ? 'on' : ''}" data-layout="monocle">▣ Monocle</button>
                   <button class="pill-toggle ${s.particlesEnabled ? 'on' : ''}" id="tog-part">✨ Partículas Anime</button>
-                  <button class="pill-toggle ${s.blurEnabled ? 'on' : ''}" id="tog-blur">💧 Cristal Blur</button>
-                  <button class="pill-toggle ${s.borderGlow ? 'on' : ''}" id="tog-glow">🌟 Borde Neón</button>
+                  <button class="pill-toggle ${s.blurEnabled ? 'on' : ''}" id="tog-blur">💧 Blur</button>
+                  <button class="pill-toggle ${s.borderGlow ? 'on' : ''}" id="tog-glow">🌟 Sombras Neón</button>
                 </div>
               `;
 
@@ -330,6 +337,13 @@
               bindRange('#rng-rad', '#lbl-rad', 'borderRadius', 'px');
               bindRange('#rng-op', '#lbl-op', 'windowOpacity', '%');
 
+              pane.querySelectorAll('[data-comp]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                  await ctx.saveSettings({ ...ctx.settings, compositor: btn.dataset.comp });
+                  render();
+                });
+              });
+
               pane.querySelectorAll('[data-layout]').forEach((btn) => {
                 btn.addEventListener('click', async () => {
                   await ctx.saveSettings({ ...ctx.settings, layoutMode: btn.dataset.layout });
@@ -350,11 +364,25 @@
                 render();
               });
             } else {
-              pane.innerHTML = `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">Generando dotfiles desde el motor Go...</div>`;
-              const res = await fetch(`/api/ricer/preview?theme=${encodeURIComponent(s.activeTheme)}`);
+              pane.innerHTML = `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">Generando dotfiles Sway / SwayFX desde el motor Go...</div>`;
+              const comp = s.compositor || 'swayfx';
+              const res = await fetch(`/api/ricer/preview?theme=${encodeURIComponent(s.activeTheme)}&compositor=${encodeURIComponent(comp)}`);
               cachedBundle = await res.json();
               const files = cachedBundle.files || {};
-              const keys = Object.keys(files);
+              const preferredOrder = [
+                'swayfx/config',
+                'sway/config',
+                'sway/swayfx-effects.conf',
+                'waybar/config-sway.jsonc',
+                'waybar/style.css',
+                'swaylock/config',
+                'swaync/style.css',
+                'kitty/kitty.conf',
+                'rofi/config.rasi',
+                'fastfetch/config.jsonc',
+                'hypr/hyprland.conf',
+              ];
+              const keys = preferredOrder.filter((k) => files[k]);
               if (!files[selectedDotfile] && keys.length) selectedDotfile = keys[0];
 
               pane.innerHTML = `
@@ -366,7 +394,7 @@
                   </div>
                   <div style="display:flex;gap:6px">
                     <button class="dot-btn" id="btn-copy-dot">📋 Copiar</button>
-                    <button class="action-primary" id="btn-export-dot">⚡ Exportar a ./dotfiles-arch</button>
+                    <button class="action-primary" id="btn-export-dot">⚡ Exportar a ./dotfiles-sway</button>
                   </div>
                 </div>
                 <pre class="code-preview" id="dot-code">${escapeHTML(files[selectedDotfile] || '')}</pre>
@@ -388,7 +416,7 @@
                 await fetch('/api/ricer/export', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ themeId: s.activeTheme, outDir: 'dotfiles-arch' }),
+                  body: JSON.stringify({ themeId: s.activeTheme, compositor: comp, outDir: 'dotfiles-sway' }),
                 });
               });
             }
@@ -397,10 +425,12 @@
           render();
           let lastTheme = ctx.settings.activeTheme;
           let lastLayout = ctx.settings.layoutMode;
+          let lastComp = ctx.settings.compositor;
           unsubState = ctx.onStateUpdate((nextS) => {
-            if (nextS.activeTheme !== lastTheme || nextS.layoutMode !== lastLayout) {
+            if (nextS.activeTheme !== lastTheme || nextS.layoutMode !== lastLayout || nextS.compositor !== lastComp) {
               lastTheme = nextS.activeTheme;
               lastLayout = nextS.layoutMode;
+              lastComp = nextS.compositor;
               render();
             }
           });
@@ -590,10 +620,10 @@
           <div class="nvim-wrap">
             <div class="nvim-topbar">
               <div style="display:flex;gap:5px;flex-wrap:wrap">
-                <button class="dot-btn" data-open="cmd/kitsune-de/main.go">main.go</button>
-                <button class="dot-btn" data-open="internal/ricer/generator.go">generator.go</button>
+                <button class="dot-btn" data-open="internal/swayipc/client.go">swayipc/client.go</button>
+                <button class="dot-btn" data-open="internal/ricer/generator.go">ricer/generator.go</button>
+                <button class="dot-btn" data-open="INSTALAR_EN_ARCH.sh">INSTALAR_EN_ARCH.sh</button>
                 <button class="dot-btn" data-open="arch/PKGBUILD">PKGBUILD</button>
-                <button class="dot-btn" data-open="arch/install.sh">install.sh</button>
               </div>
               <button class="action-primary" id="btn-nvim-save">💾 Guardar (:w)</button>
             </div>
@@ -771,16 +801,16 @@
               <div class="pacman-wrap">
                 <div class="arch-banner-box">
                   <div style="font-family:var(--font-mono);font-size:12.5px;font-weight:800;color:var(--primary);margin-bottom:4px">
-                    󰣇 Instalar KitsuneDE en tu Arch Linux Real
+                    󰣇 Instalar KitsuneDE + Sway / SwayFX en Arch Linux
                   </div>
                   <div style="font-size:12px;color:var(--text-main);line-height:1.45;margin-bottom:8px">
-                    Este repositorio incluye <code>arch/PKGBUILD</code>, <code>arch/install.sh</code> y sesiones Wayland/X11 para SDDM/LightDM/Hyprland:
+                    Incluye soporte nativo para <strong>SwayFX</strong> (blur, corner_radius, layer_effects) y <strong>Sway</strong> estándar mediante <code>$SWAYSOCK</code> en Go:
                   </div>
                   <div style="display:flex;gap:6px;flex-wrap:wrap">
-                    <a class="action-primary" href="/download/kitsune-de-arch-linux.zip" download="kitsune-de-arch-linux.zip" style="text-decoration:none;display:inline-flex;align-items:center">⬇️ Descargar ZIP Listo para Instalar</a>
+                    <a class="action-primary" href="/download/kitsune-de-sway-arch-linux.zip" download="kitsune-de-sway-arch-linux.zip" style="text-decoration:none;display:inline-flex;align-items:center">⬇️ Descargar ZIP Sway/SwayFX Listo</a>
                     <button class="dot-btn" id="btn-view-install">📜 Ver INSTALAR_EN_ARCH.sh</button>
                     <button class="dot-btn" id="btn-view-pkgbuild">📦 Ver arch/PKGBUILD</button>
-                    <button class="dot-btn" id="btn-run-syu">⚡ Ejecutar pacman -Syu</button>
+                    <button class="dot-btn" id="btn-run-syu">⚡ yay -S swayfx</button>
                   </div>
                 </div>
 
@@ -820,7 +850,7 @@
               Apps.open('nvim', { filePath: 'arch/PKGBUILD' });
             });
             body.querySelector('#btn-run-syu').addEventListener('click', () => {
-              Apps.open('terminal', { multiInstance: true, initialCommand: 'pacman -Syu' });
+              Apps.open('terminal', { multiInstance: true, initialCommand: 'yay -S swayfx' });
             });
 
             body.querySelectorAll('[data-install]').forEach((btn) => {

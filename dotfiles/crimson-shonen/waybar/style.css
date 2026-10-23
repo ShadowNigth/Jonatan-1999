@@ -1,4 +1,4 @@
-/* KitsuneDE Waybar CSS - Crimson Shonen */
+/* KitsuneDE Waybar CSS (Sway / SwayFX / Hyprland) - Crimson Shonen */
 * {
   font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace;
   font-size: 13px;
@@ -7,7 +7,7 @@
 }
 
 window#waybar {
-  background: rgba(15, 13, 28, 0.72);
+  background: rgba(15, 13, 28, 0.74);
   color: #f8fafc;
   border-radius: 12px;
   border: 1px solid #ff1e42;
@@ -30,13 +30,28 @@ window#waybar {
   background: #131118;
 }
 
+#workspaces button.focused,
 #workspaces button.active {
   color: #09090d;
   background: #ff1e42;
   box-shadow: 0 0 12px #ff1e42;
 }
 
-#clock, #cpu, #memory, #pulseaudio, #network, #custom-kitsune {
+#workspaces button.urgent {
+  background: #ff1e42;
+  color: #ffffff;
+}
+
+#mode {
+  background: #ff7b54;
+  color: #09090d;
+  padding: 4px 10px;
+  margin: 4px 4px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+#window, #clock, #cpu, #memory, #pulseaudio, #network, #custom-swaync, #custom-kitsune {
   background: #131118;
   color: #f8fafc;
   padding: 4px 12px;

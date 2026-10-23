@@ -1,0 +1,173 @@
+# ============================================================================
+# 🦊 KitsuneDE // Configuración para Sway & SwayFX generada en Go
+# Tema Anime : Cyberpunk Neon Tokyo (ネオ東京 // 2099)
+# Perfil WM  : SWAYFX
+# ============================================================================
+
+set $mod Mod4
+set $left h
+set $down j
+set $up k
+set $right l
+set $term kitty
+set $menu rofi -show drun
+
+# Fuente global para títulos y barras de pestañas (Tabbed/Stacked)
+font pango:JetBrainsMono Nerd Font SemiBold 10
+
+# Fondo de pantalla Anime (soporta swaybg nativo o swww animado)
+output * bg ~/.config/kitsune-de/wallpapers/neon-tokyo.jpg fill
+exec_once swww-daemon
+exec swww img ~/.config/kitsune-de/wallpapers/neon-tokyo.jpg --transition-type grow --transition-fps 60
+
+# Demonios del entorno KitsuneDE + Waybar + SwayNC + Autotiling
+exec waybar -c ~/.config/waybar/config-sway.jsonc -s ~/.config/waybar/style.css
+exec swaync
+exec autotiling
+exec kitsune-de --addr 127.0.0.1:8080
+
+# Configuración de teclado e input (Español Latam / Inglés + Touchpad natural)
+input "type:keyboard" {
+    xkb_layout "latam,us"
+    xkb_options "grp:alt_shift_toggle"
+    repeat_delay 260
+    repeat_rate 38
+}
+
+input "type:touchpad" {
+    tap enabled
+    natural_scroll enabled
+    dwt enabled
+}
+
+# Gaps y Bordes estilo Anime
+gaps inner 8
+gaps outer 14
+default_border pixel 2
+default_floating_border pixel 2
+hide_edge_borders none
+smart_gaps off
+
+# Paleta de Colores de Ventanas (border | background | text | indicator | child_border)
+client.focused          #00f0ff #131026 #eef6ff #ff2a85 #00f0ff
+client.focused_inactive #1e1938 #0b0916 #8f9bb8 #1e1938 #1e1938
+client.unfocused        #1e1938 #0b0916 #8f9bb8 #1e1938 #1e1938
+client.urgent           #ff2a6d #131026 #eef6ff #ff2a6d #ff2a6d
+
+# Reglas para ventanas flotantes comunes
+for_window [app_id="pavucontrol"] floating enable, resize set 720 480
+for_window [app_id="blueman-manager"] floating enable
+for_window [window_role="pop-up"] floating enable
+for_window [window_role="dialog"] floating enable
+for_window [app_id="kitty"] opacity 0.90
+
+# ── Atajos Principales ($mod = Super) ────────────────────────────────────────
+bindsym $mod+Return exec $term
+bindsym $mod+q kill
+bindsym $mod+space exec $menu
+bindsym $mod+d exec $menu
+bindsym $mod+e exec kitty -e yazi
+bindsym $mod+n exec swaync-client -t -sw
+bindsym $mod+x exec swaylock -C ~/.config/swaylock/config
+bindsym $mod+t exec kitsune-ctl theme next
+bindsym $mod+Shift+d exec kitsune-de --kiosk
+
+floating_modifier $mod normal
+bindsym $mod+Shift+c reload
+bindsym $mod+Shift+e exec swaynag -t warning -m '¿Salir de KitsuneDE Sway/SwayFX?' -B 'Cerrar sesión' 'swaymsg exit'
+
+# ── Navegación y Movimiento de Contenedores ──────────────────────────────────
+bindsym $mod+$left focus left
+bindsym $mod+$down focus down
+bindsym $mod+$up focus up
+bindsym $mod+$right focus right
+bindsym $mod+Left focus left
+bindsym $mod+Down focus down
+bindsym $mod+Up focus up
+bindsym $mod+Right focus right
+
+bindsym $mod+Shift+$left move left
+bindsym $mod+Shift+$down move down
+bindsym $mod+Shift+$up move up
+bindsym $mod+Shift+$right move right
+bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Down move down
+bindsym $mod+Shift+Up move up
+bindsym $mod+Shift+Right move right
+
+# ── Espacios de Trabajo Kanji (1..5) ─────────────────────────────────────────
+set $ws1 "1"
+set $ws2 "2"
+set $ws3 "3"
+set $ws4 "4"
+set $ws5 "5"
+
+bindsym $mod+1 workspace number $ws1
+bindsym $mod+2 workspace number $ws2
+bindsym $mod+3 workspace number $ws3
+bindsym $mod+4 workspace number $ws4
+bindsym $mod+5 workspace number $ws5
+
+bindsym $mod+Shift+1 move container to workspace number $ws1
+bindsym $mod+Shift+2 move container to workspace number $ws2
+bindsym $mod+Shift+3 move container to workspace number $ws3
+bindsym $mod+Shift+4 move container to workspace number $ws4
+bindsym $mod+Shift+5 move container to workspace number $ws5
+
+# ── Modos de Layout de Sway (Split / Stacking / Tabbed / Floating) ──────────
+bindsym $mod+b splith
+bindsym $mod+v splitv
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+a layout toggle split
+bindsym $mod+f fullscreen
+bindsym $mod+Shift+space floating toggle
+bindsym $mod+Ctrl+space focus mode_toggle
+
+# Scratchpad rápido (Terminal flotante oculta)
+bindsym $mod+Shift+minus move scratchpad
+bindsym $mod+minus scratchpad show
+
+# Modo Redimensionar (Super+R)
+mode "resize" {
+    bindsym $left resize shrink width 20px
+    bindsym $down resize grow height 20px
+    bindsym $up resize shrink height 20px
+    bindsym $right resize grow width 20px
+    bindsym Left resize shrink width 20px
+    bindsym Down resize grow height 20px
+    bindsym Up resize shrink height 20px
+    bindsym Right resize grow width 20px
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
+bindsym $mod+r mode "resize"
+
+# Inclusión de efectos SwayFX (si se instaló con perfil SwayFX)
+# ── Efectos Exclusivos de SwayFX ( Anime Eye-Candy ) ─────────────────────────
+corner_radius 12
+smart_corner_radius off
+
+blur enable
+blur_xray disable
+blur_passes 3
+blur_radius 6
+blur_noise 0.02
+blur_brightness 0.95
+blur_contrast 1.05
+blur_saturation 1.15
+
+shadows enable
+shadows_on_csd enable
+shadow_blur_radius 22
+shadow_color #00f0ff66
+shadow_inactive_color #0b091688
+
+default_dim_inactive 0.10
+dim_inactive_colors.unfocused #0b0916AA
+dim_inactive_colors.urgent #ff2a6dAA
+
+layer_effects "waybar" "blur enable; shadows enable; corner_radius 12"
+layer_effects "rofi" "blur enable; shadows enable; corner_radius 12"
+layer_effects "notifications" "blur enable; corner_radius 12"
+

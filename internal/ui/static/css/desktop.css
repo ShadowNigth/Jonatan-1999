@@ -1619,3 +1619,68 @@ body.glow-off .kitsune-window.focused {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary);
 }
+
+/* ==================== SWAY & SWAYFX COMPOSITOR STYLES ==================== */
+.wb-comp {
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+  color: var(--primary);
+}
+
+/* Pure Sway profile: crisp 0px corners & no glass blur (classic wlroots Sway) */
+body.comp-sway .kitsune-window,
+body.comp-sway .waybar,
+body.comp-sway .rofi-modal,
+body.comp-sway .swaync-drawer {
+  border-radius: 0px !important;
+  backdrop-filter: none !important;
+}
+
+/* Sway Tabbed Container Header Bar (layout tabbed / Alt+W) */
+.sway-tabbar {
+  position: absolute;
+  z-index: 95;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 30px;
+  padding: 2px;
+  border-radius: calc(var(--border-radius) * 0.7);
+  background: color-mix(in srgb, var(--bg-base) 88%, transparent);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, rgba(255,255,255,0.1));
+}
+
+body.comp-sway .sway-tabbar,
+body.comp-sway .sway-tab {
+  border-radius: 0px !important;
+}
+
+.sway-tab {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-radius: calc(var(--border-radius) * 0.5);
+  background: color-mix(in srgb, var(--bg-surface) 80%, transparent);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 0 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.sway-tab:hover {
+  color: var(--text-main);
+}
+
+.sway-tab.active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 32%, var(--bg-surface)), var(--bg-surface));
+  color: var(--text-main);
+  border-bottom: 2px solid var(--primary);
+}
+
