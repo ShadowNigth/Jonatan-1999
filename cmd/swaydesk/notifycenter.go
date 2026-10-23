@@ -73,7 +73,15 @@ func (c *notifyCenter) reload() error {
 	if st, err := c.client.Status(); err == nil {
 		dnd = st.DND
 	}
-	c.model = notify.NewCenter(live, history, dnd)
+	model := notify.NewCenter(live, history, dnd)
+	if c.model != nil {
+		// Se conserva el modo de agrupación y qué pilas estaban abiertas.
+		model.SetGrouped(c.model.Grouped())
+		for _, key := range c.model.OpenKeys() {
+			model.Expand(key)
+		}
+	}
+	c.model = model
 	c.model.SetQuery(query)
 	c.model.Select(sel)
 	c.now = time.Now()
@@ -99,6 +107,15 @@ func (c *notifyCenter) handle(k ui.Key) bool {
 		c.model.Backspace()
 	case k.Name == "enter":
 		c.act()
+	case k.Name == "tab" || k.Name == "space" || k.IsRune('o'):
+		c.toggleGroup()
+	case k.IsRune('g'):
+		on := c.model.ToggleGrouped()
+		if on {
+			c.flash("agrupado por aplicación", false)
+		} else {
+			c.flash("lista sin agrupar", false)
+		}
 	case k.IsRune('x'):
 		c.dismiss()
 	case k.IsRune('r'):
@@ -121,13 +138,19 @@ func (c *notifyCenter) handle(k ui.Key) bool {
 	return false
 }
 
-// act ejecuta la acción principal de la entrada seleccionada: responder si
-// admite respuesta, cerrarla si sigue viva, y nada en el historial.
+// act ejecuta la acción principal de la fila seleccionada: en un grupo,
+// despliega o pliega la pila; en una notificación, responde si admite
+// respuesta, la cierra si sigue viva, y nada en el historial.
 func (c *notifyCenter) act() {
-	e, ok := c.model.Selected()
+	row, ok := c.model.SelectedRow()
 	if !ok {
 		return
 	}
+	if row.Group {
+		c.toggleGroup()
+		return
+	}
+	e := row.Entry
 	switch {
 	case e.Live && e.InlineReply:
 		c.reply()
@@ -138,29 +161,61 @@ func (c *notifyCenter) act() {
 	}
 }
 
+// toggleGroup despliega o pliega la pila seleccionada.
+func (c *notifyCenter) toggleGroup() {
+	row, ok := c.model.ToggleSelected()
+	if !ok {
+		c.flash("esta notificación no forma parte de un grupo", true)
+		return
+	}
+	if c.model.Expanded(row.Key) {
+		c.flash(fmt.Sprintf("%s desplegado", notify.Shorten(row.Entry.App, 20)), false)
+	} else {
+		c.flash("pila plegada", false)
+	}
+}
+
+// dismiss cierra la fila seleccionada: una notificación suelta o la pila
+// entera cuando es un grupo.
 func (c *notifyCenter) dismiss() {
-	e, ok := c.model.Selected()
+	row, ok := c.model.SelectedRow()
 	if !ok {
 		return
 	}
-	if !e.Live {
-		c.flash("ya estaba cerrada", true)
+	ids := row.IDs()
+	closed := 0
+	var lastErr error
+	for _, id := range ids {
+		if _, err := c.client.Dismiss(id); err != nil {
+			lastErr = err
+			continue
+		}
+		closed++
+	}
+	if closed == 0 {
+		if lastErr != nil {
+			c.flash(lastErr.Error(), true)
+		} else {
+			c.flash("ya estaba cerrada", true)
+		}
 		return
 	}
-	if _, err := c.client.Dismiss(e.ID); err != nil {
-		c.flash(err.Error(), true)
-		return
+	if closed == 1 {
+		c.flash("cerrada: "+notify.Shorten(row.Entry.Summary, 40), false)
+	} else {
+		c.flash(fmt.Sprintf("%d notificaciones cerradas", closed), false)
 	}
-	c.flash("cerrada: "+notify.Shorten(e.Summary, 40), false)
+	c.model.Collapse(row.Key)
 	_ = c.reload()
 }
 
 // reply abre el diálogo de respuesta en una terminal flotante y recarga.
 func (c *notifyCenter) reply() {
-	e, ok := c.model.Selected()
+	row, ok := c.model.SelectedRow()
 	if !ok {
 		return
 	}
+	e := row.Newest()
 	if !e.InlineReply {
 		c.flash("esa notificación no admite respuesta", true)
 		return
@@ -237,10 +292,24 @@ func (c *notifyCenter) frame(w, h int) string {
 
 	// Cabecera: título + resumen del estado.
 	title := " notificaciones "
-	cabecera := ui.Style{Fg: pal.Accent, Bg: pal.Bg}.B().Render(" centro de notificaciones")
-	resumen := ui.Style{Fg: pal.Muted, Bg: pal.Bg}.Render(" · " + c.model.Summary())
-	if c.model.DND() {
-		resumen += ui.Style{Fg: pal.Warn, Bg: pal.Bg}.Render(" · no molestar")
+	titulo := ui.Style{Fg: pal.Accent, Bg: pal.Bg}.B().Render(" centro de notificaciones")
+	cabecera := titulo
+	resto := innerW - ui.Width(titulo)
+	if resto > 8 {
+		texto := c.model.Summary()
+		extra := ""
+		if c.model.Grouped() {
+			extra += " · agrupado"
+		}
+		if c.model.DND() {
+			extra += " · no molestar"
+		}
+		texto = " · " + ui.Truncate(texto+extra, resto-6)
+		col := pal.Muted
+		if c.model.DND() {
+			col = pal.Warn
+		}
+		cabecera += ui.Style{Fg: col, Bg: pal.Bg}.Render(texto)
 	}
 
 	// Alto disponible: marco(2) + cabecera(2) + filtro(1) + pistas(1).
@@ -248,7 +317,7 @@ func (c *notifyCenter) frame(w, h int) string {
 	if listH < 1 {
 		listH = 1
 	}
-	entries := c.model.Filtered()
+	rows := c.model.Rows()
 	sel := c.model.Index()
 
 	// Ventana de la lista centrada en la selección.
@@ -256,16 +325,16 @@ func (c *notifyCenter) frame(w, h int) string {
 	if sel >= listH {
 		offset = sel - listH + 1
 	}
-	if extra := len(entries) - listH; offset > extra {
+	if extra := len(rows) - listH; offset > extra {
 		offset = extra
 	}
 	if offset < 0 {
 		offset = 0
 	}
 
-	body := []string{fit(cabecera + resumen), ""}
+	body := []string{fit(cabecera), ""}
 
-	if len(entries) == 0 {
+	if len(rows) == 0 {
 		msg := "no hay notificaciones"
 		switch {
 		case c.model.Len() > 0:
@@ -275,8 +344,8 @@ func (c *notifyCenter) frame(w, h int) string {
 		}
 		body = append(body, ui.Style{Fg: pal.Muted, Bg: pal.Bg}.Render("  "+msg))
 	} else {
-		for i := offset; i < len(entries) && i < offset+listH; i++ {
-			body = append(body, c.row(entries[i], i == sel, innerW))
+		for i := offset; i < len(rows) && i < offset+listH; i++ {
+			body = append(body, c.rowLine(rows[i], i == sel, innerW))
 		}
 	}
 
@@ -286,7 +355,7 @@ func (c *notifyCenter) frame(w, h int) string {
 		filtro += ui.Style{Fg: pal.Muted, Bg: pal.Bg}.Render("escribe para filtrar")
 	} else {
 		filtro += ui.Style{Fg: pal.Fg, Bg: pal.Bg}.Render(c.model.Query())
-		contador := ui.Style{Fg: pal.Muted, Bg: pal.Bg}.Render(fmt.Sprintf("  %d/%d", len(entries), c.model.Len()))
+		contador := ui.Style{Fg: pal.Muted, Bg: pal.Bg}.Render(fmt.Sprintf("  %d/%d", len(rows), c.model.Len()))
 		filtro += contador
 	}
 	// El filtro y las pistas van pegados al borde inferior.
@@ -304,14 +373,33 @@ func (c *notifyCenter) frame(w, h int) string {
 		}
 		footer = ui.Style{Fg: col, Bg: pal.Bg}.Render(c.status)
 	}
-	hints := t.HintBar(
+	// Las pistas se van quitando de la menos importante a la última si no
+	// caben, empezando por las de la derecha.
+	todas := [][2]string{
 		[2]string{"↑↓", "mover"},
-		[2]string{"Enter", "actuar"},
+		[2]string{"Enter", "abrir/actuar"},
+		[2]string{"g", "agrupar"},
 		[2]string{"r", "responder"},
 		[2]string{"x", "cerrar"},
 		[2]string{"m", "dnd"},
 		[2]string{"Esc", "salir"},
-	)
+	}
+	// Orden de sacrificio: primero las de uso menos frecuente; «mover»,
+	// «cerrar» y «salir» se quedan hasta el final.
+	sacrificio := []string{"responder", "agrupar", "dnd", "abrir/actuar"}
+	hints := t.HintBar(todas...)
+	for _, quitar := range sacrificio {
+		if ui.Width(hints) <= innerW {
+			break
+		}
+		for i, h := range todas {
+			if h[1] == quitar {
+				todas = append(todas[:i], todas[i+1:]...)
+				break
+			}
+		}
+		hints = t.HintBar(todas...)
+	}
 	anchoHints := ui.Width(hints)
 	if c.status == "" || anchoHints+ui.Width(c.status)+3 > innerW {
 		body = append(body, fit(hints))
@@ -325,8 +413,9 @@ func (c *notifyCenter) frame(w, h int) string {
 	return t.Frame(w, h, title, "", body)
 }
 
-// row dibuja una entrada del listado: marca, hora, título y insignias.
-func (c *notifyCenter) row(e notify.Entry, selected bool, w int) string {
+// rowLine dibuja una fila del listado: una notificación, una pila plegada o la
+// franja de un grupo desplegado.
+func (c *notifyCenter) rowLine(row notify.Row, selected bool, w int) string {
 	t := c.theme
 	pal := t.Palette
 	fg, bgc := pal.Fg, pal.Bg
@@ -335,10 +424,15 @@ func (c *notifyCenter) row(e notify.Entry, selected bool, w int) string {
 		fg, bgc, muted = pal.Bg, pal.BgSel, pal.Bg
 	}
 	sty := func(col ui.Color) ui.Style { return ui.Style{Fg: col, Bg: bgc} }
+	e := row.Entry
 
-	// Marca de urgencia: ! crítica, · baja, • viva, espacio si ya cerró.
+	// Marca: ▾ franja de grupo, ▸ pila plegada, ! crítica, · baja, • viva.
 	dot, dotCol := " ", pal.Accent
 	switch {
+	case row.Header:
+		dot, dotCol = "v", pal.Accent2
+	case row.Group:
+		dot, dotCol = ">", pal.Accent2
 	case e.Urgency == notify.Critical:
 		dot, dotCol = "!", pal.Err
 	case e.Urgency == notify.Low:
@@ -355,8 +449,7 @@ func (c *notifyCenter) row(e notify.Entry, selected bool, w int) string {
 		hora = e.ClosedAt.Local().Format("02/01 15:04")
 	}
 
-	// Insignias: solo las que quepan; primero se recorta el título.
-	badges := e.Badges()
+	badges := row.Badges()
 	badgeTxt := ""
 	if len(badges) > 0 {
 		badgeTxt = " " + strings.Join(badges, " ")
@@ -367,7 +460,6 @@ func (c *notifyCenter) row(e notify.Entry, selected bool, w int) string {
 	}
 	resto := w - 2 - len(hora) - 1 - ui.Width(badgeTxt) - 1
 	if resto < 12 {
-		// Sin sitio para insignias: se sacrifican antes que el título.
 		badgeTxt = ""
 		resto = w - 2 - len(hora) - 1
 	}
@@ -375,10 +467,18 @@ func (c *notifyCenter) row(e notify.Entry, selected bool, w int) string {
 		resto = 8
 	}
 
+	title := row.Title()
+	indent := ""
+	if row.Count > 1 && !row.Header && c.model.Grouped() && c.model.Expanded(row.Key) {
+		// Las notificaciones de un grupo desplegado van sangradas.
+		indent = "  "
+		title = "· " + title
+	}
+
 	var b strings.Builder
 	b.WriteString(sty(dotCol).Render(dot + " "))
 	b.WriteString(sty(muted).Render(hora + " "))
-	b.WriteString(sty(fg).Render(ui.PadRight(ui.Truncate(e.Title(), resto), resto)))
+	b.WriteString(sty(fg).Render(ui.PadRight(indent+ui.Truncate(title, resto-ui.Width(indent)), resto)))
 	if badgeTxt != "" {
 		col := pal.Accent2
 		if selected {

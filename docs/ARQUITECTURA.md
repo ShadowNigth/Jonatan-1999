@@ -55,8 +55,11 @@ internal/osd     avisos en pantalla (OSD)
                  con alfa variable para los fundidos
 internal/notify  notificaciones de escritorio
   notify.go      modelo, caducidad, modo «no molestar» e historial en JSON
-  render.go      tarjetas en píxeles: urgencias, acciones, progreso y cuenta atrás
-  center.go      modelo del centro: filtro sin acentos, orden y selección
+  render.go      tarjetas en píxeles: urgencias, acciones, progreso, cuenta
+                 atrás, pilas plegadas con capas y franjas de grupo
+  center.go      modelo del centro: filtro sin acentos, orden, pilas y selección
+  group.go       agrupación por aplicación o etiqueta de pila, recorte por
+                 grupos y estado de plegado
   service.go     servidor y cliente de org.freedesktop.Notifications
 internal/dbus    cliente y servidor D-Bus en Go puro
   message.go     formato binario: firmas, alineación, arrays, variantes, dicts
@@ -156,6 +159,10 @@ app (Chromium, pacman…)              swaynotify
 - **Repintado por eventos**: el servicio avisa al bucle con un canal cuando
   cambia el estado; el bucle solo redibuja si cambia el resumen del contenido
   (y una vez por segundo por la cuenta atrás).
+- **Pilas y clics**: el renderizador devuelve por cada tarjeta qué
+  notificaciones representa (`IDs`), si resume una pila plegada y si la franja
+  de un grupo está abierta; el daemon usa eso para decidir entre cerrar,
+  plegar, desplegar o cerrar el grupo entero con el botón derecho.
 - **Superficie ajustada al contenido**: cuando hay más o menos tarjetas se pide
   un tamaño nuevo al compositor y se espera su confirmación; mientras tanto no
   se pinta, para no estirar las tarjetas.
@@ -290,6 +297,12 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
   formato (arrays de cadenas y bytes, estructuras, diccionarios con variantes),
   validación de firmas, y un autobús de pruebas sobre socket UNIX que verifica
   el saludo, las llamadas, los errores y las respuestas.
+- **`internal/notify`** — la agrupación: clave por aplicación o etiqueta de
+  pila (normalizada, así `Marta` y `marta` son la misma), orden de los grupos,
+  vista previa del plegado, recorte de `max_visible` contando grupos completos,
+  plegado y despliegue sin perder la selección, y las marcas que devuelve el
+  dibujo (`Collapsed`, `Header`, `IDs`) para que el daemon sepa si un clic debe
+  cerrar una tarjeta, plegar una pila o abrirla.
 - **`internal/notify`** — el modelo del centro (vivas primero, sin duplicar lo
   que ya está en pantalla, filtro que ignora mayúsculas y acentos, selección y
   recuento por urgencia), el saneado de respuestas (`SanitizeReply`: una línea,

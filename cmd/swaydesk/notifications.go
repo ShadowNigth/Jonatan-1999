@@ -281,13 +281,16 @@ func notifyTest(cfg *config.Config) {
 	// una descarga con progreso, para ver de un vistazo todo lo que dibuja el
 	// daemon.
 	now := time.Now()
-	_ = notifySend(notify.Notification{
-		App: "Chat de prueba", Summary: "Marta", Sender: "Marta",
-		Body: "¿Comemos a las dos?", Urgency: notify.Normal, Progress: -1,
-		InlineReply: true, ReplyPlaceholder: "Responder a Marta…",
-		Actions: []notify.Action{{Key: "inline-reply", Label: "Responder"}},
-		Icon:    "mail-unread", Timeout: 20000,
-	})
+	// Tres mensajes con la misma etiqueta de pila: se apilan en una tarjeta.
+	for i, texto := range []string{"¿Quedamos el sábado?", "Traigo el postre", "¿Comemos a las dos?"} {
+		_ = notifySend(notify.Notification{
+			App: "Chat de prueba", GroupID: "chat-marta", Summary: "Marta", Sender: "Marta",
+			Body: texto, Urgency: notify.Normal, Progress: -1, Created: now.Add(time.Duration(i) * time.Second),
+			InlineReply: i == 2, ReplyPlaceholder: "Responder a Marta…",
+			Icon:    "mail-unread",
+			Timeout: -1,
+		})
+	}
 	_ = notifySend(notify.Notification{
 		App: "swaydesk", Summary: "Descarga completada",
 		Body: "archlinux-2026.10.01-x86_64.iso", Urgency: notify.Low,

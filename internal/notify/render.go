@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -40,7 +41,27 @@ type Card struct {
 	Notification Notification
 	Rect         Rect
 	Buttons      []Button
+
+	// GroupKey identifica el grupo de la tarjeta ("" si no pertenece a uno).
+	GroupKey string
+	// GroupCount es cuántas notificaciones tiene el grupo.
+	GroupCount int
+	// Collapsed marca la tarjeta que resume un grupo plegado.
+	Collapsed bool
+	// Header marca la franja de un grupo desplegado.
+	Header bool
+	// Toggle indica que un clic en la tarjeta pliega o despliega el grupo.
+	Toggle bool
+	// IDs son las notificaciones que representa la tarjeta (el grupo entero en
+	// la cabecera y en la pila plegada).
+	IDs []uint32
 }
+
+// GroupExpandAction es la clave del botón que despliega una pila.
+const GroupExpandAction = "group-expand"
+
+// GroupCollapseAction es la clave del botón que pliega un grupo abierto.
+const GroupCollapseAction = "group-collapse"
 
 // Renderer dibuja notificaciones como tarjetas apiladas.
 type Renderer struct {
@@ -137,17 +158,145 @@ func urgencyColor(u Urgency, muted, accent, err, warn bar.RGBA) bar.RGBA {
 
 // Measure devuelve el alto total que ocuparían las tarjetas dadas.
 func (r *Renderer) Measure(items []Notification, now time.Time) int {
-	h := 0
-	for i := range items {
-		h += r.cardHeight(&items[i], now)
-		if i > 0 {
-			h += r.Opt.Gap
-		}
+	views := make([]GroupView, 0, len(items))
+	for _, n := range items {
+		views = append(views, GroupView{Key: GroupKey(n), Items: []Notification{n}})
 	}
-	return h
+	return r.MeasureGroups(views, now)
 }
 
-// cardHeight calcula el alto de una tarjeta.
+// GroupView es un grupo tal como se quiere dibujar: sus notificaciones (la más
+// reciente primero) y si está desplegado.
+type GroupView struct {
+	Key      string
+	Items    []Notification
+	Expanded bool
+}
+
+// Views construye las vistas a partir de la lista plana de notificaciones y
+// del estado de plegado. Con stack nil todos los grupos van plegados.
+func Views(items []Notification, stack *Stack) []GroupView {
+	groups := GroupAll(items)
+	out := make([]GroupView, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, GroupView{Key: g.Key, Items: g.Items, Expanded: stack.Expanded(g.Key)})
+	}
+	return out
+}
+
+// layoutEntry es una tarjeta en la lista de dibujo.
+type layoutEntry struct {
+	n      Notification
+	group  Card // metadatos de agrupación (sin rect)
+	layers int  // capas de pila detrás de la tarjeta
+	header bool // franja de un grupo desplegado
+	app    string
+}
+
+// entry cuenta las notificaciones del grupo (para las insignias).
+func (r *Renderer) build(views []GroupView) []layoutEntry {
+	var out []layoutEntry
+	for _, v := range views {
+		if len(v.Items) == 0 {
+			continue
+		}
+		key := v.Key
+		if key == "" {
+			key = GroupKey(v.Items[0])
+		}
+		ids := make([]uint32, 0, len(v.Items))
+		for _, n := range v.Items {
+			ids = append(ids, n.ID)
+		}
+		if len(v.Items) == 1 {
+			n := v.Items[0]
+			out = append(out, layoutEntry{
+				n:     n,
+				app:   appLabel(n),
+				group: Card{GroupKey: key, GroupCount: 1, IDs: ids},
+			})
+			continue
+		}
+		if v.Expanded {
+			out = append(out, layoutEntry{
+				header: true,
+				group:  Card{GroupKey: key, GroupCount: len(v.Items), Header: true, Toggle: true, IDs: ids},
+				app:    groupApp(v.Items),
+			})
+			for _, n := range v.Items {
+				out = append(out, layoutEntry{
+					n:     n,
+					app:   appLabel(n),
+					group: Card{GroupKey: key, GroupCount: len(v.Items), IDs: []uint32{n.ID}},
+				})
+			}
+			continue
+		}
+		// Grupo plegado: se resume en una tarjeta con la notificación más
+		// reciente y una pila dibujada detrás.
+		latest := v.Items[0]
+		summary := latest
+		summary.Summary = groupPreview(v.Items)
+		if len(v.Items) > 1 {
+			summary.Body = ""
+		}
+		out = append(out, layoutEntry{
+			n:      summary,
+			layers: 2,
+			app:    groupApp(v.Items),
+			group: Card{GroupKey: key, GroupCount: len(v.Items), Collapsed: true,
+				Toggle: true, IDs: ids},
+		})
+	}
+	return out
+}
+
+// appLabel es el nombre de la aplicación para la cabecera.
+func appLabel(n Notification) string {
+	if a := Sanitize(n.App, 26); a != "" {
+		return a
+	}
+	return "sistema"
+}
+
+// groupApp es el nombre común de un grupo.
+func groupApp(items []Notification) string {
+	for _, n := range items {
+		if a := Sanitize(n.App, 26); a != "" {
+			return a
+		}
+	}
+	return "sistema"
+}
+
+// groupPreview resume un grupo plegado.
+func groupPreview(items []Notification) string {
+	if len(items) == 0 {
+		return ""
+	}
+	text := Sanitize(items[0].Summary, 0)
+	if text == "" {
+		text = Sanitize(StripMarkup(items[0].Body), 0)
+	}
+	if rest := len(items) - 1; rest > 0 {
+		if text == "" {
+			return fmt.Sprintf("%d avisos", len(items))
+		}
+		return fmt.Sprintf("%s · y %d más", text, rest)
+	}
+	return text
+}
+
+// stackStep es cuánto asoma cada capa de la pila.
+func (r *Renderer) stackStep() int {
+	s := 3 * r.sc
+	if s < 3 {
+		s = 3
+	}
+	return s
+}
+
+// cardHeight calcula el alto de una tarjeta según su contenido.
 func (r *Renderer) cardHeight(n *Notification, now time.Time) int {
 	pad := r.Opt.Padding
 	h := 2 * pad
@@ -168,6 +317,7 @@ func (r *Renderer) cardHeight(n *Notification, now time.Time) int {
 		h += len(bodyLines) * r.lineH(r.sc)
 	}
 	if len(n.Actions) > 0 || n.InlineReply {
+		_ = 0
 		h += 6
 		h += r.rows(r.sc)
 	}
@@ -180,150 +330,298 @@ func (r *Renderer) cardHeight(n *Notification, now time.Time) int {
 	return h
 }
 
+// headerHeight es el alto de la franja de un grupo desplegado.
+func (r *Renderer) headerHeight() int {
+	pad := r.Opt.Padding / 2
+	if pad < 6 {
+		pad = 6
+	}
+	return 2*pad + r.rows(r.sc)
+}
+
+// entryHeight calcula el alto de una entrada del dibujo.
+func (r *Renderer) entryHeight(e layoutEntry, now time.Time) int {
+	h := 0
+	if e.header {
+		h = r.headerHeight()
+	} else {
+		h = r.cardHeight(&e.n, now)
+		if e.group.Collapsed && e.group.GroupCount > 1 {
+			// Una línea más para el botón de abrir el grupo, salvo que la
+			// tarjeta ya tenga una fila de botones.
+			if len(e.n.Actions) == 0 && !e.n.InlineReply {
+				h += 6 + r.rows(r.sc)
+			}
+		}
+	}
+	return h + e.layers*r.stackStep()
+}
+
+// MeasureGroups devuelve el alto total de las vistas dadas.
+func (r *Renderer) MeasureGroups(views []GroupView, now time.Time) int {
+	entries := r.build(views)
+	h := 0
+	for i, e := range entries {
+		if i > 0 {
+			h += r.Opt.Gap
+		}
+		h += r.entryHeight(e, now)
+	}
+	return h
+}
+
 // Render dibuja las tarjetas y devuelve el lienzo junto con su distribución.
-// El lienzo tiene ancho Width y el alto necesario (al menos 1 px).
 func (r *Renderer) Render(items []Notification, now time.Time) (*bar.Canvas, []Card) {
+	views := make([]GroupView, 0, len(items))
+	for _, n := range items {
+		views = append(views, GroupView{Key: GroupKey(n), Items: []Notification{n}})
+	}
+	return r.RenderGroups(views, now)
+}
+
+// RenderGroups dibuja los grupos: las pilas plegadas como una tarjeta con
+// capas detrás y los grupos desplegados como una franja y sus tarjetas.
+func (r *Renderer) RenderGroups(views []GroupView, now time.Time) (*bar.Canvas, []Card) {
 	w := r.Opt.Width
-	h := r.Measure(items, now)
+	h := r.MeasureGroups(views, now)
 	if h < 1 {
 		h = 1
 	}
 	c := bar.NewCanvas(w, h)
 	bg, border, fg, muted, accent, accent2, warn, err := r.colors()
-	// El fondo se compone sobre el escritorio: se refuerza un poco para que el
-	// texto se lea sobre cualquier fondo animado.
 	if bg.A < 255 {
 		bg.A = uint8(minF(255, float64(bg.A)+10))
 	}
 
-	cards := make([]Card, 0, len(items))
+	entries := r.build(views)
+	cards := make([]Card, 0, len(entries))
 	y := 0
-	for i := range items {
-		n := &items[i]
-		ch := r.cardHeight(n, now)
+	for i, e := range entries {
+		if i > 0 {
+			y += r.Opt.Gap
+		}
+		ch := r.entryHeight(e, now)
 		rect := Rect{X: 0, Y: y, W: w, H: ch}
-		card := Card{Notification: *n, Rect: rect}
+		card := e.group
+		card.Notification = e.n
+		card.Rect = rect
 
-		// Fondo y borde: la urgencia crítica se marca con borde de error.
-		borderCol := border
-		if n.Urgency == Critical {
-			borderCol = err.WithAlpha(minF(1, float64(err.A)/255))
-		}
-		c.FillRound(rect.X, rect.Y, rect.W, rect.H, r.Opt.Radius, bg, &borderCol)
-
-		pad := r.Opt.Padding
-		x := rect.X + pad
-		ty := rect.Y + pad
-		inner := rect.W - 2*pad
-
-		// Punto de urgencia, app y hora.
-		dot := urgencyColor(n.Urgency, muted, accent, err, warn)
-		cx, cy := x+3*r.sc, ty+r.rows(r.sc)/2+1
-		c.FillRound(cx-3*r.sc, cy-3*r.sc, 6*r.sc, 6*r.sc, 3*r.sc, dot, nil)
-
-		appX := x + 10*r.sc
-		app := Sanitize(n.App, 26)
-		if app == "" {
-			app = "sistema"
-		}
-		c.Text(r.face, appX, ty, app, r.sc, r.sc, muted)
-
-		stamp := n.Created.Format("15:04")
-		sw := bar.TextWidth(r.face, stamp, r.sc, r.sc)
-		c.Text(r.face, rect.X+rect.W-pad-sw, ty, stamp, r.sc, r.sc, muted)
-		ty += r.rows(r.sc) + 4
-
-		// Resumen.
-		titleScale := r.sc
-		if r.sc == 1 && r.Opt.Width >= 300 {
-			titleScale = 2
-		}
-		for _, line := range Wrap(Sanitize(n.Summary, 0), inner, r.advance(titleScale), 2) {
-			c.Text(r.face, x, ty, line, titleScale, titleScale, fg)
-			ty += r.lineH(titleScale)
-		}
-
-		// Cuerpo.
-		if body := strings.TrimSpace(StripMarkup(n.Body)); body != "" {
-			ty += 4
-			for _, line := range Wrap(body, inner, r.advance(r.sc), r.Opt.MaxLines) {
-				c.Text(r.face, x, ty, line, r.sc, r.sc, muted)
-				ty += r.lineH(r.sc)
+		// Capas de la pila, de la más al fondo a la de delante.
+		step := r.stackStep()
+		bodyH := rect.H - e.layers*step
+		for layer := e.layers; layer >= 1; layer-- {
+			// Cada capa asoma por debajo y por los lados, como una baraja.
+			inset := layer * 4 * r.sc
+			top := rect.Y + layer*step
+			lh := bodyH
+			if lh < 4 {
+				lh = 4
 			}
+			col := bg
+			col.A = uint8(float64(col.A) * 0.75)
+			lb := border
+			lb.A = uint8(float64(lb.A) * 0.7)
+			c.FillRound(rect.X+inset, top, rect.W-2*inset, lh, r.Opt.Radius, col, &lb)
 		}
 
-		// Acciones y respuesta rápida: etiqueta entre corchetes.
-		type boton struct {
-			key, label string
-			principal  bool
-		}
-		var botones []boton
-		for _, a := range n.Actions {
-			label := a.Label
-			if label == "" {
-				label = a.Key
-			}
-			botones = append(botones, boton{a.Key, label, a.Key == "default"})
-		}
-		if n.InlineReply {
-			label := n.ReplyPlaceholder
-			if label == "" {
-				label = "Responder"
-			}
-			botones = append(botones, boton{InlineReplyAction, label, true})
-		}
-		if len(botones) > 0 {
-			ty += 6
-			bx := x
-			for _, b := range botones {
-				txt := "[" + b.label + "]"
-				tw := bar.TextWidth(r.face, txt, r.sc, r.sc)
-				if bx+tw > rect.X+rect.W-pad {
-					break
-				}
-				col := accent2
-				if b.principal {
-					col = accent
-				}
-				c.Text(r.face, bx, ty, txt, r.sc, r.sc, col)
-				card.Buttons = append(card.Buttons, Button{
-					Key: b.key, Label: b.label,
-					Rect: Rect{X: bx, Y: ty - 2, W: tw, H: r.rows(r.sc) + 4},
-				})
-				bx += tw + 8*r.sc
-			}
-			ty += r.rows(r.sc)
+		if e.header {
+			card.Buttons = r.drawHeader(c, e, rect, bg, border, muted, accent)
+			cards = append(cards, card)
+			y += ch
+			continue
 		}
 
-		// Progreso (hint `progress`).
-		if n.Progress >= 0 {
-			ty += 4
-			ph := 3 * r.sc
-			c.FillRound(x, ty, inner, ph, ph/2, border, nil)
-			fill := inner * n.Progress / 100
-			if fill > 0 {
-				c.FillRound(x, ty, fill, ph, ph/2, accent, nil)
-			}
-			ty += ph + 4
-		}
-
-		// Barra de tiempo restante.
-		if frac, timed := n.Remaining(now); timed {
-			bh := 2 * r.sc
-			by := rect.Y + rect.H - bh - 2*r.sc
-			if by < ty {
-				by = ty
-			}
-			c.FillRound(x, by, inner, bh, bh/2, border, nil)
-			if wpx := int(float64(inner) * frac); wpx > 1 {
-				c.FillRound(x, by, wpx, bh, bh/2, accent2, nil)
-			}
-		}
-
+		body := Rect{X: rect.X, Y: rect.Y, W: rect.W, H: rect.H - e.layers*step}
+		card.Buttons = r.drawCard(c, e, body, appLabelOf(e), now,
+			bg, border, fg, muted, accent, accent2, warn, err)
 		cards = append(cards, card)
-		y += ch + r.Opt.Gap
+		y += ch
 	}
 	return c, cards
+}
+
+// appLabelOf devuelve la etiqueta de la cabecera de una entrada.
+func appLabelOf(e layoutEntry) string {
+	if e.app != "" {
+		return e.app
+	}
+	return appLabel(e.n)
+}
+
+// drawHeader dibuja la franja que corona un grupo desplegado y devuelve su
+// botón de plegar.
+func (r *Renderer) drawHeader(c *bar.Canvas, e layoutEntry, rect Rect, bg, border, muted, accent bar.RGBA) []Button {
+	pad := r.Opt.Padding
+	hbg := bg
+	hbg.A = uint8(minF(255, float64(bg.A)+14))
+	c.FillRound(rect.X, rect.Y, rect.W, rect.H, r.Opt.Radius/2, hbg, &border)
+	y := rect.Y + (rect.H-r.rows(r.sc))/2
+	title := fmt.Sprintf("%s · %d avisos", appLabelOf(e), e.group.GroupCount)
+	c.Text(r.face, rect.X+pad, y, truncateRunes(title, 40), r.sc, r.sc, accent)
+
+	label := "[plegar]"
+	lw := bar.TextWidth(r.face, label, r.sc, r.sc)
+	bx := rect.X + rect.W - pad - lw
+	c.Text(r.face, bx, y, label, r.sc, r.sc, muted)
+	return []Button{{
+		Key: GroupCollapseAction, Label: "plegar",
+		Rect: Rect{X: bx, Y: y - 2, W: lw, H: r.rows(r.sc) + 4},
+	}}
+}
+
+// drawCard dibuja una tarjeta normal (o la que resume un grupo plegado).
+func (r *Renderer) drawCard(c *bar.Canvas, e layoutEntry, rect Rect, app string,
+	now time.Time, bg, border, fg, muted, accent, accent2, warn, err bar.RGBA) []Button {
+	n := &e.n
+	var buttons []Button
+
+	borderCol := border
+	if n.Urgency == Critical {
+		borderCol = err.WithAlpha(minF(1, float64(err.A)/255))
+	}
+	c.FillRound(rect.X, rect.Y, rect.W, rect.H, r.Opt.Radius, bg, &borderCol)
+
+	pad := r.Opt.Padding
+	x := rect.X + pad
+	inner := rect.W - 2*pad
+	ty := rect.Y + pad
+
+	// Punto de urgencia, aplicación y hora.
+	dot := urgencyColor(n.Urgency, muted, accent, err, warn)
+	if e.group.Collapsed && e.group.GroupCount > 1 {
+		dot = accent2
+	}
+	cx, cy := x+3*r.sc, ty+r.rows(r.sc)/2+1
+	c.FillRound(cx-3*r.sc, cy-3*r.sc, 6*r.sc, 6*r.sc, 3*r.sc, dot, nil)
+
+	appX := x + 10*r.sc
+	c.Text(r.face, appX, ty, app, r.sc, r.sc, muted)
+
+	stamp := n.Created.Format("15:04")
+	sw := bar.TextWidth(r.face, stamp, r.sc, r.sc)
+	c.Text(r.face, rect.X+rect.W-pad-sw, ty, stamp, r.sc, r.sc, muted)
+	if e.group.Collapsed && e.group.GroupCount > 1 {
+		// Contador del grupo, como una pastilla a la izquierda de la hora.
+		count := fmt.Sprintf("%d", e.group.GroupCount)
+		cw := bar.TextWidth(r.face, count, r.sc, r.sc)
+		chipW, chipH := cw+6*r.sc, r.rows(r.sc)
+		chipX := rect.X + rect.W - pad - sw - 6*r.sc - chipW
+		c.FillRound(chipX, ty, chipW, chipH, chipH/2, accent2, nil)
+		c.Text(r.face, chipX+3*r.sc, ty, count, r.sc, r.sc, bg)
+	}
+	ty += r.rows(r.sc) + 4
+
+	// Resumen.
+	titleScale := r.sc
+	if r.sc == 1 && r.Opt.Width >= 300 {
+		titleScale = 2
+	}
+	for _, line := range Wrap(Sanitize(n.Summary, 0), inner, r.advance(titleScale), 2) {
+		c.Text(r.face, x, ty, line, titleScale, titleScale, fg)
+		ty += r.lineH(titleScale)
+	}
+
+	// Cuerpo.
+	if body := strings.TrimSpace(StripMarkup(n.Body)); body != "" {
+		ty += 4
+		for _, line := range Wrap(body, inner, r.advance(r.sc), r.Opt.MaxLines) {
+			c.Text(r.face, x, ty, line, r.sc, r.sc, muted)
+			ty += r.lineH(r.sc)
+		}
+	}
+
+	// Acciones, respuesta rápida y el botón de abrir la pila.
+	type boton struct {
+		key, label string
+		principal  bool
+	}
+	var botones []boton
+	for _, a := range n.Actions {
+		if a.Key == InlineReplyAction {
+			// Se dibuja con el resto de la fila, no dos veces.
+			continue
+		}
+		label := a.Label
+		if label == "" {
+			label = a.Key
+		}
+		botones = append(botones, boton{a.Key, label, a.Key == "default"})
+	}
+	if n.InlineReply {
+		label := n.ReplyPlaceholder
+		// Si el botón de la pila va a compartir fila, se acorta para que
+		// quepan los dos.
+		if e.group.Collapsed && e.group.GroupCount > 1 {
+			label = "Responder"
+		}
+		if label == "" {
+			label = "Responder"
+		}
+		botones = append(botones, boton{InlineReplyAction, label, true})
+	}
+	if e.group.Collapsed && e.group.GroupCount > 1 {
+		botones = append(botones, boton{GroupExpandAction, fmt.Sprintf("ver %d", e.group.GroupCount), false})
+	}
+	if len(botones) > 0 {
+		ty += 6
+		bx := x
+		for _, b := range botones {
+			txt := "[" + b.label + "]"
+			tw := bar.TextWidth(r.face, txt, r.sc, r.sc)
+			if bx+tw > rect.X+rect.W-pad {
+				break
+			}
+			col := accent2
+			if b.principal {
+				col = accent
+			}
+			c.Text(r.face, bx, ty, txt, r.sc, r.sc, col)
+			buttons = append(buttons, Button{
+				Key: b.key, Label: b.label,
+				Rect: Rect{X: bx, Y: ty - 2, W: tw, H: r.rows(r.sc) + 4},
+			})
+			bx += tw + 8*r.sc
+		}
+		ty += r.rows(r.sc)
+	}
+
+	// Progreso (hint `progress`).
+	if n.Progress >= 0 {
+		ty += 4
+		ph := 3 * r.sc
+		c.FillRound(x, ty, inner, ph, ph/2, border, nil)
+		fill := inner * n.Progress / 100
+		if fill > 0 {
+			c.FillRound(x, ty, fill, ph, ph/2, accent, nil)
+		}
+		ty += ph + 4
+	}
+
+	// Barra de tiempo restante.
+	if frac, timed := n.Remaining(now); timed {
+		bh := 2 * r.sc
+		by := rect.Y + rect.H - bh - 2*r.sc
+		if by < ty {
+			by = ty
+		}
+		c.FillRound(x, by, inner, bh, bh/2, border, nil)
+		if wpx := int(float64(inner) * frac); wpx > 1 {
+			c.FillRound(x, by, wpx, bh, bh/2, accent2, nil)
+		}
+	}
+	return buttons
+}
+
+// truncateRunes recorta por caracteres completos con puntos suspensivos.
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	if n <= 1 {
+		return string(r[:n])
+	}
+	return string(r[:n-1]) + "…"
 }
 
 func minF(a, b float64) float64 {

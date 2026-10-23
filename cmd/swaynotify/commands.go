@@ -58,6 +58,7 @@ func runSend(args []string) {
 		}
 	}
 	n.Category = last(vals, "category")
+	n.GroupID = last(vals, "group")
 	for _, spec := range vals["action"] {
 		key, label := spec, spec
 		if i := strings.IndexByte(spec, '='); i > 0 {

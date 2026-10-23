@@ -82,6 +82,7 @@ type Config struct {
 	NotifyHistory      int
 	NotifyMaxLines     int
 	NotifyDND          bool // arrancar en modo «no molestar»
+	NotifyGroup        bool // agrupar por aplicación en pilas desplegables
 	NotifyFont         string
 	NotifyFontScale    int
 
@@ -196,6 +197,7 @@ func Default() *Config {
 		NotifyHistory:      50,
 		NotifyMaxLines:     3,
 		NotifyDND:          false,
+		NotifyGroup:        true,
 		NotifyFontScale:    0,
 
 		OSDEnabled:   true,
@@ -367,6 +369,7 @@ func (c *Config) apply() {
 	num("notify.history", &c.NotifyHistory)
 	num("notify.max_lines", &c.NotifyMaxLines)
 	bl("notify.dnd", &c.NotifyDND)
+	bl("notify.group", &c.NotifyGroup)
 	str("notify.font", &c.NotifyFont)
 	if v, ok := c.values["notify.font_scale"]; ok {
 		if n, ok := v.(int); ok && n >= 0 {
@@ -603,6 +606,8 @@ history = %d
 max_lines = %d
 # arrancar en modo «no molestar»
 dnd = %t
+# agrupar por aplicación en pilas que se despliegan con un clic
+group = %t
 # fuente PSF de consola (vacío = la mejor disponible del sistema)
 font = %q
 # escala de la fuente (0 = automática)
@@ -660,7 +665,7 @@ rounding = %d
 		c.NotifyEnabled, c.NotifyPosition, c.NotifyWidth, c.NotifyMargin,
 		c.NotifyPadding, c.NotifyGap, c.NotifyRadius, c.NotifyOpacity,
 		c.NotifyTimeout, c.NotifyCriticalTime, c.NotifyMaxVisible, c.NotifyHistory,
-		c.NotifyMaxLines, c.NotifyDND, c.NotifyFont, c.NotifyFontScale,
+		c.NotifyMaxLines, c.NotifyDND, c.NotifyGroup, c.NotifyFont, c.NotifyFontScale,
 		c.BootEnabled, c.BootStyle, c.BootDuration, c.BootLogo,
 		c.OSDEnabled, c.OSDPosition, c.OSDWidth, c.OSDMargin, c.OSDPadding,
 		c.OSDRadius, c.OSDOpacity, c.OSDTimeout, c.OSDFade, c.OSDSegments,

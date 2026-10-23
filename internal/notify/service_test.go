@@ -566,3 +566,32 @@ func TestCapabilitiesIncludeInlineReply(t *testing.T) {
 		t.Fatal("sin capacidades")
 	}
 }
+
+func TestApplyHintsGroupTags(t *testing.T) {
+	// Cada cliente nombra igual la etiqueta de pila; se aceptan las tres.
+	casos := []struct {
+		key   string
+		value string
+		want  string
+	}{
+		{"x-dunst-stack-tag", "chat-marta", "chat-marta"},
+		{"x-kde-group-id", "grupo-7", "grupo-7"},
+		{"group", " equipo ", "equipo"},
+	}
+	for _, c := range casos {
+		h := dbus.Dict{{Key: c.key, Value: dbus.Variant{Sig: "s", Value: c.value}}}
+		var n Notification
+		applyHints(&n, h)
+		if n.GroupID != c.want {
+			t.Fatalf("%s: GroupID = %q, se esperaba %q", c.key, n.GroupID, c.want)
+		}
+	}
+
+	// Una etiqueta vacía no cambia el grupo.
+	h := dbus.Dict{{Key: "group", Value: dbus.Variant{Sig: "s", Value: "   "}}}
+	var n Notification
+	applyHints(&n, h)
+	if n.GroupID != "" {
+		t.Fatalf("una etiqueta en blanco no debe agrupar: %q", n.GroupID)
+	}
+}

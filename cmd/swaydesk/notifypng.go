@@ -35,7 +35,7 @@ func writeNotifyPNGWith(cfg *config.Config, items []notify.Notification, path st
 		Scale:    2,
 		MaxLines: cfg.NotifyMaxLines,
 	})
-	canvas, _ := r.Render(items, now)
+	canvas, _ := r.RenderGroups(notify.Views(items, nil), now)
 
 	const mx, my = 24, 20
 	w, h := canvas.W+2*mx, canvas.H+2*my

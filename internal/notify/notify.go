@@ -93,6 +93,10 @@ type Notification struct {
 	// ReplyPlaceholder es el texto de ayuda del campo de respuesta (hint
 	// x-kde-reply-placeholder-text).
 	ReplyPlaceholder string `json:"reply_placeholder,omitempty"`
+	// GroupID es la etiqueta de pila que manda el cliente (hints
+	// x-dunst-stack-tag, x-kde-group-id o group). Con ella se separan grupos
+	// dentro de una misma aplicación; vacía, se agrupa por aplicación.
+	GroupID string `json:"group,omitempty"`
 	// Sender es el nombre único D-Bus del cliente que la envió, para poder
 	// entregarle la respuesta solo a él.
 	Sender    string    `json:"-"`
@@ -147,7 +151,8 @@ type Record struct {
 type Options struct {
 	Timeout         time.Duration // predeterminado para urgencia normal o baja
 	CriticalTimeout time.Duration // 0 = las críticas no caducan
-	MaxVisible      int           // cuántas se dibujan a la vez
+	MaxVisible      int           // cuántas se dibujan a la vez (o cuántos grupos)
+	GroupVisible    bool          // MaxVisible cuenta grupos, no notificaciones
 	HistorySize     int           // entradas que se conservan
 	DNDBypass       bool          // las críticas se muestran en modo no molestar
 	now             func() time.Time
@@ -260,7 +265,9 @@ func (s *Store) Visible() []Notification {
 		}
 		out = append(out, *n)
 	}
-	if len(out) > s.opts.MaxVisible {
+	if s.opts.GroupVisible {
+		out = TrimToGroups(out, s.opts.MaxVisible)
+	} else if len(out) > s.opts.MaxVisible {
 		out = out[len(out)-s.opts.MaxVisible:]
 	}
 	return out

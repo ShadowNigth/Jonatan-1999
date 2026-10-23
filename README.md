@@ -87,6 +87,13 @@ terceros.
   tarjetas dibujadas en píxeles sobre una capa overlay. Urgencias con color,
   acciones, barra de progreso, caducidad con cuenta atrás, modo «no molestar»,
   historial persistente y clic para cerrar o para pulsar una acción. Sin mako.
+- **Notificaciones agrupadas**: los avisos de la misma aplicación se apilan en
+  una sola tarjeta con contador, capas detrás y la vista previa del último
+  mensaje («Marta · y 2 más»). Un clic la despliega en la franja del grupo más
+  una tarjeta por aviso; el clic derecho cierra la pila entera. Respeta la
+  etiqueta de pila de cada cliente (`x-dunst-stack-tag`, `x-kde-group-id`), así
+  que varios chats de la misma app no se mezclan. Se enciende o apaga con
+  `group` en `[notify]` (y con `g` en el centro).
 - **Respuesta rápida y centro de notificaciones**: las apps que hablan
   `inline-reply` (Telegram, Signal, Discord…) muestran el botón **Responder**;
   el texto se escribe en una ventana flotante y vuelve a la app solo a ella
@@ -379,6 +386,7 @@ max_visible = 4            # cuántas se apilan
 history = 50               # entradas que se recuerdan
 max_lines = 3              # líneas del cuerpo
 dnd = false                # arrancar en «no molestar»
+group = true               # agrupar por aplicación en pilas desplegables
 font = ""                  # fuente PSF (vacío = automática)
 
 [bar]

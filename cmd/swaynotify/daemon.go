@@ -31,6 +31,8 @@ type daemon struct {
 	scale   int
 	cards   []notify.Card
 	lastKey string
+	// stack recuerda qué pilas de notificaciones están desplegadas.
+	stack *notify.Stack
 }
 
 // runDaemon arranca el servidor D-Bus y la superficie de notificaciones.
@@ -59,6 +61,7 @@ func runDaemon(args []string) {
 		Timeout:         time.Duration(cfg.NotifyTimeout) * time.Millisecond,
 		CriticalTimeout: time.Duration(cfg.NotifyCriticalTime) * time.Millisecond,
 		MaxVisible:      cfg.NotifyMaxVisible,
+		GroupVisible:    cfg.NotifyGroup,
 		HistorySize:     cfg.NotifyHistory,
 		DNDBypass:       true,
 	})
@@ -72,6 +75,7 @@ func runDaemon(args []string) {
 		store: store,
 		svc:   notify.NewService(store),
 		scale: scale,
+		stack: notify.NewStack(),
 		render: notify.New(notify.RenderOptions{
 			Width:    cfg.NotifyWidth,
 			Padding:  cfg.NotifyPadding,
@@ -134,13 +138,14 @@ func runDaemon(args []string) {
 	}
 	d.panel = panel
 
-	// Ratón: clic para cerrar, clic en una acción para activarla.
+	// Ratón: izquierdo para cerrar, responder, abrir una pila o activar una
+	// acción; derecho para cerrar la pila entera de un golpe.
 	if p, err := wayland.NewPointer(wl, wayland.PointerHandler{
 		Button: func(x, y float64, button uint32, pressed bool) {
-			if !pressed || button != 0x110 { // solo el botón izquierdo
+			if !pressed || (button != 0x110 && button != 0x111) {
 				return
 			}
-			d.click(int(x), int(y))
+			d.click(int(x), int(y), button)
 		},
 	}); err == nil {
 		d.pointer = p
@@ -235,11 +240,18 @@ func (d *daemon) loop() error {
 func (d *daemon) draw() error {
 	now := time.Now()
 	items := d.store.Visible()
-	key := itemsKey(items, now)
+	key := itemsKey(items, now) + "|" + strings.Join(d.stack.OpenKeys(), ",")
 	if key == d.lastKey {
 		return nil
 	}
-	canvas, cards := d.render.Render(items, now)
+	var views []notify.GroupView
+	if d.cfg.NotifyGroup {
+		views = notify.Views(items, d.stack)
+		d.stack.Prune(notify.GroupAll(items))
+	} else {
+		views = notify.Views(items, nil)
+	}
+	canvas, cards := d.render.RenderGroups(views, now)
 	canvas = canvas.ScaleCanvas(d.scale)
 	d.cards = cards
 	// Solo las tarjetas reciben clics; el resto de la superficie deja pasar el
@@ -298,7 +310,7 @@ func itemsKey(items []notify.Notification, now time.Time) string {
 }
 
 // click busca la tarjeta (y la acción) en la posición pulsada.
-func (d *daemon) click(x, y int) {
+func (d *daemon) click(x, y int, button uint32) {
 	// Las coordenadas llegan en píxeles de la superficie.
 	lx, ly := x/d.scale, y/d.scale
 	for _, c := range d.cards {
@@ -306,12 +318,25 @@ func (d *daemon) click(x, y int) {
 			ly < c.Rect.Y || ly >= c.Rect.Y+c.Rect.H {
 			continue
 		}
+		// Botón derecho: se cierra todo lo que representa la tarjeta (la pila
+		// entera si es un grupo).
+		if button == 0x111 {
+			d.dismissAll(c)
+			return
+		}
 		for _, b := range c.Buttons {
 			if lx < b.Rect.X || lx >= b.Rect.X+b.Rect.W ||
 				ly < b.Rect.Y || ly >= b.Rect.Y+b.Rect.H {
 				continue
 			}
-			if b.Key == notify.InlineReplyAction {
+			switch b.Key {
+			case notify.GroupExpandAction:
+				d.setExpanded(c.GroupKey, true)
+				return
+			case notify.GroupCollapseAction:
+				d.setExpanded(c.GroupKey, false)
+				return
+			case notify.InlineReplyAction:
 				// La respuesta rápida necesita teclado: se abre el diálogo en
 				// una ventana flotante (la terminal ya sabe de teclado y de
 				// acentos, cosa que el panel no puede hacer sin xkbcommon).
@@ -321,8 +346,42 @@ func (d *daemon) click(x, y int) {
 			d.svc.InvokeAction(c.Notification.ID, b.Key)
 			return
 		}
-		// Clic en el resto de la tarjeta: se cierra.
+		// Un grupo plegado (o su franja) se abre o se pliega; una tarjeta
+		// suelta se cierra.
+		if c.Toggle && c.GroupKey != "" {
+			d.stack.Toggle(c.GroupKey)
+			_ = d.draw()
+			return
+		}
 		d.svc.Dismiss(c.Notification.ID)
 		return
 	}
+}
+
+// setExpanded pliega o despliega una pila y repinta.
+func (d *daemon) setExpanded(key string, open bool) {
+	if key == "" {
+		return
+	}
+	if open {
+		d.stack.Expand(key)
+	} else {
+		d.stack.Collapse(key)
+	}
+	_ = d.draw()
+}
+
+// dismissAll cierra todas las notificaciones de una tarjeta.
+func (d *daemon) dismissAll(c notify.Card) {
+	ids := c.IDs
+	if len(ids) == 0 {
+		ids = []uint32{c.Notification.ID}
+	}
+	for _, id := range ids {
+		d.svc.Dismiss(id)
+	}
+	if c.GroupKey != "" {
+		d.stack.Collapse(c.GroupKey)
+	}
+	_ = d.draw()
 }

@@ -29,6 +29,60 @@ func testCenter() *notifyCenter {
 
 // Cada línea debe medir exactamente el ancho del marco: ni un carácter de más
 // (rompería el borde derecho) ni de menos.
+func TestNotifyCenterGroupedRows(t *testing.T) {
+	c := testCenter()
+	// Tres mensajes del mismo chat (con etiqueta de pila) y un aviso suelto.
+	now := time.Date(2026, 10, 23, 14, 0, 0, 0, time.Local)
+	live := []notify.Notification{
+		{ID: 10, App: "Telegram", GroupID: "marta", Summary: "Marta", Body: "¿Quedamos?",
+			Progress: -1, Created: now.Add(-3 * time.Minute)},
+		{ID: 11, App: "Telegram", GroupID: "marta", Summary: "Marta", Body: "Traigo el postre",
+			Progress: -1, Created: now.Add(-2 * time.Minute)},
+		{ID: 12, App: "Telegram", GroupID: "marta", Summary: "Marta", Body: "¿Comemos?",
+			Progress: -1, Created: now.Add(-time.Minute)},
+		{ID: 13, App: "pacman", Summary: "12 paquetes", Body: "sway 1.10",
+			Progress: -1, Created: now},
+	}
+	c.model = notify.NewCenter(live, nil, false)
+	out := c.frame(100, 24)
+	if !strings.Contains(out, "Telegram · 3 avisos") {
+		t.Fatalf("no se ve la pila plegada: %q", out)
+	}
+	if !strings.Contains(out, "agrupado") {
+		t.Fatalf("la cabecera debe indicar el modo agrupado: %q", out)
+	}
+	if c.model.Rows()[1].Count != 3 {
+		t.Fatalf("la segunda fila debería ser el grupo de 3: %+v", c.model.Rows()[1])
+	}
+
+	// g alterna el modo: sin agrupar se ven los cuatro avisos.
+	c.handle(ui.Key{Rune: 'g'})
+	if c.model.Grouped() {
+		t.Fatal("g debería desagrupar")
+	}
+	if out = c.frame(100, 24); strings.Contains(out, "3 avisos") || strings.Contains(out, "agrupado") {
+		t.Fatalf("sin agrupar no debe haber pilas: %q", out)
+	}
+	if got := len(c.model.Rows()); got != 4 {
+		t.Fatalf("filas sin agrupar = %d", got)
+	}
+	c.handle(ui.Key{Rune: 'g'})
+	if !c.model.Grouped() {
+		t.Fatal("g debería volver a agrupar")
+	}
+
+	// Tab sobre la pila la despliega y sangra sus mensajes.
+	c.handle(ui.Key{Name: "down"})
+	c.handle(ui.Key{Name: "tab"})
+	out = c.frame(100, 24)
+	if !strings.Contains(out, "Telegram · 3 avisos") {
+		t.Fatalf("la pila desplegada no muestra su franja: %q", out)
+	}
+	if got := len(c.model.Rows()); got != 5 {
+		t.Fatalf("filas tras desplegar = %d, se esperaban 5", got)
+	}
+}
+
 func TestNotifyCenterFrameFits(t *testing.T) {
 	c := testCenter()
 	for _, size := range [][2]int{{100, 24}, {80, 20}, {60, 14}, {40, 10}} {

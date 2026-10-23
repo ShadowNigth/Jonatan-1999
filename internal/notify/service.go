@@ -236,6 +236,13 @@ func applyHints(n *Notification, h dbus.Dict) {
 	if ph, ok := h.Value(ReplyPlaceholderHint).(string); ok && ph != "" {
 		n.ReplyPlaceholder = ph
 	}
+	// Etiqueta de pila: dunst y KDE usan nombres distintos para lo mismo.
+	for _, key := range []string{"x-dunst-stack-tag", "x-kde-group-id", "group", "x-swaydesk-group"} {
+		if g, ok := h.Value(key).(string); ok && strings.TrimSpace(g) != "" {
+			n.GroupID = strings.TrimSpace(g)
+			break
+		}
+	}
 	if p := h.Value("progress"); p != nil {
 		if v, ok := toUint(p); ok {
 			n.Progress = int(int32(uint32(v)))

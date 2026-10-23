@@ -381,6 +381,7 @@ max_visible = 4            # cuántas se apilan
 history = 50               # entradas que se guardan
 max_lines = 3              # líneas del cuerpo
 dnd = false                # arrancar en modo «no molestar»
+group = true               # agrupar por aplicación en pilas desplegables
 font = ""                  # fuente PSF (vacío = automática)
 font_scale = 0             # 0 = automática
 ```
@@ -397,6 +398,33 @@ font_scale = 0             # 0 = automática
 - **Cuenta atrás**: una línea fina se va vaciando hasta que la tarjeta
   desaparece sola. Un clic en cualquier parte de la tarjeta la cierra
   (`NotificationClosed` con motivo 2).
+
+### Notificaciones agrupadas
+
+Con `group = true` (por defecto), todos los avisos de una misma aplicación se
+apilan en **una sola tarjeta**: las capas asoman por debajo, un contador indica
+cuántos hay y la línea grande muestra el último mensaje seguido de «y N más».
+
+- **Un clic** en la tarjeta (o en `[ver N]`) despliega la pila: aparece la franja
+  del grupo —con `[plegar]`— y debajo una tarjeta por aviso, en orden.
+- **Clic derecho** en cualquier tarjeta de la pila la cierra entera; el clic
+  izquierdo en una tarjeta suelta la cierra como siempre y en la franja pliega
+  el grupo.
+- El modo «no molestar» y la caducidad funcionan igual; `max_visible` cuenta
+  **pilas**, no avisos, así que cinco mensajes del mismo chat ocupan el hueco de
+  uno solo.
+- Cada cliente puede separar sus pilas con una etiqueta: se aceptan
+  `x-dunst-stack-tag`, `x-kde-group-id` y `group` como hints de cadena. Sirve
+  para no mezclar «chat de Marta» y «chat de Luis» de la misma aplicación:
+
+```bash
+swaynotify send --app Telegram --group chat-marta --reply "Marta" "¿Comemos?"
+swaynotify send --app Telegram --group chat-marta "Marta" "Traigo el postre"
+```
+
+- En el centro (`swaydesk notifications center`) las pilas se ven como una fila
+  con el número de avisos: `Enter`/`Tab` la abre, `g` quita o pone el
+  agrupamiento y `x` cierra la pila completa.
 
 ### Responder desde la tarjeta (`inline-reply`)
 
@@ -429,9 +457,11 @@ swaydesk notifications center      # también con clic en el indicador de la bar
 swaynotify reply 7 "voy saliendo"  # respuesta directa, sin interfaz
 ```
 
-Teclas del centro: `↑`/`↓` mover, `Enter` actuar (responder si se puede, si no
-cerrar), `r` responder, `x` cerrar, `m` no molestar, `c` cerrar todas, `X`
-borrar historial, `F5` recargar, `Esc` salir (o borrar el filtro).
+Teclas del centro: `↑`/`↓` mover, `Enter` abrir la pila o actuar (responder si
+se puede, si no cerrar), `Tab` desplegar o plegar el grupo, `g` agrupar por
+aplicación, `r` responder, `x` cerrar (la pila entera si es un grupo), `m` no
+molestar, `c` cerrar todas, `X` borrar historial, `F5` recargar, `Esc` salir (o
+borrar el filtro).
 
 El indicador de la barra es el módulo `notify`: muestra una pastilla con el
 número de avisos en pantalla (con `+` si alguno admite respuesta), `dnd` en

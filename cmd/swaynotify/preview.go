@@ -15,34 +15,61 @@ import (
 	"github.com/ShadowNigth/swaydesk/internal/ui"
 )
 
-// demoNotes son las notificaciones de ejemplo de la vista previa.
+// demoNotes son las notificaciones de ejemplo de la vista previa. Incluye una
+// pila de tres mensajes del mismo chat para que se vea el grupo plegado.
 func demoNotes(now time.Time) []notify.Notification {
 	return []notify.Notification{
 		{
 			ID: 1, App: "swaydesk", Summary: "Tema aplicado",
 			Body:    "Sakura · 31 paletas disponibles, cambia con <b>Super+t</b>",
-			Urgency: notify.Normal, Created: now, Expires: now.Add(6 * time.Second),
-			Timeout: 6000, Progress: -1,
+			Urgency: notify.Normal, Created: now.Add(-40 * time.Second),
+			Expires: now.Add(6 * time.Second), Timeout: 6000, Progress: -1,
 		},
 		{
 			ID: 2, App: "pacman", Summary: "12 paquetes por actualizar",
 			Body:    "Entre ellos el kernel y Mesa. Reinicia la sesión al terminar.",
-			Urgency: notify.Critical, Created: now.Add(-2 * time.Second), Progress: 42,
+			Urgency: notify.Critical, Created: now.Add(-30 * time.Second), Progress: 42,
 			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Luego"}},
 		},
 		{
-			ID: 4, App: "Telegram", Sender: "Marta", Summary: "Marta",
+			ID: 3, App: "spotify", Summary: "Lofi Girl · Midnight Study",
+			Body:    "Reproduciendo la lista «estudio»",
+			Urgency: notify.Low, Created: now.Add(-20 * time.Second), Timeout: -1, Progress: -1,
+		},
+		{
+			ID: 4, App: "Telegram", GroupID: "chat-marta", Sender: "Marta",
+			Summary: "Marta", Body: "¿Quedamos el sábado?",
+			Urgency: notify.Normal, Created: now.Add(-12 * time.Second),
+			Timeout: 20000, Progress: -1,
+		},
+		{
+			ID: 5, App: "Telegram", GroupID: "chat-marta", Sender: "Marta",
+			Summary: "Marta", Body: "Traigo el postre, tú el café.",
+			Urgency: notify.Normal, Created: now.Add(-6 * time.Second),
+			Timeout: 20000, Progress: -1,
+		},
+		{
+			ID: 6, App: "Telegram", GroupID: "chat-marta", Sender: "Marta", Summary: "Marta",
 			Body:    "¿Comemos a las dos? Traigo el postre.",
 			Urgency: notify.Normal, Created: now.Add(-time.Second), Timeout: 20000, Progress: -1,
 			InlineReply: true, ReplyPlaceholder: "Responder a Marta…",
 			Actions: []notify.Action{{Key: notify.InlineReplyAction, Label: "Responder"}},
 		},
-		{
-			ID: 3, App: "spotify", Summary: "Lofi Girl · Midnight Study",
-			Body:    "Reproduciendo la lista «estudio»",
-			Urgency: notify.Low, Created: now.Add(-4 * time.Second), Timeout: -1, Progress: -1,
-		},
 	}
+}
+
+// demoViews agrupa las notificaciones de ejemplo como las pintaría el daemon.
+func demoViews(now time.Time, grouped bool) []notify.GroupView {
+	items := demoNotes(now)
+	if !grouped {
+		return notify.Views(items, nil)
+	}
+	groups := notify.GroupAll(items)
+	out := make([]notify.GroupView, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, notify.GroupView{Key: g.Key, Items: g.Items})
+	}
+	return out
 }
 
 // renderPreview compone las tarjetas sobre un fondo del tema y guarda el PNG.
@@ -54,7 +81,6 @@ func renderPreview(cfg *config.Config, path string) error {
 // fondo transparente para superponerlo a una captura.
 func renderPreviewWith(cfg *config.Config, path string, backdrop bool) error {
 	now := time.Now()
-	items := demoNotes(now)
 	r := notify.New(notify.RenderOptions{
 		Width:    cfg.NotifyWidth,
 		Padding:  cfg.NotifyPadding,
@@ -67,7 +93,7 @@ func renderPreviewWith(cfg *config.Config, path string, backdrop bool) error {
 		MaxLines: cfg.NotifyMaxLines,
 		Shadow:   true,
 	})
-	canvas, _ := r.Render(items, now)
+	canvas, _ := r.RenderGroups(demoViews(now, cfg.NotifyGroup), now)
 
 	// Fondo simulado: degradado del tema con margen alrededor.
 	const marginX, marginY = 24, 20
