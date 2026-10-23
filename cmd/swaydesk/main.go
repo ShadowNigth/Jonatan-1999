@@ -52,6 +52,8 @@ func main() {
 		cmdStatus(args)
 	case "doctor", "check":
 		cmdDoctor(args)
+	case "keys", "atajos", "teclas":
+		cmdKeys(args)
 	case "notify":
 		cmdNotify(args)
 	case "volume", "vol":
@@ -119,6 +121,7 @@ Configuración
 Sesión
   status [--json|--module M]  Estado del escritorio (sway, CPU, RAM, batería...)
   doctor                      Diagnóstico de dependencias y configuración
+  keys [filtro] [--exec]      Atajos de sway expandidos y cuáles no funcionan
   notify <título> [cuerpo]    Envía una notificación de escritorio
   notifications [status|dnd|history|clear|preview|test]
                               Daemon de notificaciones propio (swaynotify)
@@ -708,6 +711,100 @@ type check struct {
 	required bool
 	detail   string
 	fix      string
+}
+
+// cmdKeys lista los atajos de sway ya expandidos y señala los que no pueden
+// funcionar (tecla repetida o programa inexistente). Es el diagnóstico rápido
+// cuando «el atajo no hace nada»: sway falla en silencio.
+func cmdKeys(args []string) {
+	cfg, err := config.Load()
+	must(err)
+	th := ui.NewTheme(cfg.Theme, cfg.NerdFont)
+	p := th.Palette
+
+	live := func() (string, error) {
+		c, err := swayipc.Dial()
+		if err != nil {
+			return "", err
+		}
+		defer c.Close()
+		return c.Config()
+	}
+	text, origin := setup.BindingSource(live)
+	if text == "" {
+		fmt.Fprintf(os.Stderr, "swaydesk: no se encontró la configuración de sway (%s)\n", origin)
+		os.Exit(1)
+	}
+	// ¿La sesión va por detrás de lo que hay en disco? (editar sin recargar)
+	if strings.Contains(origin, "vivo") {
+		if disk, err := os.ReadFile(filepath.Join(configDir(), "sway", "config")); err == nil &&
+			strings.TrimSpace(string(disk)) != strings.TrimSpace(text) {
+			fmt.Printf("\n  %s\n", ui.Style{Fg: p.Warn}.Render("• sway sigue con la configuración anterior: ejecuta  swaymsg reload"))
+		}
+	}
+	binds := setup.ParseBindings(text)
+	bad := setup.CheckBindings(binds)
+
+	filter := ""
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			filter = strings.ToLower(a)
+		}
+	}
+	execOnly := hasFlagArg(args, "exec")
+	show := make([]setup.Binding, 0, len(binds))
+	for _, b := range binds {
+		if filter != "" && !strings.Contains(strings.ToLower(b.Sym+" "+b.Command), filter) {
+			continue
+		}
+		if execOnly && b.Exec == "" {
+			continue
+		}
+		show = append(show, b)
+	}
+	if !hasFlagArg(args, "sin-ordenar") && !hasFlagArg(args, "unsorted") {
+		setup.SortBindings(show)
+	}
+
+	fmt.Println()
+	fmt.Printf("  %s %s\n", ui.Style{Fg: p.Accent, Bg: p.Bg}.B().Render("atajos de sway"), ui.Dim("· "+origin))
+	fmt.Printf("  %d atajos · %d con problemas\n\n", len(binds), bad)
+
+	ok := ui.Style{Fg: p.Ok}.Render("✔")
+	mal := ui.Style{Fg: p.Err}.Render("✘")
+	for _, b := range show {
+		mark := ok
+		if b.Error != "" {
+			mark = mal
+		}
+		etiqueta := b.Sym
+		if b.Mode != "" && b.Mode != "default" {
+			etiqueta = b.Sym + " [" + b.Mode + "]"
+		}
+		sym := ui.Style{Fg: p.Accent}.Render(padRight(etiqueta, 26))
+		cmd := b.Command
+		if b.Exec != "" {
+			cmd = ui.Dim(fmt.Sprintf("%s %s", b.Exec, strings.Join(b.Args, " ")))
+		}
+		fmt.Printf("  %s %s %s\n", mark, sym, ui.Truncate(cmd, 96))
+		if b.Error != "" {
+			fmt.Printf("      %s %s\n", ui.Style{Fg: p.Warn}.Render("→"), ui.Dim(b.Error))
+		}
+	}
+	if len(show) == 0 {
+		fmt.Printf("  %s\n", ui.Dim("ningún atajo coincide con el filtro"))
+	}
+	if bad > 0 {
+		fmt.Printf("\n  %s\n", ui.Dim("corrige las rutas con: swaydesk init --force --only sway   ·   recarga: swaymsg reload"))
+	}
+	fmt.Println()
+}
+
+func padRight(s string, n int) string {
+	if len(s) >= n {
+		return s
+	}
+	return s + strings.Repeat(" ", n-len(s))
 }
 
 // footIssueDetail describe el problema del foot.ini instalado, si lo hay.

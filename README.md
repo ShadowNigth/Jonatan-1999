@@ -291,6 +291,7 @@ Fondos de pantalla
 Sesión
   status [--json] [--module M]   Estado (sway, CPU, RAM, disco, batería…)
   doctor                         Diagnóstico de dependencias y configuración
+  keys [filtro] [--exec]         Atajos de sway expandidos y cuáles no funcionan
   notify <título> [cuerpo]       Notificación de escritorio
   volume <up|down|mute>          Volumen (con aviso en pantalla si hay swayosd)
   osd [show|preview|volume …]    Avisos en pantalla: estado, repetir, PNG

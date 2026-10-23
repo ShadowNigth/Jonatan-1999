@@ -7,16 +7,25 @@
 ### Variables ##############################################################
 
 set $mod Mod4
+# Rutas absolutas: sway no hereda el PATH de tu shell, así que si los
+# binarios están en ~/.local/bin los atajos no encontrarían nada.
+set $swaydesk {{SWAYDESK_BIN}}
+set $swaymenu {{SWAYMENU_BIN}}
+set $swayctl {{SWAYCTL_BIN}}
+set $swayclip {{SWAYCLIP_BIN}}
+
 set $term {{TERMINAL}}
-set $menu {{LAUNCHER}}
-set $menu_all swaymenu --float --commands
-set $power swaymenu --power
-set $themes swaydesk theme --gallery
-set $wall swaydesk wallpaper --gallery
-set $ctl swayctl
-set $clip swayclip
-set $boot swaydesk boot --force
-set $lock swaylock -f -c '{{THEME_BG_HEX}}'
+# Ojo: sway no expande variables dentro de otras variables, así que cada una
+# lleva la ruta completa.
+set $menu {{SWAYMENU_BIN}} --float
+set $menu_all {{SWAYMENU_BIN}} --float --commands
+set $power {{SWAYMENU_BIN}} --power
+set $themes {{SWAYDESK_BIN}} theme --gallery
+set $wall {{SWAYDESK_BIN}} wallpaper --gallery
+set $ctl {{SWAYCTL_BIN}}
+set $clip {{SWAYCLIP_BIN}}
+set $boot {{SWAYDESK_BIN}} boot --force
+set $lock swaylock -f -c {{THEME_BG_HEX}}
 set $browser {{BROWSER}}
 set $files {{FILES}}
 set $editor {{EDITOR}}
@@ -141,13 +150,13 @@ bindsym $mod+Ctrl+b exec sh -c 'pkill -x swaybar; pkill -x waybar; sleep 0.2; ~/
 bindsym $mod+c exec --no-startup-id $clip
 bindsym $mod+i exec --no-startup-id $ctl
 bindsym $mod+Shift+l exec $lock
-bindsym $mod+Shift+n exec --no-startup-id swaydesk notify "swaydesk" "Notificaciones de prueba"
+bindsym $mod+Shift+n exec --no-startup-id $swaydesk notify "swaydesk" "Notificaciones de prueba"
 # Modo «no molestar» de las notificaciones propias
-bindsym $mod+Ctrl+n exec --no-startup-id swaydesk notifications dnd
+bindsym $mod+Ctrl+n exec --no-startup-id $swaydesk notifications dnd
 # Cerrar todas las notificaciones en pantalla
-bindsym $mod+Ctrl+Shift+n exec --no-startup-id swaydesk notifications clear
+bindsym $mod+Ctrl+Shift+n exec --no-startup-id $swaydesk notifications clear
 # Centro de notificaciones (también se abre con clic en el indicador de la barra)
-bindsym $mod+n exec --no-startup-id swaydesk notifications center
+bindsym $mod+n exec --no-startup-id $swaydesk notifications center
 
 # Capturas de pantalla
 bindsym Print exec sh -c 'mkdir -p ~/Capturas && grim ~/Capturas/$(date +%Y%m%d-%H%M%S).png'
@@ -239,7 +248,7 @@ bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
 bindsym $mod+Shift+c reload
 bindsym $mod+Shift+r restart
 bindsym $mod+Shift+e exec $power
-bindsym $mod+Shift+x exec swaydesk lock
+bindsym $mod+Shift+x exec $swaydesk lock
 
 ### Modos ##################################################################
 
@@ -281,7 +290,7 @@ input type:pointer {
 ### Autostart ##############################################################
 
 # 1. Regenera waybar/foot/mako/swaylock con la paleta activa y avisa a sway.
-exec_always --no-startup-id swaydesk apply
+exec_always --no-startup-id $swaydesk apply
 
 # 2. Arranca barra, notificaciones, bloqueo por inactividad, portapapeles...
 #    El script comprueba qué programas están instalados antes de lanzarlos.

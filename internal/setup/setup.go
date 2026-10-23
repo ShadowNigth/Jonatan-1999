@@ -166,21 +166,27 @@ func templateData(cfg *config.Config) map[string]string {
 		"FILES":           cfg.FileManager,
 		"EDITOR":          cfg.Editor,
 		"KEYBOARD_LAYOUT": cfg.KeyboardLayout,
-		"SWAYDESK_BIN":    "swaydesk",
-		"ICON_LOGO":       ic.Workspace,
-		"ICON_POWER":      ic.Power,
-		"ICON_VOLUME":     ic.Volume,
-		"ICON_MUTED":      ic.Muted,
-		"ICON_WIFI":       ic.Wifi,
-		"ICON_NET":        ic.Network,
-		"ICON_CPU":        ic.CPU,
-		"ICON_RAM":        ic.RAM,
-		"ICON_TEMP":       ic.Warn,
-		"ICON_BATTERY":    ic.Battery,
-		"ICON_CHARGING":   ic.Charging,
-		"ICON_PLUG":       ic.Plug,
-		"ICON_CLOCK":      ic.Clock,
-		"ICON_CALENDAR":   ic.Calendar,
+		// Rutas absolutas de los binarios propios. Si ~/.local/bin no está en
+		// el PATH de la sesión (lo normal al arrancar sway desde un TTY o un
+		// gestor de sesión), los atajos no harían nada: mejor la ruta completa.
+		"SWAYDESK_BIN":  binPath("swaydesk"),
+		"SWAYMENU_BIN":  binPath("swaymenu"),
+		"SWAYCTL_BIN":   binPath("swayctl"),
+		"SWAYCLIP_BIN":  binPath("swayclip"),
+		"ICON_LOGO":     ic.Workspace,
+		"ICON_POWER":    ic.Power,
+		"ICON_VOLUME":   ic.Volume,
+		"ICON_MUTED":    ic.Muted,
+		"ICON_WIFI":     ic.Wifi,
+		"ICON_NET":      ic.Network,
+		"ICON_CPU":      ic.CPU,
+		"ICON_RAM":      ic.RAM,
+		"ICON_TEMP":     ic.Warn,
+		"ICON_BATTERY":  ic.Battery,
+		"ICON_CHARGING": ic.Charging,
+		"ICON_PLUG":     ic.Plug,
+		"ICON_CLOCK":    ic.Clock,
+		"ICON_CALENDAR": ic.Calendar,
 	}
 }
 
@@ -214,6 +220,28 @@ func alphaHex(v, def float64) string {
 		a = 255
 	}
 	return fmt.Sprintf("%02x", a)
+}
+
+// binPath devuelve la ruta absoluta de un binario de swaydesk, o su nombre si
+// no se encuentra (para no romper la configuración en instalaciones parciales).
+func binPath(name string) string {
+	if p, err := exec.LookPath(name); err == nil {
+		if abs, err := filepath.Abs(p); err == nil {
+			return abs
+		}
+		return p
+	}
+	// Al instalar con scripts/install.sh los binarios van a ~/.local/bin, que
+	// puede no estar en PATH todavía.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return name
+	}
+	candidate := filepath.Join(home, ".local", "bin", name)
+	if st, err := os.Stat(candidate); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+		return candidate
+	}
+	return name
 }
 
 // footColorsSection devuelve el nombre de la sección de colores que acepta el
@@ -389,7 +417,9 @@ func Install(cfg *config.Config, dest string, force bool, only []string) ([]Resu
 
 func matchOnly(rel string, only map[string]bool) bool {
 	for prefix := range only {
-		if strings.HasPrefix(rel, prefix) {
+		// Coincidencia por archivo exacto o por directorio ("sway" no debe
+		// arrastrar también "swaydesk/config.toml").
+		if rel == prefix || strings.HasPrefix(rel, prefix+"/") {
 			return true
 		}
 	}

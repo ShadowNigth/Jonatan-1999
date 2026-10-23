@@ -303,3 +303,49 @@ func TestSwayDuplicateBinding(t *testing.T) {
 		t.Fatalf("un comentario no es un atajo: %q", tecla)
 	}
 }
+
+func TestMatchOnlyNoArrastraPrefijos(t *testing.T) {
+	only := map[string]bool{"sway": true}
+	if !matchOnly("sway/config", only) {
+		t.Fatal("sway/config debería entrar con --only sway")
+	}
+	if matchOnly("swaydesk/config.toml", only) {
+		t.Fatal("--only sway no debe tocar swaydesk/config.toml")
+	}
+	if matchOnly("foot/foot.ini", only) {
+		t.Fatal("--only sway no debe tocar foot")
+	}
+	if !matchOnly("foot/foot.ini", map[string]bool{"foot/foot.ini": true}) {
+		t.Fatal("el archivo exacto debe entrar")
+	}
+}
+
+// --only sway debe reescribir la configuración de sway sin tocar config.toml.
+func TestInstallOnlySwayConservaConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	if _, err := Install(cfg, dir, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	propio := filepath.Join(dir, "swaydesk", "config.toml")
+	if err := os.WriteFile(propio, []byte("# editado a mano\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Install(cfg, dir, true, []string{"sway"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(propio)
+	if string(data) != "# editado a mano\n" {
+		t.Fatal("config.toml se sobrescribió con --only sway")
+	}
+	encontrado := false
+	for _, r := range res {
+		if strings.HasSuffix(r.Path, filepath.Join("sway", "config")) {
+			encontrado = true
+		}
+	}
+	if !encontrado {
+		t.Fatalf("no se reescribió sway/config: %+v", res)
+	}
+}

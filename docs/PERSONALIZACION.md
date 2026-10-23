@@ -181,6 +181,49 @@ Para tener historial persistente, `~/.config/swaydesk/autostart.sh` arranca
 `wl-paste --type text --watch cliphist store` si `cliphist` está instalado.
 Puedes borrar la entrada seleccionada con `Ctrl+d`.
 
+### Si un atajo no hace nada
+
+sway **falla en silencio**: si el programa de un `bindsym … exec` no existe (por
+ejemplo porque los binarios están en `~/.local/bin` y esa carpeta no está en el
+`PATH` de la sesión), la tecla simplemente no hace nada y no hay ningún error.
+
+Para eso está `swaydesk keys`, que lee la configuración **que sway tiene
+cargada** (por IPC), expande las variables y comprueba cada programa:
+
+```bash
+swaydesk keys                 # todos los atajos
+swaydesk keys swaydesk        # solo los que mencionan «swaydesk»
+swaydesk keys --exec          # solo los que lanzan programas
+```
+
+Salida de ejemplo:
+
+```
+  atajos de sway · sway (config en vivo)
+  98 atajos · 2 con problemas
+
+  ✔ Mod4+Return              foot
+  ✔ Mod4+t                   /home/shadow/.local/bin/swaydesk theme --gallery
+  ✘ Mod4+n                   swaydesk notifications center
+      → no se encuentra el programa "swaydesk"
+```
+
+Detecta tres cosas: **programas que no existen**, **teclas repetidas** (sway se
+queda con la última y se pierde la primera) y si la sesión va por detrás del
+archivo (editaste y no recargaste; avisa con `swaymsg reload`).
+
+Si los binarios viven en `~/.local/bin`, la configuración generada los usa con
+**ruta absoluta** (`swaydesk init` la resuelve al escribir), así que los atajos
+funcionan aunque sway no herede tu `PATH`.
+
+Para regenerar solo la configuración de sway sin tocar tu `config.toml` ni el
+resto de archivos:
+
+```bash
+swaydesk init --force --only sway
+swaymsg reload
+```
+
 ### Autostart
 
 `~/.config/swaydesk/autostart.sh` es el script que sway lanza al arrancar

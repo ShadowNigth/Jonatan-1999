@@ -336,6 +336,19 @@ func (c *Conn) Version() (*Version, error) {
 	return &v, nil
 }
 
+// Config devuelve el texto del archivo de configuración que está usando sway.
+func (c *Conn) Config() (string, error) {
+	raw, err := c.RoundTrip(MsgGetConfig, nil)
+	if err != nil {
+		return "", err
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err != nil {
+		return "", fmt.Errorf("respuesta GET_CONFIG inesperada: %w", err)
+	}
+	return text, nil
+}
+
 // Inputs devuelve los dispositivos de entrada detectados.
 func (c *Conn) Inputs() ([]Input, error) {
 	raw, err := c.RoundTrip(MsgGetInputs, nil)

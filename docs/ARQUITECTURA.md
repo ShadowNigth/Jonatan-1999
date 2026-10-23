@@ -305,6 +305,11 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
 (`internal/swayipc`, `internal/wayland`) y de los fondos
 (`internal/wallpaper`), hay suites propias para:
 
+- **`internal/setup`** — los atajos: análisis de `bindsym`/`bindcode` con la
+  misma expansión de variables que hace sway (una sola pasada, sin anidar),
+  bloques `mode` separados del modo normal, detección de teclas repetidas y de
+  programas que no existen, y `GET_CONFIG` por IPC para auditar la configuración
+  que la sesión tiene cargada de verdad.
 - **`internal/dbus`** — ida y vuelta de mensajes con todos los tipos del
   formato (arrays de cadenas y bytes, estructuras, diccionarios con variantes),
   validación de firmas, y un autobús de pruebas sobre socket UNIX que verifica
