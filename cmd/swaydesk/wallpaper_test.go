@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/ui"
 	"github.com/ShadowNigth/swaydesk/internal/wallpaper"
 )
 
@@ -42,6 +45,88 @@ func TestAnimatedSpec(t *testing.T) {
 	}
 	if animatedSpec(wallpaper.Spec{Kind: wallpaper.KindImage}) {
 		t.Fatal("una imagen fija no necesita demonio")
+	}
+}
+
+func TestWallpaperFallbackUsesSolidColorForAnimatedSources(t *testing.T) {
+	cfg := config.Default()
+	color := ui.PaletteByName(cfg.Theme).Bg
+	want := fmt.Sprintf("output * bg %s solid_color", color)
+	for _, kind := range []wallpaper.Kind{wallpaper.KindGIF, wallpaper.KindVideo, wallpaper.KindScene} {
+		got := wallpaperFallbackLine(cfg, wallpaper.Spec{Kind: kind, Path: "/tmp/wallpaper"})
+		if got != want {
+			t.Errorf("respaldo para %s = %q, se esperaba %q", kind, got, want)
+		}
+	}
+}
+
+func TestWallpaperFallbackKeepsStaticImage(t *testing.T) {
+	cfg := config.Default()
+	cfg.WallpaperMode = "fill"
+	got := wallpaperFallbackLine(cfg, wallpaper.Spec{Kind: wallpaper.KindImage, Path: "/tmp/fondo.png"})
+	if want := `output * bg "/tmp/fondo.png" fill`; got != want {
+		t.Fatalf("respaldo para imagen = %q, se esperaba %q", got, want)
+	}
+}
+
+func TestApplyAnimatedFallbackRemovesLegacyStillFrame(t *testing.T) {
+	base := t.TempDir()
+	configHome := filepath.Join(base, "config")
+	cache := filepath.Join(base, "cache")
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("SWAYSOCK", filepath.Join(base, "missing-sway.sock"))
+
+	cfg := config.Default()
+	cfg.Cache = cache
+	legacyFrame := filepath.Join(cache, "fondo-estatico.png")
+	if err := os.WriteFile(legacyFrame, []byte("legacy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	spec := wallpaper.Spec{Kind: wallpaper.KindGIF, Path: "/tmp/animado.gif"}
+	applyStaticFallback(cfg, spec)
+
+	if _, err := os.Stat(legacyFrame); !os.IsNotExist(err) {
+		t.Fatalf("el fotograma estático antiguo debería eliminarse; stat err=%v", err)
+	}
+	path := filepath.Join(configHome, "sway", "config.d", "50-wallpaper.conf")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# Fondo de pantalla · generado por swaydesk\n" + wallpaperFallbackLine(cfg, spec) + "\n"
+	if string(data) != want {
+		t.Fatalf("config de respaldo = %q, se esperaba %q", data, want)
+	}
+}
+
+func TestSetWallpaperModeKeepsAnimatedFallback(t *testing.T) {
+	base := t.TempDir()
+	configHome := filepath.Join(base, "config")
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("SWAYSOCK", filepath.Join(base, "missing-sway.sock"))
+
+	cfg := config.Default()
+	cfg.Dir = filepath.Join(base, "state")
+	cfg.Path = filepath.Join(cfg.Dir, "config.toml")
+	cfg.Cache = filepath.Join(base, "cache")
+	cfg.WallpaperKind = string(wallpaper.KindGIF)
+	cfg.WallpaperPath = filepath.Join(base, "animado.gif")
+
+	if err := setWallpaperMode(cfg, []string{"center"}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(configHome, "sway", "config.d", "50-wallpaper.conf")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# Fondo de pantalla · generado por swaydesk\n" + wallpaperFallbackLine(cfg, wallpaper.Spec{Kind: wallpaper.KindGIF, Path: cfg.WallpaperPath}) + "\n"
+	if string(data) != want {
+		t.Fatalf("set mode escribió un respaldo incorrecto: %q, se esperaba %q", data, want)
 	}
 }
 

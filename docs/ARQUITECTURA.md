@@ -304,7 +304,7 @@ que lo usado ayer gana a lo usado cien veces hace un mes.
 | TUI en lugar de GTK/Qt | Coherente con sway, rápido en cualquier hardware, se puede probar en un pty. |
 | Plantillas embebidas con `embed` | El binario es autosuficiente: se puede instalar sin el código fuente. |
 | `syscall` directo para modo crudo | Evita `golang.org/x/term`; el struct `Termios` de Linux es estable. |
-| Fondo animado en un demonio aparte | Es el único proceso que necesita Wayland nativo; si el compositor no lo soporta, sway sigue mostrando un fotograma estático. |
+| Fondo animado en un demonio aparte | Es el único proceso que necesita Wayland nativo; Sway conserva un color sólido del tema como respaldo para evitar que el primer fotograma se superponga al GIF/vídeo. |
 | Opacidad en las plantillas, no por IPC | sway no permite cambiar el alpha de una ventana ya abierta; escribir `for_window` al generar la configuración es lo único fiable. |
 | Escenas procedurales en vez de vídeos de regalo | Sin binarios pesados en el repositorio y adaptadas a la paleta activa. Los GIF y vídeos del usuario se reproducen igual. |
 | `blur`/`rounding` solo en swayfx | Sway no implementa desenfoque ni esquinas; se detecta el compositor y las líneas quedan comentadas si no aplica. |

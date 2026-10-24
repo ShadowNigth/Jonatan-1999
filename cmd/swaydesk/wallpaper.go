@@ -342,35 +342,26 @@ func setWallpaper(cfg *config.Config, args []string) error {
 	return nil
 }
 
-// applyStaticFallback deja un fondo estático en la configuración de sway.
+// wallpaperFallbackLine deja las imágenes fijas como respaldo directo; para
+// fondos animados usa un color sólido para que el primer fotograma no quede
+// superpuesto al GIF/vídeo que dibuja la superficie Wayland.
+func wallpaperFallbackLine(cfg *config.Config, spec wallpaper.Spec) string {
+	if spec.Kind == wallpaper.KindImage {
+		return fmt.Sprintf("output * bg \"%s\" %s", spec.Path, cfg.WallpaperMode)
+	}
+	bg := ui.PaletteByName(cfg.Theme).Bg
+	return fmt.Sprintf("output * bg %s solid_color", bg)
+}
+
+// applyStaticFallback deja el respaldo de Sway acorde al fondo activo.
 func applyStaticFallback(cfg *config.Config, spec wallpaper.Spec) {
 	confDir := filepath.Join(configDir(), "sway", "config.d")
 	_ = os.MkdirAll(confDir, 0o755)
-	var line string
-	switch spec.Kind {
-	case wallpaper.KindImage:
-		line = fmt.Sprintf("output * bg \"%s\" %s", spec.Path, cfg.WallpaperMode)
-	case wallpaper.KindGIF:
-		// sway no dibuja GIF: se usa el primer fotograma exportado a PNG.
-		if still, err := wallpaper.LoadStill(spec.Path); err == nil {
-			path := filepath.Join(cfg.Cache, "fondo-estatico.png")
-			if err := wallpaper.SaveImage(still.Img, path); err == nil {
-				line = fmt.Sprintf("output * bg \"%s\" %s", path, cfg.WallpaperMode)
-			}
-		}
-	case wallpaper.KindVideo:
-		if frame, err := wallpaper.VideoFrame(spec.Path, 0, 1920); err == nil {
-			path := filepath.Join(cfg.Cache, "fondo-estatico.png")
-			if err := wallpaper.SaveImage(frame, path); err == nil {
-				line = fmt.Sprintf("output * bg \"%s\" %s", path, cfg.WallpaperMode)
-			}
-		}
-	default:
-		bg := ui.PaletteByName(cfg.Theme).Bg
-		line = fmt.Sprintf("output * bg %s solid_color", bg)
-	}
-	if line == "" {
-		return
+	line := wallpaperFallbackLine(cfg, spec)
+	if spec.Kind != wallpaper.KindImage && cfg.Cache != "" {
+		// Quitar el fotograma que generaban versiones anteriores: conservarlo
+		// detrás de una superficie transparente puede parecer una captura fija.
+		_ = os.Remove(filepath.Join(cfg.Cache, "fondo-estatico.png"))
 	}
 	content := "# Fondo de pantalla · generado por swaydesk\n" + line + "\n"
 	_ = os.WriteFile(filepath.Join(confDir, "50-wallpaper.conf"), []byte(content), 0o644)
@@ -397,7 +388,11 @@ func setWallpaperMode(cfg *config.Config, args []string) error {
 	if err := saveWallpaperConfig(cfg); err != nil {
 		return err
 	}
-	applyStaticFallback(cfg, wallpaper.Spec{Kind: wallpaper.KindImage, Path: cfg.WallpaperPath})
+	spec, err := currentSpec(cfg)
+	if err != nil {
+		return err
+	}
+	applyStaticFallback(cfg, spec)
 	fmt.Printf("✔ modo de fondo: %s\n", mode)
 	return nil
 }

@@ -414,8 +414,8 @@ swaydesk wallpaper stop                  # detiene el fondo animado
 
 `--live` (o `swaydesk wallpaper daemon`) arranca el demonio que dibuja el fondo
 en una capa `wlr-layer-shell` **detrás de las ventanas**; el autostart lo lanza
-al iniciar sesión. Sin demonio, sway muestra un fotograma estático exportado a
-`~/.cache/swaydesk/fondo-estatico.png`.
+al iniciar sesión. Para GIF y vídeo, Sway mantiene un color sólido del tema como
+respaldo; así no queda un primer fotograma estático superpuesto al fondo animado.
 
 Escenas disponibles: `petals`, `snow`, `stars`, `rain`, `aurora`, `wave`,
 `city`, `embers`, `grid`, `meadow`, `bubbles`. Cada una toma los colores del
@@ -425,9 +425,10 @@ También puedes usar el nombre de una paleta y swaydesk toma su escena asociada:
 `swaydesk wallpaper set scene:sakura` es lo mismo que `scene:petals`, y
 `miku` equivale a `wave`.
 
-Para que sway dibuje el respaldo estático se escribe
-`~/.config/sway/config.d/50-wallpaper.conf`; puedes sobrescribirlo con tus
-propias reglas `output * bg ...`.
+El respaldo gestionado por swaydesk se escribe en
+`~/.config/sway/config.d/50-wallpaper.conf`: imágenes fijas usan su ruta; GIF,
+vídeo y escenas usan un color sólido mientras el demonio Wayland dibuja la
+animación. Puedes sobrescribirlo con tus propias reglas `output * bg ...`.
 
 ### Un fondo por workspace
 
