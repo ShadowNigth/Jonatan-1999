@@ -135,7 +135,7 @@ Sesión
   wallpaper --scenes [--json] Escenas animadas disponibles
   boot [--style=s] [--duration=ms]  Animación de arranque de la sesión
   opacity [list|presets|add|remove|all]  Translucidez por aplicación
-  bar [status|on|off|preview|modules]     Barra de estado propia (swaybar)
+  bar [status|on|off|preview|modules|opacity] Barra propia y translucidez
   lock                        Bloquea la pantalla
   reload                      Recarga la configuración de sway
   power [acción]              Menú de energía (lock, suspend, logout, reboot, poweroff)
@@ -733,6 +733,8 @@ func autostartStatus(cfg *config.Config) (bool, string) {
 		{"notificaciones", "swaynotify daemon"},
 		{"OSD", "swayosd watch"},
 		{"fondos por workspace", "swaydesk wallpaper daemon"},
+		{"reintentos de inicio de barra", "start_bar waybar"},
+		{"reintentos de inicio de swaybar", "start_bar swaybar"},
 	}
 	var missing []string
 	for _, check := range checks {

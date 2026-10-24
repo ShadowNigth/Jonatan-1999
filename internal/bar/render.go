@@ -55,21 +55,22 @@ type Snapshot struct {
 
 // Options configura el aspecto de la barra.
 type Options struct {
-	Height    int      // alto total en píxeles (incluye márgenes)
-	Margin    int      // separación con los bordes de la pantalla
-	Padding   int      // relleno interno de cada isla
-	Gap       int      // separación entre islas
-	Radius    int      // radio de las esquinas (0 = pill)
-	Opacity   float64  // opacidad del fondo de las islas
-	Islands   bool     // islas separadas o una sola barra
-	Modules   []string // módulos de la derecha, en orden
-	ShowLogo  bool
-	FontPath  string
-	FontScale int // 0 = automático
-	Spacing   int // separación entre letras (píxeles de la fuente)
-	Theme     ui.Palette
-	Face      *font.Face
-	Shadow    bool // sombra suave bajo las islas
+	Height     int      // alto total en píxeles (incluye márgenes)
+	Margin     int      // separación con los bordes de la pantalla
+	Padding    int      // relleno interno de cada isla
+	Gap        int      // separación entre islas
+	Radius     int      // radio de las esquinas (0 = pill)
+	Opacity    float64  // opacidad del fondo de las islas
+	OpacitySet bool     // permite usar cero para hacer el fondo totalmente transparente
+	Islands    bool     // islas separadas o una sola barra
+	Modules    []string // módulos de la derecha, en orden
+	ShowLogo   bool
+	FontPath   string
+	FontScale  int // 0 = automático
+	Spacing    int // separación entre letras (píxeles de la fuente)
+	Theme      ui.Palette
+	Face       *font.Face
+	Shadow     bool // sombra suave bajo las islas
 }
 
 // DefaultModules es la lista de módulos de la derecha por defecto.
@@ -155,8 +156,8 @@ func New(opt Options) *Renderer {
 	if opt.Gap <= 0 {
 		opt.Gap = 8
 	}
-	if opt.Opacity <= 0 || opt.Opacity > 1 {
-		opt.Opacity = 0.88
+	if opt.Opacity < 0 || opt.Opacity > 1 || (opt.Opacity == 0 && !opt.OpacitySet) {
+		opt.Opacity = 0.68
 	}
 	if opt.Spacing < 0 {
 		opt.Spacing = 0

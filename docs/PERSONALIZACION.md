@@ -49,7 +49,7 @@ dir = "~/Imágenes/Fondos"   # carpeta que explora el selector
 
 [effects]
 terminal_opacity = 0.94     # alpha de foot (1 = opaco)
-bar_opacity = 0.86          # alpha de waybar
+bar_opacity = 0.68          # alpha de waybar
 active_opacity = 1.00       # ventana enfocada
 inactive_opacity = 0.94     # ventanas sin foco
 blur = false                # requiere swayfx
@@ -595,7 +595,7 @@ margin = 6                 # separación con los bordes de la pantalla
 padding = 14               # relleno interior de cada isla
 gap = 10                   # hueco entre islas
 radius = 0                 # 0 = pastilla completa
-opacity = 0.88             # transparencia de las islas
+opacity = 0.68             # transparencia de las islas
 islands = true             # false = una sola barra continua
 logo = true
 font = ""                  # ruta a un .psf / .psf.gz; vacío = fuente del sistema
@@ -614,6 +614,7 @@ Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
 ```bash
 swaydesk bar                  # estado y módulos actuales
 swaydesk bar modules cpu ram volume network battery clock
+swaydesk bar opacity 0.68     # opacidad común (0 = invisible, 1 = opaco)
 swaydesk bar off              # desactiva swaybar; el autostart usa waybar
 swaydesk bar preview --width 1600 --out ~/barra.png   # PNG sin sesión gráfica
 swaybar --demo --preview      # datos de ejemplo, útil para probar el diseño

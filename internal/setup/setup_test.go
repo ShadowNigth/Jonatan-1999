@@ -34,7 +34,7 @@ func TestRenderSinMarcadores(t *testing.T) {
 			t.Fatalf("falta la plantilla %q", required)
 		}
 	}
-	for _, service := range []string{"quiet swaydesk boot", "once swaynotify daemon", "once swayosd watch", "swaydesk wallpaper daemon --if-needed", "autostart.log"} {
+	for _, service := range []string{"quiet swaydesk boot", "start_bar swaybar", "start_bar waybar", "once swaynotify daemon", "once swayosd watch", "swaydesk wallpaper daemon --if-needed", "autostart.log"} {
 		if !strings.Contains(files["swaydesk/autostart.sh"], service) {
 			t.Errorf("el autostart debe diagnosticar el servicio %q", service)
 		}
@@ -56,6 +56,9 @@ func TestRenderPaleta(t *testing.T) {
 	style := files["waybar/style.css"]
 	if !strings.Contains(style, "#282828") || !strings.Contains(style, "#fabd2f") {
 		t.Fatalf("los colores de gruvbox no aparecen en el CSS:\n%s", style[:400])
+	}
+	if !strings.Contains(style, "background: alpha(@bg, 0.68)") {
+		t.Fatalf("Waybar debe conservar translucidez con la opacidad predeterminada:\n%s", style)
 	}
 	if !strings.Contains(style, "Gruvbox Dark") {
 		t.Fatal("el nombre del tema no aparece en el CSS")

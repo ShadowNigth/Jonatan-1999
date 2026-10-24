@@ -53,6 +53,44 @@ once() {
     quiet "$_nombre" "$@"
 }
 
+# start_bar NOMBRE [args…] — la barra es crítica para la sesión: además de
+# lanzarla, comprueba que sobreviva al inicio y reintenta fallos tempranos.
+start_bar() {
+    _nombre="$1"; shift
+    if alive "$_nombre"; then
+        log "barra ya activa: $_nombre"
+        return 0
+    fi
+    if ! have pgrep; then
+        log "no se puede verificar $_nombre (falta pgrep); se intenta una vez"
+        quiet "$_nombre" "$@"
+        return 0
+    fi
+    _intento=1
+    while [ "$_intento" -le 3 ]; do
+        quiet "$_nombre" "$@"
+        _espera=0
+        while [ "$_espera" -lt 12 ]; do
+            sleep 0.1
+            if alive "$_nombre"; then
+                # Captura salidas inmediatas por Wayland, CSS o módulos.
+                sleep 0.4
+                if alive "$_nombre"; then
+                    log "barra $_nombre quedó activa (intento $_intento/3)"
+                    return 0
+                fi
+                break
+            fi
+            _espera=$((_espera + 1))
+        done
+        log "barra $_nombre no quedó activa (intento $_intento/3)"
+        _intento=$((_intento + 1))
+        if [ "$_intento" -le 3 ]; then sleep 0.3; fi
+    done
+    log "ERROR: $_nombre falló en los 3 intentos; revisa la salida anterior en este registro"
+    return 1
+}
+
 # stop_exact NOMBRE — detiene un proveedor alternativo y espera brevemente
 # para no arrancar dos barras/daemons que compiten por la misma superficie o
 # el mismo nombre D-Bus. Devuelve error si no pudo detenerlo.
@@ -99,17 +137,23 @@ fi
 # swaybar y detiene Waybar; si está apagado (o falta swaybar), hace lo inverso.
 if have swaydesk && have swaybar && swaydesk bar --enabled >/dev/null 2>&1; then
     if stop_exact waybar; then
-        once swaybar
+        start_bar swaybar
     fi
 else
     if stop_exact swaybar; then
         if have waybar; then
             if alive waybar; then
                 # Ya corriendo: solo se le pide que relea la hoja de estilos.
-                if have pkill; then pkill -SIGUSR2 -x waybar >/dev/null 2>&1; fi
+                if have pkill && pkill -SIGUSR2 -x waybar >/dev/null 2>&1; then
+                    log "recarga de CSS enviada a waybar"
+                else
+                    log "no se pudo recargar waybar; queda activo con la configuración actual"
+                fi
             else
-                quiet waybar
+                start_bar waybar
             fi
+        else
+            log "barra omitida: no se encontró swaybar habilitada ni waybar instalada"
         fi
     fi
 fi

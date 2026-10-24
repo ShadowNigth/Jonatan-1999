@@ -150,8 +150,8 @@ func templateData(cfg *config.Config) map[string]string {
 
 		"TERM_OPACITY":        opacity(cfg.TerminalOpacity, 0.94),
 		"TERM_ALPHA_HEX":      alphaHex(cfg.TerminalOpacity, 0.94),
-		"BAR_OPACITY":         opacity(cfg.BarOpacity, 0.86),
-		"BAR_ALPHA_HEX":       alphaHex(cfg.BarOpacity, 0.86),
+		"BAR_OPACITY":         opacity(cfg.BarOpacity, 0.68),
+		"BAR_ALPHA_HEX":       alphaHex(cfg.BarOpacity, 0.68),
 		"ACTIVE_OPACITY":      opacity(cfg.ActiveOpacity, 1.0),
 		"ACTIVE_ALPHA_HEX":    alphaHex(cfg.ActiveOpacity, 1.0),
 		"INACTIVE_OPACITY":    opacity(cfg.InactiveOpacity, 0.94),

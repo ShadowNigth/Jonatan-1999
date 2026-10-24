@@ -22,6 +22,17 @@ func testRenderer() *Renderer {
 	})
 }
 
+func TestOpacityZeroMustBeExplicit(t *testing.T) {
+	implicit := New(Options{Theme: ui.PaletteByName("sakura"), Face: font.Builtin()})
+	if implicit.Opt.Opacity != 0.68 {
+		t.Fatalf("opacidad cero implícita = %.2f, quería el valor por defecto 0.68", implicit.Opt.Opacity)
+	}
+	explicit := New(Options{Opacity: 0, OpacitySet: true, Theme: ui.PaletteByName("sakura"), Face: font.Builtin()})
+	if explicit.Opt.Opacity != 0 {
+		t.Fatalf("no se respetó la opacidad cero explícita: %.2f", explicit.Opt.Opacity)
+	}
+}
+
 func TestPowerModuleRemovedFromDefaultsAndLegacyConfig(t *testing.T) {
 	for _, module := range DefaultModules {
 		if module == "power" {
