@@ -29,6 +29,14 @@ func TestPowerMenuUsesFloatingTerminalOutsideTTY(t *testing.T) {
 	}
 }
 
+func TestShellJoinQuotesSwayExecArguments(t *testing.T) {
+	got := shellJoin([]string{"/usr/bin/foot", "--app-id=swaydesk-menu", "/tmp/my menu", "a'b"})
+	want := `'/usr/bin/foot' '--app-id=swaydesk-menu' '/tmp/my menu' 'a'\''b'`
+	if got != want {
+		t.Fatalf("shellJoin() = %q, esperado %q", got, want)
+	}
+}
+
 func TestBuildItemsKeepsPowerButNotThemePicker(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

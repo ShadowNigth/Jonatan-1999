@@ -62,7 +62,7 @@ func main() {
 		// lleva --no-float para impedir que vuelva a abrir otra terminal.
 		interactive := ui.IsInteractive()
 		if powerMenuNeedsTerminal(*float, *noFloat, interactive) {
-			runFloating(cfg, 58, 14)
+			runPowerFloating(cfg)
 			return
 		}
 		runPowerMenu(theme, cfg)
@@ -92,6 +92,16 @@ func powerMenuNeedsTerminal(forceFloat, noFloat, interactive bool) bool {
 // runFloating lanza una copia del menú dentro de una ventana de terminal
 // flotante (sway coloca la ventana según la regla app_id="swaydesk-menu").
 func runFloating(cfg *config.Config, width, height int) {
+	runFloatingWith(cfg, width, height, launcher.LaunchTerminal)
+}
+
+// runPowerFloating pide a sway que cree la terminal. Así el compositor hereda
+// el entorno gráfico de sesión, en vez de lanzar foot desde un proceso daemon.
+func runPowerFloating(cfg *config.Config) {
+	runFloatingWith(cfg, 58, 14, launchTerminalViaSway)
+}
+
+func runFloatingWith(cfg *config.Config, width, height int, launch func(string, string, string, int, int, []string) error) {
 	exe, err := os.Executable()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "swaymenu: %v\n", err)
@@ -112,11 +122,35 @@ func runFloating(cfg *config.Config, width, height int) {
 		}
 		args = append(args, a)
 	}
-	if err := launcher.LaunchTerminal(cfg.Terminal, "swaydesk-menu", "swaydesk", w, h, append([]string{exe}, args...)); err != nil {
+	if err := launch(cfg.Terminal, "swaydesk-menu", "swaydesk", w, h, append([]string{exe}, args...)); err != nil {
 		fmt.Fprintf(os.Stderr, "swaymenu: no se pudo abrir la terminal del menú: %v\n", err)
 		actions.Notification("swaydesk", "No se pudo abrir la terminal del menú: "+err.Error(), "critical")
 		os.Exit(1)
 	}
+}
+
+func launchTerminalViaSway(term, appID, title string, width, height int, command []string) error {
+	binary, args, err := launcher.TerminalCommand(term, appID, title, width, height, command)
+	if err != nil {
+		return err
+	}
+	argv := append([]string{binary}, args...)
+	conn, err := swayipc.Dial()
+	if err != nil {
+		// Fuera de una sesión de sway no existe un compositor que pueda
+		// lanzar la ventana; conserva el fallback para uso manual.
+		return launcher.StartDetached(binary, args...)
+	}
+	defer conn.Close()
+	return conn.CommandOK("exec --no-startup-id " + shellJoin(argv))
+}
+
+func shellJoin(args []string) string {
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+	}
+	return strings.Join(quoted, " ")
 }
 
 // buildItems reúne acciones, aplicaciones y comandos ordenados por uso.

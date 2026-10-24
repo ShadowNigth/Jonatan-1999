@@ -152,6 +152,33 @@ func TestPathCommands(t *testing.T) {
 	}
 }
 
+func TestTerminalCommandBuildsFootInvocation(t *testing.T) {
+	dir := t.TempDir()
+	foot := filepath.Join(dir, "foot")
+	if err := os.WriteFile(foot, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	binary, args, err := TerminalCommand("foot", "swaydesk-menu", "swaydesk", 58, 14,
+		[]string{"/tmp/swaymenu", "--no-float", "--power"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binary != foot {
+		t.Fatalf("terminal = %q, esperado %q", binary, foot)
+	}
+	want := []string{"--app-id=swaydesk-menu", "--title=swaydesk", "-W", "58x14", "-e", "/tmp/swaymenu", "--no-float", "--power"}
+	if len(args) != len(want) {
+		t.Fatalf("args = %q, esperado %q", args, want)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args = %q, esperado %q", args, want)
+		}
+	}
+}
+
 func TestPreferredTerminal(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if got := PreferredTerminal(""); got != "" {

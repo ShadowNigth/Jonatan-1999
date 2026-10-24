@@ -152,20 +152,33 @@ func HasCommand(name string) bool {
 	return err == nil
 }
 
-// LaunchTerminal abre una ventana de terminal ejecutando cmd.
-func LaunchTerminal(term, appID, title string, width, height int, cmd []string) error {
+// TerminalCommand construye el ejecutable y los argumentos para abrir cmd en
+// una ventana del terminal seleccionado.
+func TerminalCommand(term, appID, title string, width, height int, cmd []string) (string, []string, error) {
 	if term == "" {
 		term = PreferredTerminal("")
 	}
 	if term == "" {
-		return fmt.Errorf("no se encontró ningún emulador de terminal (instala foot, kitty o alacritty)")
+		return "", nil, fmt.Errorf("no se encontró ningún emulador de terminal (instala foot, kitty o alacritty)")
 	}
 	spec, ok := terminals[term]
 	if !ok {
-		return fmt.Errorf("terminal no soportado: %s", term)
+		return "", nil, fmt.Errorf("terminal no soportado: %s", term)
 	}
-	args := spec.Args(appID, title, width, height, cmd)
-	return StartDetached(term, args...)
+	binary, err := exec.LookPath(spec.Binary)
+	if err != nil {
+		return "", nil, fmt.Errorf("comando no encontrado: %s", spec.Binary)
+	}
+	return binary, spec.Args(appID, title, width, height, cmd), nil
+}
+
+// LaunchTerminal abre una ventana de terminal ejecutando cmd.
+func LaunchTerminal(term, appID, title string, width, height int, cmd []string) error {
+	binary, args, err := TerminalCommand(term, appID, title, width, height, cmd)
+	if err != nil {
+		return err
+	}
+	return StartDetached(binary, args...)
 }
 
 // StartDetached lanza un programa en su propia sesión, sin heredar la
