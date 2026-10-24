@@ -31,6 +31,10 @@ type daemon struct {
 	scale   int
 	cards   []notify.Card
 	lastKey string
+	// Se conservan para evitar repetir mensajes idénticos en el registro.
+	lastDrawErr string
+	lastResize  string
+	lastFrame   string
 	// stack recuerda qué pilas de notificaciones están desplegadas.
 	stack *notify.Stack
 }
@@ -217,11 +221,11 @@ func (d *daemon) loop() error {
 	tick := time.NewTicker(notificationPollInterval)
 	defer tick.Stop()
 	// Un primer dibujo para fijar el tamaño de la superficie.
-	d.draw()
+	d.drawLogged()
 	for {
 		select {
 		case <-d.svc.Dirty():
-			d.draw()
+			d.drawLogged()
 		case <-tick.C:
 			d.svc.Expire()
 			if d.panel.NeedsResize() {
@@ -230,15 +234,32 @@ func (d *daemon) loop() error {
 				}
 				d.lastKey = "" // fuerza el repintado con el tamaño nuevo
 			}
-			d.draw()
+			d.drawLogged()
 		}
-		// Eventos del compositor (configure, entrada del ratón).
+		// Eventos del compositor (configure, entrada del ratón). Dispatch(0)
+		// sondea sin bloquear, así las nuevas notificaciones siguen llegando.
 		if err := d.panel.Dispatch(0); err != nil {
 			if d.panel.Closed() {
 				return errStop
 			}
 			return err
 		}
+	}
+}
+
+// drawLogged registra los errores de dibujo sin derribar el servicio D-Bus.
+// Si el fotograma siguiente funciona, también deja constancia de la recuperación.
+func (d *daemon) drawLogged() {
+	if err := d.draw(); err != nil {
+		if err.Error() != d.lastDrawErr {
+			fmt.Fprintf(os.Stderr, "swaynotify: error al dibujar las notificaciones: %v\n", err)
+		}
+		d.lastDrawErr = err.Error()
+		return
+	}
+	if d.lastDrawErr != "" {
+		fmt.Fprintf(os.Stderr, "swaynotify: se recuperó el dibujo de notificaciones\n")
+		d.lastDrawErr = ""
 	}
 }
 
@@ -269,19 +290,36 @@ func (d *daemon) draw() error {
 			c.Rect.W * d.scale, c.Rect.H * d.scale,
 		})
 	}
-	_ = d.panel.SetInputRegion(rects)
+	if err := d.panel.SetInputRegion(rects); err != nil {
+		return fmt.Errorf("configurando la región de entrada: %w", err)
+	}
 
 	// La superficie se ajusta al contenido; hasta que el compositor confirma
 	// el tamaño nuevo no se pinta (evitaría estirar las tarjetas).
 	w, h := d.panel.Size()
 	if w != canvas.W || h != canvas.H {
+		request := fmt.Sprintf("%dx%d (actual %dx%d)", canvas.W, canvas.H, w, h)
+		if request != d.lastResize {
+			fmt.Fprintf(os.Stderr, "swaynotify: solicitando tamaño de panel %s\n", request)
+			d.lastResize = request
+		}
 		if err := d.panel.RequestSize(canvas.W, canvas.H); err != nil {
-			return err
+			return fmt.Errorf("solicitando tamaño de panel %s: %w", request, err)
 		}
 		return nil
 	}
+	d.lastResize = ""
+	if err := d.panel.Draw(canvas.Pix, canvas.W, canvas.H); err != nil {
+		return fmt.Errorf("subiendo el fotograma %dx%d: %w", canvas.W, canvas.H, err)
+	}
 	d.lastKey = key
-	return d.panel.Draw(canvas.Pix, canvas.W, canvas.H)
+	frame := fmt.Sprintf("%d/%d/%dx%d", len(items), len(cards), canvas.W, canvas.H)
+	if frame != d.lastFrame {
+		fmt.Fprintf(os.Stderr, "swaynotify: fotograma enviado: %d notificaciones, %d tarjetas, superficie %dx%d\n",
+			len(items), len(cards), canvas.W, canvas.H)
+		d.lastFrame = frame
+	}
+	return nil
 }
 
 // openReply lanza el diálogo de respuesta rápida en una ventana flotante.
@@ -301,7 +339,7 @@ func (d *daemon) openReply(n notify.Notification) {
 	// Mientras se escribe, la tarjeta no debe caducar y se marca como «en
 	// respuesta» para que se vea que está activa.
 	d.svc.Hold(n.ID)
-	d.draw()
+	d.drawLogged()
 }
 
 // itemsKey resume el estado para evitar repintados innecesarios.
@@ -360,7 +398,7 @@ func (d *daemon) click(x, y int, button uint32) {
 		// suelta se cierra.
 		if c.Toggle && c.GroupKey != "" {
 			d.stack.Toggle(c.GroupKey)
-			_ = d.draw()
+			d.drawLogged()
 			return
 		}
 		d.svc.Dismiss(c.Notification.ID)
@@ -378,7 +416,7 @@ func (d *daemon) setExpanded(key string, open bool) {
 	} else {
 		d.stack.Collapse(key)
 	}
-	_ = d.draw()
+	d.drawLogged()
 }
 
 // dismissAll cierra todas las notificaciones de una tarjeta.
@@ -393,5 +431,5 @@ func (d *daemon) dismissAll(c notify.Card) {
 	if c.GroupKey != "" {
 		d.stack.Collapse(c.GroupKey)
 	}
-	_ = d.draw()
+	d.drawLogged()
 }

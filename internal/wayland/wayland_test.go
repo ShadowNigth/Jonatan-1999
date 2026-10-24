@@ -164,6 +164,59 @@ func TestDispatchReportsWaylandProtocolError(t *testing.T) {
 	}
 }
 
+func TestDispatchZeroPollsWithoutBlocking(t *testing.T) {
+	runtimeDir := t.TempDir()
+	socket := filepath.Join(runtimeDir, "wayland-test")
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: socket, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	t.Setenv("WAYLAND_DISPLAY", "wayland-test")
+
+	accepted := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	go func() {
+		server, err := listener.AcceptUnix()
+		if err != nil {
+			return
+		}
+		defer server.Close()
+		close(accepted)
+		<-release
+	}()
+
+	conn, err := NewConn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	<-accepted
+
+	type dispatchResult struct {
+		processed int
+		err       error
+	}
+	done := make(chan dispatchResult, 1)
+	go func() {
+		n, err := conn.Dispatch(0)
+		done <- dispatchResult{processed: n, err: err}
+	}()
+	select {
+	case result := <-done:
+		if result.err != nil {
+			t.Fatalf("Dispatch(0): %v", result.err)
+		}
+		if result.processed != 0 {
+			t.Fatalf("Dispatch(0) procesó %d eventos sin datos", result.processed)
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("Dispatch(0) bloqueó el hilo en vez de sondear el socket")
+	}
+}
+
 func TestLayerSurfaceConstructorsUseBoundObjectIDs(t *testing.T) {
 	t.Run("fondo", func(t *testing.T) {
 		testLayerSurfaceConstructor(t, -1, func(c *Conn) (bool, error) {

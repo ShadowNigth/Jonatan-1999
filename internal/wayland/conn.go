@@ -1,6 +1,7 @@
 package wayland
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -130,14 +131,10 @@ func (c *Conn) SendWithFD(msg []byte, fd int) error {
 }
 
 // Dispatch lee y procesa los mensajes disponibles, esperando como máximo timeout.
+// Un timeout cero o negativo sondea el socket sin bloquear.
 //
 // Devuelve el número de mensajes procesados.
 func (c *Conn) Dispatch(timeout time.Duration) (int, error) {
-	if timeout > 0 {
-		_ = c.nc.SetReadDeadline(time.Now().Add(timeout))
-	} else {
-		_ = c.nc.SetReadDeadline(time.Time{})
-	}
 	// Primero se procesa lo que quedó pendiente de la lectura anterior.
 	processed := c.drain()
 	if c.fatalErr != nil {
@@ -146,7 +143,18 @@ func (c *Conn) Dispatch(timeout time.Duration) (int, error) {
 
 	buf := make([]byte, 64*1024)
 	oob := make([]byte, syscall.CmsgSpace(4*8))
-	n, oobn, _, _, err := c.nc.ReadMsgUnix(buf, oob)
+	var n, oobn int
+	var err error
+	if timeout <= 0 {
+		// Un deadline cero en net.Conn significa «sin límite», no lectura
+		// inmediata. Los loops de Wayland usan Dispatch(0) para no bloquear
+		// el render/IPC mientras sondean eventos pendientes, así que usamos
+		// recvmsg(MSG_DONTWAIT) dentro del control seguro del descriptor.
+		n, oobn, err = c.readAvailable(buf, oob)
+	} else {
+		_ = c.nc.SetReadDeadline(time.Now().Add(timeout))
+		n, oobn, _, _, err = c.nc.ReadMsgUnix(buf, oob)
+	}
 	// Un Read puede devolver bytes y también un error (por ejemplo, EOF tras
 	// recibir el último evento); procesa siempre los bytes antes de propagarlo.
 	if n > 0 {
@@ -159,10 +167,13 @@ func (c *Conn) Dispatch(timeout time.Duration) (int, error) {
 		return processed, c.fatalErr
 	}
 	if err != nil {
+		if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) {
+			return processed, nil
+		}
 		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 			return processed, nil
 		}
-		if err == syscall.EINTR {
+		if errors.Is(err, syscall.EINTR) {
 			return processed, nil
 		}
 		return processed, err
@@ -171,6 +182,23 @@ func (c *Conn) Dispatch(timeout time.Duration) (int, error) {
 		return processed, fmt.Errorf("el compositor cerró la conexión")
 	}
 	return processed, nil
+}
+
+// readAvailable lee un lote sin esperar a que llegue un evento. SyscallConn
+// mantiene el descriptor protegido mientras recvmsg usa MSG_DONTWAIT.
+func (c *Conn) readAvailable(buf, oob []byte) (int, int, error) {
+	raw, err := c.nc.SyscallConn()
+	if err != nil {
+		return 0, 0, err
+	}
+	var n, oobn int
+	var recvErr error
+	if err := raw.Control(func(fd uintptr) {
+		n, oobn, _, _, recvErr = syscall.Recvmsg(int(fd), buf, oob, syscall.MSG_DONTWAIT|syscall.MSG_CMSG_CLOEXEC)
+	}); err != nil {
+		return 0, 0, err
+	}
+	return n, oobn, recvErr
 }
 
 // drain procesa todos los mensajes completos del búfer de lectura.
