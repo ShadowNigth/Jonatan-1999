@@ -735,6 +735,7 @@ func autostartStatus(cfg *config.Config) (bool, string) {
 		{"fondos por workspace", "swaydesk wallpaper daemon"},
 		{"reintentos de inicio de barra", "start_bar waybar"},
 		{"reintentos de inicio de swaybar", "start_bar swaybar"},
+		{"configuración Waybar de swaydesk", `--config "$WAYBAR_CONFIG"`},
 	}
 	var missing []string
 	for _, check := range checks {

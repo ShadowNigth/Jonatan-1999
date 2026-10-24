@@ -18,6 +18,10 @@
 PATH="$HOME/.local/bin:$HOME/bin:$PATH"
 export PATH
 
+# Waybar no siempre descubre config.json automáticamente (puede caer en
+# /etc/xdg/waybar/config.jsonc); usa explícitamente la plantilla de swaydesk.
+WAYBAR_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/waybar/config.json"
+
 LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/swaydesk"
 LOG_FILE=/dev/null
 if mkdir -p "$LOG_DIR" 2>/dev/null; then
@@ -91,6 +95,24 @@ start_bar() {
     return 1
 }
 
+# waybar_uses_generated_config distingue la instancia correcta de una Waybar
+# antigua que arrancó con el config del sistema.
+waybar_uses_generated_config() {
+    [ -f "$WAYBAR_CONFIG" ] || return 1
+    have pgrep && have grep || return 1
+    pgrep -a -x waybar 2>/dev/null | grep -F -- "$WAYBAR_CONFIG" >/dev/null 2>&1
+}
+
+start_waybar() {
+    if [ -f "$WAYBAR_CONFIG" ]; then
+        log "Waybar usará la configuración de swaydesk: $WAYBAR_CONFIG"
+        start_bar waybar --config "$WAYBAR_CONFIG"
+    else
+        log "no se encontró $WAYBAR_CONFIG; se usa la configuración por defecto de Waybar"
+        start_bar waybar
+    fi
+}
+
 # stop_exact NOMBRE — detiene un proveedor alternativo y espera brevemente
 # para no arrancar dos barras/daemons que compiten por la misma superficie o
 # el mismo nombre D-Bus. Devuelve error si no pudo detenerlo.
@@ -143,14 +165,21 @@ else
     if stop_exact swaybar; then
         if have waybar; then
             if alive waybar; then
-                # Ya corriendo: solo se le pide que relea la hoja de estilos.
-                if have pkill && pkill -SIGUSR2 -x waybar >/dev/null 2>&1; then
-                    log "recarga de CSS enviada a waybar"
+                if [ -f "$WAYBAR_CONFIG" ] && ! waybar_uses_generated_config; then
+                    log "Waybar estaba usando otra configuración; se reinicia con la de swaydesk"
+                    if stop_exact waybar; then
+                        start_waybar
+                    fi
                 else
-                    log "no se pudo recargar waybar; queda activo con la configuración actual"
+                    # Ya corre con el config elegido: solo releer CSS y módulos.
+                    if have pkill && pkill -SIGUSR2 -x waybar >/dev/null 2>&1; then
+                        log "recarga de CSS/config enviada a waybar"
+                    else
+                        log "no se pudo recargar waybar; queda activo con la configuración actual"
+                    fi
                 fi
             else
-                start_bar waybar
+                start_waybar
             fi
         else
             log "barra omitida: no se encontró swaybar habilitada ni waybar instalada"

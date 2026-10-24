@@ -635,8 +635,11 @@ caída.
 Si prefieres waybar y sus módulos personalizados, pon `enabled = false` en
 `[bar]` (o ejecuta `swaydesk bar off`) y aplica el cambio con `swaymsg reload`.
 El autostart detiene la barra que no corresponde a la opción elegida antes de
-iniciar la otra, así no quedan Waybar y swaybar superpuestas. La plantilla de
-waybar sigue instalada y se colorea con el tema igual que antes.
+iniciar la otra, así no quedan Waybar y swaybar superpuestas. Si el archivo
+`~/.config/waybar/config.json` existe, Waybar se inicia con `--config` explícito:
+varias versiones ignoran `config.json` al buscar automáticamente y caen en
+`/etc/xdg/waybar/config.jsonc`. La hoja de estilos de swaydesk se mantiene en
+`~/.config/waybar/style.css` y se colorea con el tema activo.
 
 ## 8c. Notificaciones propias (`swaynotify`)
 
