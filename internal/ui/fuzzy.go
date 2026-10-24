@@ -12,31 +12,46 @@ type MatchResult struct {
 	Positions []int
 }
 
+type fuzzyQuery struct {
+	lower string
+	runes []rune
+}
+
+func compileFuzzy(pattern string) fuzzyQuery {
+	lower := strings.ToLower(pattern)
+	return fuzzyQuery{lower: lower, runes: []rune(lower)}
+}
+
 // Fuzzy comprueba si pattern es una subsecuencia de target (sin distinguir
 // mayúsculas) y le asigna una puntuación: más alta = mejor coincidencia.
 //
 // Bonificaciones: coincidencia al inicio, tras separador y caracteres
 // consecutivos. Penalización: huecos entre caracteres.
 func Fuzzy(pattern, target string) (MatchResult, bool) {
-	if pattern == "" {
+	return compileFuzzy(pattern).match(target, true)
+}
+
+// match comparte el patrón ya normalizado entre muchos candidatos. FilterItems
+// no necesita posiciones, por lo que evita crear una lista por cada campo.
+func (q fuzzyQuery) match(target string, keepPositions bool) (MatchResult, bool) {
+	if len(q.runes) == 0 {
 		return MatchResult{Score: 0}, true
 	}
-	p := []rune(strings.ToLower(pattern))
 	t := []rune(target)
-	lower := make([]rune, len(t))
-	for i, r := range t {
-		lower[i] = unicode.ToLower(r)
+	var pos []int
+	if keepPositions {
+		pos = make([]int, 0, len(q.runes))
 	}
-
-	pos := make([]int, 0, len(p))
 	score := 0
 	pi := 0
 	lastMatch := -2
-	for i := 0; i < len(t) && pi < len(p); i++ {
-		if lower[i] != p[pi] {
+	for i, r := range t {
+		if unicode.ToLower(r) != q.runes[pi] {
 			continue
 		}
-		pos = append(pos, i)
+		if keepPositions {
+			pos = append(pos, i)
+		}
 		score += 10
 		if i == 0 {
 			score += 20
@@ -48,23 +63,22 @@ func Fuzzy(pattern, target string) (MatchResult, bool) {
 		} else if lastMatch >= 0 {
 			score -= (i - lastMatch - 1) * 2
 		}
-		if t[i] == rune(pattern[len(pattern)-1]) && pi == len(p)-1 {
-			// pequeño premio por terminar en el último carácter
-		}
 		lastMatch = i
 		pi++
+		if pi == len(q.runes) {
+			break
+		}
 	}
-	if pi < len(p) {
+	if pi < len(q.runes) {
 		return MatchResult{}, false
 	}
 	// Premio por coincidencia exacta de substring y por cadenas cortas.
-	lowTarget := string(lower)
-	lowPat := strings.ToLower(pattern)
-	if lowTarget == lowPat {
+	lowTarget := strings.ToLower(target)
+	if lowTarget == q.lower {
 		score += 200
-	} else if strings.HasPrefix(lowTarget, lowPat) {
+	} else if strings.HasPrefix(lowTarget, q.lower) {
 		score += 80
-	} else if strings.Contains(lowTarget, lowPat) {
+	} else if strings.Contains(lowTarget, q.lower) {
 		score += 40
 	}
 	score -= len(t) / 4
@@ -86,15 +100,16 @@ func FilterItems[T any](items []T, filter string, fields func(T) []string) []int
 		idx   int
 		score int
 	}
+	query := compileFuzzy(filter)
 	var out []scored
 	for i, item := range items {
 		best := 0
 		matched := false
-		for _, f := range fields(item) {
-			if m, ok := Fuzzy(filter, f); ok {
+		for _, field := range fields(item) {
+			if match, ok := query.match(field, false); ok {
 				matched = true
-				if m.Score > best {
-					best = m.Score
+				if match.Score > best {
+					best = match.Score
 				}
 			}
 		}

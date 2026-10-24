@@ -192,10 +192,13 @@ Recarga siempre con `Super+Shift+c` o `swaymsg reload`.
 
 ### Lanzador
 
+- Al abrirse, muestra «cargando aplicaciones…» mientras descubre las entradas
+  `.desktop` en segundo plano; puedes empezar a escribir mientras termina.
 - Los comandos del `PATH` no se listan por defecto (son cientos y ensucian).
   `Super+Shift+d` (`swaymenu --float --commands`) los incluye.
-- El historial está en `~/.cache/swaydesk/history`. Bórralo para reiniciar el
-  orden de resultados.
+- El filtrado difuso reutiliza resultados mientras navegas y recalcula solo al
+  cambiar el texto o la lista. El historial está en `~/.cache/swaydesk/history`;
+  bórralo para reiniciar el orden de resultados.
 - La calculadora se activa empezando el filtro por `=`:
   `=2^10`, `=sqrt(144)+3`, `=100*1.19` (IVA), `=round(2.5)`.
 

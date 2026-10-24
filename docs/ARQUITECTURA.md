@@ -279,7 +279,10 @@ xterm-256 más cercano comparando con el cubo 6×6×6 y la rampa de grises; si
 
 **Búsqueda difusa.** `Fuzzy("chrm", "Chromium")` comprueba subsecuencia y puntúa:
 +20 al inicio, +15 tras separador, +12 por caracteres consecutivos, −2 por hueco,
-+200 por coincidencia exacta. `FilterItems` puntúa cada campo y ordena estable.
++200 por coincidencia exacta. `FilterItems` compila el patrón una vez, puntúa cada
+campo y ordena estable; `Selector` conserva la lista filtrada hasta que cambie
+el texto o las entradas. El lanzador descubre los `.desktop` en segundo plano y
+mantiene el TUI interactivo durante esa carga.
 
 ## Frecency del lanzador
 
@@ -359,15 +362,16 @@ Cobertura destacada:
 
 - `swayipc`: frames binarios, magic inválido, payloads, con/sin argumentos,
   comandos fallidos, árbol, eventos y suscripción.
-- `ui`: anchos CJK/emoji, truncado, wrap de palabras largas, diff de secuencias
-  de teclas, dimensiones exactas de los paneles, `SGR` en 3 perfiles de color,
-  validación de las 8 paletas.
+- `ui`: anchos CJK/emoji, truncado, wrap de palabras largas, búsqueda difusa y
+  caché/invalidez del selector, secuencias de teclas, dimensiones exactas de los
+  paneles, `SGR` en 3 perfiles de color y validación de las 8 paletas.
 - `config`: TOML (comentarios, arrays, comillas simples, errores), aplicación de
   valores y `SaveTheme` conservando el resto del archivo.
 - `setup`: render sin marcadores, colores por tema, iconos según Nerd Font,
   instalación con respaldos y `apply` sobre directorio vacío.
-- `launcher`: `.desktop` (localización, `NoDisplay`, `Hidden`), `Exec` con
-  comillas y códigos `%f`, historial persistente y recortado, `PATH`.
+- `launcher`: `.desktop` (localización, `NoDisplay`, `Hidden`, descarte de
+  archivos especiales), `Exec` con comillas y códigos `%f`, historial persistente
+  y recortado, `PATH`.
 - `wayland`: cabeceras de mensaje, alineación a 4 bytes de strings, decodificación
   de eventos, descriptores y detección de compositor sin servidor.
 - `wallpaper`: las 11 escenas (tamaño, búfer y no-negro), `ParseSpec` con sus

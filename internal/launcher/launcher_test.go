@@ -3,6 +3,7 @@ package launcher
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -54,6 +55,28 @@ func TestParseDesktopOculta(t *testing.T) {
 		if _, ok := ParseDesktopFile(path); ok {
 			t.Fatalf("%s no debía cargarse", name)
 		}
+	}
+}
+
+func TestDesktopEntriesSkipsSpecialFiles(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	apps := filepath.Join(data, "applications")
+	if err := os.MkdirAll(apps, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	valid := filepath.Join(apps, "editor.desktop")
+	if err := os.WriteFile(valid, []byte("[Desktop Entry]\nName=Editor\nExec=editor\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(apps, "blocked.desktop"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_DIRS", data)
+
+	entries := DesktopEntries()
+	if len(entries) != 1 || entries[0].Name != "Editor" {
+		t.Fatalf("entradas inesperadas (el pipe no debe abrirse): %+v", entries)
 	}
 }
 

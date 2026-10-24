@@ -150,7 +150,12 @@ func DesktopEntries() []Entry {
 			if e.IsDir() || !strings.HasSuffix(e.Name(), ".desktop") {
 				continue
 			}
-			entry, ok := ParseDesktopFile(filepath.Join(dir, e.Name()))
+			path := filepath.Join(dir, e.Name())
+			info, err := os.Stat(path) // sigue symlinks, pero descarta pipes y otros especiales
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			entry, ok := ParseDesktopFile(path)
 			if !ok || seen[entry.Key] {
 				continue
 			}

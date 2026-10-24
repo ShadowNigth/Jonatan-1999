@@ -224,10 +224,11 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 		}
 	)
 	rebuild := func() {
-		sel.Items = nil
+		list := make([]ui.Item, 0, len(items))
 		for _, it := range items {
-			sel.Items = append(sel.Items, ui.Item{Key: it.id, Label: it.label, Hint: it.hint})
+			list = append(list, ui.Item{Key: it.id, Label: it.label, Hint: it.hint})
 		}
+		sel.SetItems(list)
 	}
 	rebuild()
 	applyFilter := func() {

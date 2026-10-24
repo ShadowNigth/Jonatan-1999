@@ -145,6 +145,32 @@ func TestKeyReader(t *testing.T) {
 	}
 }
 
+func TestSelectorFilteredCacheInvalidation(t *testing.T) {
+	sel := NewSelector(NewTheme("catppuccin", false), "cache", []Item{
+		{Key: "a", Label: "Alpha"},
+		{Key: "b", Label: "Beta"},
+	})
+	sel.SetFilter("al")
+	first := sel.Filtered()
+	second := sel.Filtered()
+	if len(first) != 1 || first[0].Key != "a" || &first[0] != &second[0] {
+		t.Fatalf("el resultado filtrado no se conservó: %v / %v", first, second)
+	}
+
+	sel.SetItems([]Item{{Key: "b", Label: "Beta"}})
+	if got := sel.Filtered(); len(got) != 0 {
+		t.Fatalf("SetItems dejó una búsqueda obsoleta: %+v", got)
+	}
+	sel.SetFilter("be")
+	if got := sel.Filtered(); len(got) != 1 || got[0].Key != "b" {
+		t.Fatalf("SetFilter no invalidó el resultado: %+v", got)
+	}
+	sel.SetBypassFilter(true)
+	if got := sel.Filtered(); len(got) != 1 || got[0].Key != "b" {
+		t.Fatalf("BypassFilter no aplicó: %+v", got)
+	}
+}
+
 func TestSelectorView(t *testing.T) {
 	SetProfile(ProfileNone)
 	defer SetProfile(ProfileTrueColor)
@@ -168,7 +194,7 @@ func TestSelectorView(t *testing.T) {
 	if !strings.Contains(view, "Firefox") {
 		t.Fatal("no aparece la primera entrada")
 	}
-	sel.Filter = "term"
+	sel.SetFilter("term")
 	if got := sel.Filtered(); len(got) != 1 || got[0].Label != "Terminal" {
 		t.Fatalf("filtro inesperado: %+v", got)
 	}

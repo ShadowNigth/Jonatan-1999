@@ -216,11 +216,6 @@ func firstCategory(cats string) string {
 }
 
 func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bool) {
-	items, byKey := buildItems(cfg, theme, withCommands)
-	sel := ui.NewSelector(theme, "swaydesk · lanzador", items)
-	sel.Filter = filter
-	sel.Placeholder = "escribe para buscar ·  = para calcular"
-
 	sc, err := ui.OpenScreen()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "swaymenu: %v\n", err)
@@ -228,15 +223,22 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 	}
 	defer sc.Close()
 
+	sel := ui.NewSelector(theme, "swaydesk · lanzador", nil)
+	sel.SetFilter(filter)
+	sel.Placeholder = "escribe para buscar ·  = para calcular"
+	sel.Empty = "cargando aplicaciones…"
+
 	var (
 		calcResult string
 		calcErr    error
-		base       = items
+		base       []ui.Item
+		byKey      map[string]payload
+		loaded     bool
 	)
 	refresh := func() {
 		f := strings.TrimSpace(sel.Filter)
-		sel.Items = base
-		sel.BypassFilter = false
+		sel.SetItems(base)
+		sel.SetBypassFilter(false)
 		calcResult, calcErr = "", nil
 		if strings.HasPrefix(f, "=") {
 			expr := strings.TrimSpace(strings.TrimPrefix(f, "="))
@@ -246,22 +248,73 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 					calcErr = err
 				} else {
 					calcResult = calc.Format(v)
-					sel.Items = []ui.Item{{
+					sel.SetItems([]ui.Item{{
 						Key:   "calc",
 						Label: calcResult,
 						Hint:  "copiar resultado",
 						Icon:  theme.Icons.Calc,
-					}}
-					sel.BypassFilter = true
+					}})
+					sel.SetBypassFilter(true)
 					sel.Cursor = 0
 				}
 			}
 		}
 	}
-	refresh()
+	type buildResult struct {
+		items []ui.Item
+		byKey map[string]payload
+	}
+	ready := make(chan buildResult, 1)
+	wake := make(chan time.Time, 1)
+	go func() {
+		items, payloads := buildItems(cfg, theme, withCommands)
+		ready <- buildResult{items: items, byKey: payloads}
+		wake <- time.Now()
+	}()
+	consumeReady := func() {
+		if loaded {
+			return
+		}
+		select {
+		case result := <-ready:
+			loaded = true
+			base, byKey = result.items, result.byKey
+			sel.Empty = "sin resultados"
+			refresh()
+		default:
+		}
+	}
+	editFilterWhileLoading := func(k ui.Key) bool {
+		switch {
+		case k.Is("esc"):
+			if sel.Filter != "" {
+				sel.ClearFilter()
+				return false
+			}
+			return true
+		case k.Is("enter"):
+			// Evita cerrar el lanzador si la búsqueda inicial sigue cargando.
+			return false
+		case k.Is("backspace"):
+			sel.Backspace()
+		case k.Ctrl && k.IsRune('u'):
+			sel.ClearFilter()
+		case k.Ctrl && k.IsRune('w'):
+			f := strings.TrimRight(sel.Filter, " ")
+			if i := strings.LastIndexByte(f, ' '); i >= 0 {
+				sel.SetFilter(f[:i+1])
+			} else {
+				sel.SetFilter("")
+			}
+		case k.Rune >= 32 && !k.Ctrl && !k.Alt:
+			sel.Type(k.Rune)
+		}
+		return false
+	}
 
 	_ = sc.Loop(
 		func(w, h int) string {
+			consumeReady()
 			view := sel.View(w, h)
 			if calcErr != nil && strings.HasPrefix(sel.Filter, "=") {
 				// Sustituye la línea de pistas por el error de cálculo.
@@ -279,6 +332,10 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 			return view
 		},
 		func(k ui.Key) bool {
+			consumeReady()
+			if !loaded {
+				return editFilterWhileLoading(k)
+			}
 			switch {
 			case k.Is("esc"):
 				if sel.Filter != "" {
@@ -315,18 +372,17 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 			case k.Ctrl && k.IsRune('w'):
 				f := strings.TrimRight(sel.Filter, " ")
 				if i := strings.LastIndexByte(f, ' '); i >= 0 {
-					sel.Filter = f[:i+1]
+					sel.SetFilter(f[:i+1])
 				} else {
-					sel.Filter = ""
+					sel.SetFilter("")
 				}
-				sel.Cursor, sel.Offset = 0, 0
 				refresh()
 			case k.Rune >= 32 && !k.Ctrl && !k.Alt:
 				sel.Type(k.Rune)
 				refresh()
 			}
 			return false
-		}, nil)
+		}, wake)
 }
 
 // execute lanza la entrada seleccionada.
