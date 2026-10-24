@@ -53,6 +53,30 @@ once() {
     quiet "$_nombre" "$@"
 }
 
+# stop_exact NOMBRE — detiene un proveedor alternativo y espera brevemente
+# para no arrancar dos barras/daemons que compiten por la misma superficie o
+# el mismo nombre D-Bus. Devuelve error si no pudo detenerlo.
+stop_exact() {
+    _nombre="$1"
+    if ! alive "$_nombre"; then return 0; fi
+    if ! have pkill; then
+        log "no se puede detener $_nombre: falta pkill"
+        return 1
+    fi
+    log "deteniendo proveedor alternativo: $_nombre"
+    pkill -TERM -x "$_nombre" >/dev/null 2>&1 || true
+    _intento=0
+    while alive "$_nombre" && [ "$_intento" -lt 10 ]; do
+        sleep 0.1
+        _intento=$((_intento + 1))
+    done
+    if alive "$_nombre"; then
+        log "$_nombre sigue activo; no se iniciará otro proveedor"
+        return 1
+    fi
+    return 0
+}
+
 # una_vez CLAVE — verdadero la primera vez en esta sesión de sway. SWAYSOCK
 # cambia en cada arranque del compositor, así que un reload no repite nada.
 una_vez() {
@@ -71,30 +95,53 @@ if have swaydesk && una_vez arranque; then
 fi
 
 # --- Barra de estado -------------------------------------------------------
-# swaydesk trae su propia barra (swaybar). Si `bar.enabled = true` en
-# config.toml y swaybar está instalado, se usa esa; si no, se usa waybar.
-if have swaybar && swaydesk bar --enabled >/dev/null 2>&1; then
-    once swaybar
-elif have waybar; then
-    if alive waybar; then
-        # Ya corriendo: solo se le pide que relea la hoja de estilos.
-        pkill -SIGUSR2 -x waybar >/dev/null 2>&1
-    else
-        quiet waybar
+# Los proveedores son excluyentes: si `bar.enabled = true`, swaydesk usa su
+# swaybar y detiene Waybar; si está apagado (o falta swaybar), hace lo inverso.
+if have swaydesk && have swaybar && swaydesk bar --enabled >/dev/null 2>&1; then
+    if stop_exact waybar; then
+        once swaybar
+    fi
+else
+    if stop_exact swaybar; then
+        if have waybar; then
+            if alive waybar; then
+                # Ya corriendo: solo se le pide que relea la hoja de estilos.
+                if have pkill; then pkill -SIGUSR2 -x waybar >/dev/null 2>&1; fi
+            else
+                quiet waybar
+            fi
+        fi
     fi
 fi
 
 # --- Notificaciones --------------------------------------------------------
-# swaynotify (propio) dibuja las tarjetas en una capa overlay con el tema
-# activo. Si no está instalado o está desactivado (notify.enabled = false),
-# se usa mako.
-if have swaynotify && swaydesk notify-enabled >/dev/null 2>&1; then
-    once swaynotify daemon
-elif have mako; then
-    if [ -f "$HOME/.config/mako/config" ]; then
-        once mako -c "$HOME/.config/mako/config"
-    else
-        once mako
+# swaynotify (propio) dibuja las tarjetas con el tema activo. Solo un proceso
+# puede poseer org.freedesktop.Notifications: al seleccionar swaynotify se
+# detienen mako/dunst; al desactivarlo, se conserva dunst si ya estaba activo
+# y se usa mako como alternativa.
+if have swaydesk && have swaynotify && swaydesk notify-enabled >/dev/null 2>&1; then
+    _puede_iniciar=1
+    stop_exact mako || _puede_iniciar=0
+    stop_exact dunst || _puede_iniciar=0
+    if [ "$_puede_iniciar" -eq 1 ]; then
+        if swaynotify status >/dev/null 2>&1; then
+            log "swaynotify ya responde en D-Bus"
+        elif stop_exact swaynotify; then
+            once swaynotify daemon
+        fi
+    fi
+else
+    if stop_exact swaynotify; then
+        if alive dunst; then
+            stop_exact mako || true
+            log "dunst ya está activo; no se inicia mako"
+        elif have mako; then
+            if [ -f "$HOME/.config/mako/config" ]; then
+                once mako -c "$HOME/.config/mako/config"
+            else
+                once mako
+            fi
+        fi
     fi
 fi
 

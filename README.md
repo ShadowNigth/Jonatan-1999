@@ -325,6 +325,10 @@ Barra propia
   bar modules cpu ram clock  Elige los módulos de la derecha
 ```
 
+Para volver ahora a Waybar sin reiniciar la sesión, ejecuta `swaydesk bar off`
+y después `swaymsg reload`. El autostart detiene la otra barra antes de iniciar
+la elegida, evitando que queden superpuestas.
+
 ### Avisos en pantalla (OSD de volumen y reproducción)
 
 ```bash

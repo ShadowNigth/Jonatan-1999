@@ -632,7 +632,9 @@ caída.
 ### Todo el camino de vuelta a waybar
 
 Si prefieres waybar y sus módulos personalizados, pon `enabled = false` en
-`[bar]` (o ejecuta `swaydesk bar off`) y reinicia la sesión: la plantilla de
+`[bar]` (o ejecuta `swaydesk bar off`) y aplica el cambio con `swaymsg reload`.
+El autostart detiene la barra que no corresponde a la opción elegida antes de
+iniciar la otra, así no quedan Waybar y swaybar superpuestas. La plantilla de
 waybar sigue instalada y se colorea con el tema igual que antes.
 
 ## 8c. Notificaciones propias (`swaynotify`)
@@ -814,8 +816,9 @@ con `SetDND`, `ToggleDND`, `GetStatus`, `ListHistory`, `CloseAll`,
 - Sin bus de sesión (`DBUS_SESSION_BUS_ADDRESS`) el daemon no puede arrancar.
   En una sesión de sway normal lo levanta `dbus-update-activation-environment` /
   `dbus-launch`; el autostart lo comprueba antes de lanzarlo.
-- Solo puede haber un servidor de notificaciones: si ya hay `mako` o `dunst`,
-  `swaynotify` avisa y sale. El autostart arranca uno u otro, nunca los dos.
+- Solo puede haber un servidor de notificaciones. Si `notify.enabled = true`,
+  el autostart detiene `mako`/`dunst` antes de iniciar `swaynotify`; si está
+  desactivado, conserva `dunst` si ya está activo o inicia `mako` como reserva.
 - El historial se guarda en `~/.cache/swaydesk/notificaciones.json` cada cinco
   segundos y al salir, así que sobrevive a un reinicio de la sesión.
 - Si un aviso llega con `replaces_id`, se actualiza la tarjeta en el sitio en

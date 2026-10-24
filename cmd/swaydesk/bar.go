@@ -35,11 +35,11 @@ func cmdBar(args []string) {
 	case "on", "activar":
 		cfg.BarEnabled = true
 		must(saveBarConfig(cfg))
-		fmt.Println("✔ barra propia activada · reinicia la sesión o ejecuta: pkill waybar; swaybar &")
+		fmt.Println("✔ barra propia activada · aplica el cambio con: swaymsg reload")
 	case "off", "desactivar":
 		cfg.BarEnabled = false
 		must(saveBarConfig(cfg))
-		fmt.Println("✔ barra propia desactivada · se usará waybar")
+		fmt.Println("✔ barra propia desactivada · Waybar se iniciará al recargar Sway: swaymsg reload")
 	case "preview", "vista":
 		must(barPreview(cfg, args))
 	case "modules", "modulos", "módulos":

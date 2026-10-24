@@ -39,6 +39,11 @@ func TestRenderSinMarcadores(t *testing.T) {
 			t.Errorf("el autostart debe diagnosticar el servicio %q", service)
 		}
 	}
+	for _, provider := range []string{"stop_exact waybar", "stop_exact swaybar", "stop_exact mako", "stop_exact dunst", "swaynotify status"} {
+		if !strings.Contains(files["swaydesk/autostart.sh"], provider) {
+			t.Errorf("el autostart debe seleccionar un solo proveedor: falta %q", provider)
+		}
+	}
 }
 
 func TestRenderPaleta(t *testing.T) {

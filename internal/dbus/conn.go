@@ -209,12 +209,30 @@ func (c *Conn) readLoop() {
 			c.failAll(err)
 			return
 		}
-		bodyLen := int(binary.LittleEndian.Uint32(header[4:]))
-		fieldsLen := int(binary.LittleEndian.Uint32(header[12:]))
-		// Cabecera (rellenada a 8), cuerpo y relleno final a 8.
-		bodyStart := align8(16 + fieldsLen)
-		total := align8(bodyStart + bodyLen)
-		if total < 16 || total > 128<<20 {
+		var order binary.ByteOrder
+		switch header[0] {
+		case 'l':
+			order = binary.LittleEndian
+		case 'B':
+			order = binary.BigEndian
+		default:
+			c.failAll(fmt.Errorf("orden de bytes D-Bus desconocido %q", header[0]))
+			return
+		}
+		if header[3] != 1 {
+			c.failAll(fmt.Errorf("versión de protocolo D-Bus no soportada: %d", header[3]))
+			return
+		}
+		bodyLen := uint64(order.Uint32(header[4:8]))
+		fieldsLen := uint64(order.Uint32(header[12:16]))
+		if bodyLen+fieldsLen+16 > maxMessageSize {
+			c.failAll(fmt.Errorf("mensaje D-Bus demasiado grande: cuerpo=%d cabeceras=%d", bodyLen, fieldsLen))
+			return
+		}
+		// El cuerpo empieza alineado a 8 bytes, pero no hay relleno tras él.
+		bodyStart := align8(16 + int(fieldsLen))
+		total := bodyStart + int(bodyLen)
+		if total < 16 || total > maxMessageSize {
 			c.failAll(fmt.Errorf("mensaje D-Bus de tamaño imposible: %d", total))
 			return
 		}
@@ -226,7 +244,8 @@ func (c *Conn) readLoop() {
 		}
 		decoded, err := DecodeMessage(msg)
 		if err != nil {
-			continue
+			c.failAll(fmt.Errorf("no se pudo decodificar mensaje D-Bus: %w", err))
+			return
 		}
 		c.dispatch(decoded)
 	}
@@ -283,6 +302,7 @@ func (c *Conn) failAll(err error) {
 		ch <- &Message{Type: ErrorReply, ErrorName: "org.freedesktop.DBus.Error.Disconnected", Body: []any{err.Error()}}
 	}
 	c.mu.Unlock()
+	_ = c.nc.Close()
 }
 
 // nextSerial devuelve un serial nuevo.
