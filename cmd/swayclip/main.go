@@ -6,10 +6,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 	"os"
 	"os/exec"
 	"strings"
@@ -36,7 +32,6 @@ type backend interface {
 	list() ([]clipItem, error)
 	copy(clipItem) error
 	remove(clipItem) error
-	preview(clipItem, int, int) ([]string, error)
 }
 
 func main() {
@@ -242,21 +237,6 @@ func (cliphist) copy(it clipItem) error {
 	return nil
 }
 
-func (cliphist) preview(it clipItem, width, height int) ([]string, error) {
-	if it.imageMIME == "" {
-		return ui.Wrap(ui.Sanitize(it.content), width), nil
-	}
-	data, err := exec.Command("cliphist", "decode", it.id).Output()
-	if err != nil {
-		return nil, fmt.Errorf("no se pudo leer la imagen: %w", err)
-	}
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("formato de imagen no compatible (%s): %w", it.imageMIME, err)
-	}
-	return ui.RenderImage(img, width, height), nil
-}
-
 func (cliphist) remove(it clipItem) error {
 	cmd := exec.Command("cliphist", "delete")
 	cmd.Stdin = strings.NewReader(it.raw + "\n")
@@ -297,10 +277,6 @@ func (clipman) remove(it clipItem) error {
 	return fmt.Errorf("clipman no permite borrar entradas individuales")
 }
 
-func (clipman) preview(it clipItem, width, _ int) ([]string, error) {
-	return ui.Wrap(ui.Sanitize(it.content), width), nil
-}
-
 // client es el modo mínimo: sólo muestra el contenido actual del portapapeles.
 type client struct{}
 
@@ -331,10 +307,6 @@ func (client) remove(clipItem) error {
 	return fmt.Errorf("no hay historial que borrar con el backend 'cliente'")
 }
 
-func (client) preview(it clipItem, width, _ int) ([]string, error) {
-	return ui.Wrap(ui.Sanitize(it.content), width), nil
-}
-
 // ───────────────────────── interfaz ─────────────────────────
 
 func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
@@ -349,35 +321,16 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 	sel.Placeholder = "busca en el historial…"
 
 	var (
-		filter            []clipItem
-		cursor            int
-		offset            int
-		status            string
-		imagePreviewCache = map[string][]string{}
-		previewOf         = func() []string {
+		filter    []clipItem
+		cursor    int
+		offset    int
+		status    string
+		previewOf = func() []string {
 			if len(filter) == 0 {
 				return nil
 			}
 			it := filter[cursor]
-			width := max(1, sc.W-8)
-			height := max(1, min(5, sc.H/3-1))
-			if it.imageMIME != "" {
-				key := fmt.Sprintf("%s:%dx%d", it.id, width, height)
-				if lines, ok := imagePreviewCache[key]; ok {
-					return lines
-				}
-				lines, err := b.preview(it, width, height)
-				if err != nil {
-					lines = []string{ui.Sanitize(err.Error())}
-				}
-				imagePreviewCache[key] = lines
-				return lines
-			}
-			lines, err := b.preview(it, width, height)
-			if err != nil {
-				return []string{ui.Sanitize(err.Error())}
-			}
-			return lines
+			return ui.Wrap(ui.Sanitize(it.content), sc.W-8)
 		}
 	)
 	rebuild := func() {

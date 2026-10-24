@@ -184,6 +184,10 @@ func runDaemon(args []string) {
 
 var errStop = errors.New("fin")
 
+// notificationPollInterval limita la espera para despachar eventos Wayland
+// cuando no llega una nueva notificación D-Bus.
+const notificationPollInterval = 50 * time.Millisecond
+
 // anchorsFor traduce la posición configurada en anclas y márgenes.
 func anchorsFor(pos string) (anchors uint32, mx, my int) {
 	switch strings.ToLower(pos) {
@@ -208,7 +212,9 @@ func scaleFor(cfg *config.Config, scale int) int {
 
 // loop dibuja y atiende eventos.
 func (d *daemon) loop() error {
-	tick := time.NewTicker(200 * time.Millisecond)
+	// Dispatch no bloqueante sondea el socket de Wayland con el intervalo
+	// corto anterior, evitando dejar una tarjeta esperando el tick viejo de 200 ms.
+	tick := time.NewTicker(notificationPollInterval)
 	defer tick.Stop()
 	// Un primer dibujo para fijar el tamaño de la superficie.
 	d.draw()
@@ -302,9 +308,13 @@ func (d *daemon) openReply(n notify.Notification) {
 func itemsKey(items []notify.Notification, now time.Time) string {
 	var b strings.Builder
 	for _, n := range items {
-		fmt.Fprintf(&b, "%d:%d:%d:%s;", n.ID, n.Timeout, n.Progress, n.Summary)
+		fmt.Fprintf(&b, "%d:%d:%d:%d:%q:%q:%q:%q:%q:%q:%q:%v:%t:%q:%t:%d;",
+			n.ID, n.Timeout, n.Progress, n.Urgency, n.App, n.Summary, n.Body,
+			n.Icon, n.GroupID, n.ImagePath, n.Category, n.Actions, n.InlineReply,
+			n.ReplyPlaceholder, n.Resident, n.Created.UnixNano())
 	}
-	// La barra de tiempo avanza; se repinta una vez por segundo.
+	// La barra de tiempo avanza; se repinta una vez por segundo. Los cambios
+	// reales (incluido un replace con el mismo resumen) se detectan enseguida.
 	fmt.Fprintf(&b, "@%d|%d", now.Unix(), len(items))
 	return b.String()
 }

@@ -113,7 +113,7 @@ func swayipcDial(fn func(*swayipc.Conn) error) error {
 }
 
 // Screenshot captura la pantalla completa o una región según el modo, guarda
-// el PNG, lo copia como image/png y muestra una miniatura en notificaciones.
+// el PNG, lo copia como image/png y envía una notificación ligera.
 func Screenshot(mode string) error {
 	if !launcher.HasCommand("grim") {
 		return fmt.Errorf("se necesita grim para capturas de pantalla")
@@ -153,10 +153,10 @@ func Screenshot(mode string) error {
 
 	copyErr := copyScreenshotToClipboard(name)
 	if copyErr != nil {
-		screenshotPreview(name, false, copyErr)
+		screenshotNotification(name, false, copyErr)
 		return fmt.Errorf("captura guardada en %s, pero no se copió al portapapeles: %w", name, copyErr)
 	}
-	screenshotPreview(name, true, nil)
+	screenshotNotification(name, true, nil)
 	return nil
 }
 
@@ -184,25 +184,28 @@ func copyScreenshotToClipboard(path string) error {
 	return nil
 }
 
-// screenshotPreview muestra una notificación con la propia captura como
-// miniatura. swaynotify dibuja la imagen completa; notify-send queda como
-// alternativa cuando no está disponible el daemon propio.
-func screenshotPreview(path string, copied bool, copyErr error) {
+// screenshotNotification envía un aviso breve, sin cargar ni dibujar la imagen;
+// así la notificación no espera a decodificar una captura grande.
+func screenshotNotification(path string, copied bool, copyErr error) {
 	summary := "Captura guardada"
 	body := "Guardada en " + path
+	urgency := "low"
 	if copied {
 		summary = "Captura copiada"
 		body += " · Copiada al portapapeles"
 	} else if copyErr != nil {
 		body += " · No se pudo copiar: " + copyErr.Error()
+		urgency = "critical"
 	}
 
 	if bin := companionCommand("swaynotify"); bin != "" {
-		_ = launcher.StartDetached(bin, "send", "--app", "swaydesk", "--image", path, "--icon", path, summary, body)
+		_ = launcher.StartDetached(bin, "send", "--app", "swaydesk", "--urgency", urgency,
+			"--timeout", "3500", summary, body)
 		return
 	}
 	if launcher.HasCommand("notify-send") {
-		_ = launcher.StartDetached("notify-send", "-a", "swaydesk", "-i", path, "-t", "5000", summary, body)
+		_ = launcher.StartDetached("notify-send", "-a", "swaydesk", "-u", urgency,
+			"-t", "3500", summary, body)
 	}
 }
 

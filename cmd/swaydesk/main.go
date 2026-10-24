@@ -127,7 +127,7 @@ Sesión
                               Daemon de notificaciones propio (swaynotify)
   volume <up|down|mute>       Controla el volumen (con aviso en pantalla)
   osd [show|preview|volume]   Avisos en pantalla (swayosd): volumen
-  screenshot [region|full]    Captura, copia al portapapeles y muestra miniatura
+  screenshot [region|full]    Captura, copia al portapapeles y avisa al terminar
   wallpaper <fondo> [modo]    Fondo estático o animado (ver "swaydesk wallpaper help")
   wallpaper --gallery         Selector de fondos con vista previa animada
   wallpaper daemon | --stop   Inicia/detiene el fondo animado (live wallpaper)

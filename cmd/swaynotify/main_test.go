@@ -71,6 +71,10 @@ func TestItemsKeyIgnoresNothing(t *testing.T) {
 	if itemsKey(a, now) == itemsKey(b, now) {
 		t.Error("un resumen distinto debe cambiar la clave")
 	}
+	actualizada := []notify.Notification{{ID: 1, Summary: "uno", Body: "actualizado", Progress: -1}}
+	if itemsKey(a, now) == itemsKey(actualizada, now) {
+		t.Error("el cuerpo de un reemplazo debe repintarse sin esperar al siguiente segundo")
+	}
 	// La clave cambia con el segundo (la cuenta atrás avanza).
 	if itemsKey(a, now) == itemsKey(a, now.Add(1100*time.Millisecond)) {
 		t.Error("la cuenta atrás debería repintar cada segundo")
