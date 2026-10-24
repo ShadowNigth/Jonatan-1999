@@ -80,7 +80,7 @@ func (s State) Label() string {
 // ValueText es el texto grande: el porcentaje o el estado de silencio.
 func (s State) ValueText() string {
 	if s.Muted {
-		return "silencio"
+		return "silenciado"
 	}
 	return fmt.Sprintf("%d%%", s.Value)
 }

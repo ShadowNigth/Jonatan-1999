@@ -662,29 +662,37 @@ una capa overlay, con la fuente y los colores del tema activo.
 [notify]
 enabled = true             # false = usar mako
 position = "top-right"     # top-right, top-left, bottom-right, bottom-left
-width = 360                # ancho de cada tarjeta
+width = 300                # ancho compacto de cada tarjeta
 margin = 14                # separación con el borde de la pantalla
-padding = 14               # relleno interior
-gap = 8                    # separación entre tarjetas
-radius = 14                # esquinas redondeadas
+padding = 10               # relleno interior
+gap = 6                    # separación entre tarjetas
+radius = 12                # esquinas redondeadas
 opacity = 0.94             # transparencia de las tarjetas
 timeout_ms = 6000          # tiempo en pantalla de las normales
 critical_timeout_ms = 0    # 0 = las urgentes se quedan hasta cerrarlas
 max_visible = 4            # cuántas se apilan
 history = 50               # entradas que se guardan
-max_lines = 3              # líneas del cuerpo
+max_lines = 2              # máximo de líneas del cuerpo para reducir altura
 dnd = false                # arrancar en modo «no molestar»
 group = true               # agrupar por aplicación en pilas desplegables
 font = ""                  # fuente PSF (vacío = automática)
 font_scale = 0             # 0 = automática
 ```
 
+En instalaciones ya configuradas, edita `~/.config/swaydesk/config.toml`:
+los valores guardados prevalecen sobre estos valores predeterminados.
+
+Los rótulos y controles propios aparecen en español; algunas acciones genéricas
+que las aplicaciones envían en inglés (Open, Reply, Dismiss, etc.) se traducen.
+El título y el cuerpo del aviso son texto de la aplicación y se muestran tal como
+llegan: para traducirlos hay que cambiar el idioma de esa aplicación.
+
 ### Qué se dibuja
 
 - **Punto de color** según la urgencia: acento (normal), atenuado (baja) y
   error (crítica, que además lleva el borde marcado).
-- **Aplicación y hora** arriba, con el resumen en tamaño doble y el cuerpo
-  recortado a `max_lines` líneas con puntos suspensivos.
+- **Aplicación y hora** arriba, con el resumen compacto por defecto (destacado
+  en tarjetas anchas) y el cuerpo recortado a `max_lines` líneas.
 - **Acciones** como botones `[Etiqueta]`: se pulsan con el ratón y el cliente
   recibe `ActionInvoked`.
 - **Barra de progreso** con el hint `progress` (descargas, copias…).
@@ -844,7 +852,9 @@ El nivel de volumen aparece en una **tarjeta flotante** con porcentaje y barra
 segmentada. Además, al cambiar de pista, los reproductores compatibles con
 MPRIS (por ejemplo, mpv, Spotify o Chromium) pueden mostrar una tarjeta con
 **título, artista y carátula**. Ambas se desvanecen solas y no interceptan
-clics; el aviso lo dibuja el escritorio, no cada reproductor.
+clics; el aviso lo dibuja el escritorio, no cada reproductor. Sus rótulos son
+`VOLUMEN` y `SILENCIADO`; los estados de reproducción también se muestran en
+español.
 
 ```toml
 [osd]
@@ -852,16 +862,16 @@ enabled = true             # OSD de volumen; no desactiva el control de audio
 media_enabled = true        # tarjeta MPRIS al cambiar de pista
 media_timeout_ms = 3200     # duración del OSD de reproducción
 position = "bottom-center" # bottom-right, bottom-left, top-center, center
-width = 320                # ancho de la tarjeta en píxeles
+width = 260                # ancho compacto de la tarjeta en píxeles
 margin = 72                # separación con el borde de la pantalla
-padding = 16               # relleno interior
-radius = 18                # esquinas redondeadas
+padding = 12               # relleno interior
+radius = 14                # esquinas redondeadas
 opacity = 0.95             # transparencia del fondo
 timeout_ms = 1400          # cuánto tiempo se queda en pantalla
 fade_ms = 140              # fundido de entrada y salida (0 = sin animación)
 segments = 24              # marcas de la barra de nivel
 font = ""                  # fuente PSF (vacío = automática)
-font_scale = 0             # 0 = el doble que la barra, para leerse de reojo
+font_scale = 0             # 0 = automática; OSD compacto (escala 1)
 ```
 
 ### Cómo se dispara

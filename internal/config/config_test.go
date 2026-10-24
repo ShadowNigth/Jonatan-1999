@@ -267,6 +267,21 @@ func TestLoadBootSection(t *testing.T) {
 	}
 }
 
+func TestNotificationDefaultsAreCompact(t *testing.T) {
+	cfg := Default()
+	if cfg.NotifyWidth != 300 || cfg.NotifyPadding != 10 || cfg.NotifyGap != 6 ||
+		cfg.NotifyRadius != 12 || cfg.NotifyMaxLines != 2 {
+		t.Fatalf("valores compactos de notificación inesperados: ancho=%d relleno=%d separación=%d radio=%d líneas=%d",
+			cfg.NotifyWidth, cfg.NotifyPadding, cfg.NotifyGap, cfg.NotifyRadius, cfg.NotifyMaxLines)
+	}
+	text := DefaultFile(cfg)
+	for _, want := range []string{"width = 300", "padding = 10", "gap = 6", "max_lines = 2"} {
+		if !contains(text, want) {
+			t.Errorf("la configuración compacta debe incluir %q", want)
+		}
+	}
+}
+
 func TestOSDDefaults(t *testing.T) {
 	c := Default()
 	if !c.OSDEnabled || !c.OSDMediaEnabled {
@@ -278,15 +293,15 @@ func TestOSDDefaults(t *testing.T) {
 	if c.OSDPosition != "bottom-center" {
 		t.Fatalf("posición por defecto = %q", c.OSDPosition)
 	}
-	if c.OSDWidth < 200 || c.OSDTimeout < 500 || c.OSDSegments < 8 {
-		t.Fatalf("valores del OSD poco razonables: %+v", c)
+	if c.OSDWidth != 260 || c.OSDPadding != 12 || c.OSDRadius != 14 || c.OSDTimeout < 500 || c.OSDSegments < 8 {
+		t.Fatalf("valores compactos del OSD poco razonables: %+v", c)
 	}
 	if c.OSDOpacity <= 0 || c.OSDOpacity > 1 {
 		t.Fatalf("opacidad del OSD = %v", c.OSDOpacity)
 	}
 	// El archivo generado trae la sección con sus valores.
 	text := DefaultFile(c)
-	for _, want := range []string{"[osd]", "media_enabled = true", "media_timeout_ms = 3200", "position = \"bottom-center\"", "fade_ms = "} {
+	for _, want := range []string{"[osd]", "media_enabled = true", "media_timeout_ms = 3200", "position = \"bottom-center\"", "width = 260", "padding = 12", "fade_ms = "} {
 		if !contains(text, want) {
 			t.Fatalf("falta %q en la configuración generada", want)
 		}

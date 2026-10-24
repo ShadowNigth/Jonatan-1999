@@ -175,7 +175,7 @@ func runPreview(args []string) {
 		}
 	}
 	st := osd.Volume(value, has(vals, "muted"), orDefault(last(vals, "device"), "Auriculares"))
-	r := rendererFor(cfg, 2, 0, last(vals, "theme"))
+	r := rendererFor(cfg, scaleFor(cfg, last(vals, "scale")), 0, last(vals, "theme"))
 	canvas := r.Render(st, 1)
 	if err := savePNG(canvas, out); err != nil {
 		fail(err)

@@ -76,6 +76,19 @@ func TestRenderPaleta(t *testing.T) {
 	}
 }
 
+func TestMakoFallbackUsesCompactCards(t *testing.T) {
+	files, err := Render(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mako := files["mako/config"]
+	for _, want := range []string{"width=320", "height=120", "padding=10", "max-visible=4", "max-icon-size=40"} {
+		if !strings.Contains(mako, want) {
+			t.Errorf("la configuración compacta de mako debe incluir %q", want)
+		}
+	}
+}
+
 func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 	files, err := Render(config.Default())
 	if err != nil {

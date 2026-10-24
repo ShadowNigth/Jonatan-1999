@@ -471,17 +471,17 @@ dir = "~/Imágenes/Fondos"  # carpeta que explora el selector
 [notify]
 enabled = true             # false = volver a mako
 position = "top-right"     # top-right · top-left · bottom-right · bottom-left
-width = 360                # ancho de las tarjetas
+width = 300                # tarjetas compactas
 margin = 14
-padding = 14
-gap = 8
-radius = 14
+padding = 10
+gap = 6
+radius = 12
 opacity = 0.94
 timeout_ms = 6000          # tiempo en pantalla (normales)
 critical_timeout_ms = 0    # 0 = las urgentes no caducan
 max_visible = 4            # cuántas se apilan
 history = 50               # entradas que se recuerdan
-max_lines = 3              # líneas del cuerpo
+max_lines = 2              # líneas del cuerpo
 dnd = false                # arrancar en «no molestar»
 group = true               # agrupar por aplicación en pilas desplegables
 font = ""                  # fuente PSF (vacío = automática)
@@ -513,16 +513,16 @@ enabled = true             # aviso flotante con el nivel de volumen
 media_enabled = true        # tarjeta al cambiar de pista (MPRIS)
 media_timeout_ms = 3200     # duración de la tarjeta multimedia
 position = "bottom-center" # bottom-right, bottom-left, top-center, center
-width = 320                # ancho de la tarjeta
+width = 260                # ancho compacto de la tarjeta
 margin = 72                # separación con el borde inferior
-padding = 16
-radius = 18
+padding = 12
+radius = 14
 opacity = 0.95
 timeout_ms = 1400          # cuánto se queda en pantalla
 fade_ms = 140              # fundido de entrada y salida (0 = sin animación)
 segments = 24              # marcas de la barra de nivel
 font = ""                  # fuente PSF (vacío = automática)
-font_scale = 0             # 0 = el doble de la barra, para leerse de reojo
+font_scale = 0             # 0 = automática; OSD compacto (escala 1)
 
 [effects]
 terminal_opacity = 0.94    # foot
@@ -534,6 +534,11 @@ gaps_inner = 6
 gaps_outer = 8
 rounding = 12              # solo swayfx
 ```
+
+Las tarjetas de notificación y el OSD de volumen usan tamaños compactos; sus
+rótulos propios están en español. El título y el cuerpo de cada notificación
+los envía la aplicación de origen y se muestran tal como llegan. Si ya tenías
+`config.toml`, sus medidas guardadas prevalecen: actualízalas en ese archivo.
 
 Cambiar de tema en caliente:
 

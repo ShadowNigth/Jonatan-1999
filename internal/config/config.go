@@ -201,17 +201,17 @@ func Default() *Config {
 
 		NotifyEnabled:      true,
 		NotifyPosition:     "top-right",
-		NotifyWidth:        360,
+		NotifyWidth:        300,
 		NotifyMargin:       14,
-		NotifyPadding:      14,
-		NotifyGap:          8,
-		NotifyRadius:       14,
+		NotifyPadding:      10,
+		NotifyGap:          6,
+		NotifyRadius:       12,
 		NotifyOpacity:      0.94,
 		NotifyTimeout:      6000,
 		NotifyCriticalTime: 0,
 		NotifyMaxVisible:   4,
 		NotifyHistory:      50,
-		NotifyMaxLines:     3,
+		NotifyMaxLines:     2,
 		NotifyDND:          false,
 		NotifyGroup:        true,
 		NotifyFontScale:    0,
@@ -220,10 +220,10 @@ func Default() *Config {
 		OSDMediaEnabled: true,
 		OSDMediaTimeout: 3200,
 		OSDPosition:     "bottom-center",
-		OSDWidth:        320,
+		OSDWidth:        260,
 		OSDMargin:       72,
-		OSDPadding:      16,
-		OSDRadius:       18,
+		OSDPadding:      12,
+		OSDRadius:       14,
 		OSDOpacity:      0.95,
 		OSDTimeout:      1400,
 		OSDFade:         140,
@@ -685,7 +685,7 @@ fade_ms = %d
 segments = %d
 # fuente PSF de consola (vacío = la mejor disponible del sistema)
 font = %q
-# escala de la fuente (0 = automática: el doble para leerse de reojo)
+# escala de la fuente (0 = automática: tamaño compacto, escala 1)
 font_scale = %d
 
 [effects]

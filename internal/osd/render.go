@@ -35,7 +35,7 @@ func New(opt Options) *Renderer {
 		opt.Width = 260
 	}
 	if opt.Padding <= 0 {
-		opt.Padding = 16
+		opt.Padding = 12
 	}
 	if opt.Radius < 0 {
 		opt.Radius = 0

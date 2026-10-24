@@ -22,6 +22,13 @@ func testRenderer(scale int) *Renderer {
 	})
 }
 
+func TestRendererDefaultsAreCompact(t *testing.T) {
+	r := New(Options{Face: font.Builtin(), Theme: ui.PaletteByName("sakura")})
+	if r.Opt.Width != 260 || r.Opt.Padding != 12 || r.Scale() != 1 {
+		t.Fatalf("valores compactos del OSD: %+v, escala %d", r.Opt, r.Scale())
+	}
+}
+
 func TestStatePercentAndFill(t *testing.T) {
 	casos := []struct {
 		valor  int
@@ -61,7 +68,7 @@ func TestStateTexts(t *testing.T) {
 		t.Fatalf("textos del aviso: %q %q %q", s.Label(), s.ValueText(), s.Detail())
 	}
 	m := Volume(45, true, "  ")
-	if m.ValueText() != "silencio" {
+	if m.ValueText() != "silenciado" {
 		t.Fatalf("silenciado = %q", m.ValueText())
 	}
 	if m.Detail() != "" {

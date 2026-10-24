@@ -90,8 +90,8 @@ Opciones comunes
 
 // ─── lectura del estado ────────────────────────────────────────────────────
 
-// scaleFor decide la escala de la fuente. El OSD se dibuja por defecto al
-// doble que la barra: se mira de reojo y tiene que leerse de un vistazo.
+// scaleFor decide la escala de la fuente. El valor automático es compacto
+// (escala 1); puede aumentarse con osd.font_scale, --scale o la variable de entorno.
 func scaleFor(cfg *config.Config, valor string) int {
 	if valor != "" {
 		if n, err := atoi(valor); err == nil && n >= 1 && n <= 3 {
@@ -106,7 +106,7 @@ func scaleFor(cfg *config.Config, valor string) int {
 			return n
 		}
 	}
-	return 2
+	return 1
 }
 
 // changeVolume aplica el cambio con la herramienta disponible.
