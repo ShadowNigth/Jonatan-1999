@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/launcher"
 	"github.com/ShadowNigth/swaydesk/internal/ui"
 )
 
@@ -30,7 +31,7 @@ func TestPowerMenuUsesFloatingTerminalOutsideTTY(t *testing.T) {
 }
 
 func TestShellJoinQuotesSwayExecArguments(t *testing.T) {
-	got := shellJoin([]string{"/usr/bin/foot", "--app-id=swaydesk-menu", "/tmp/my menu", "a'b"})
+	got := launcher.ShellQuoteArgs([]string{"/usr/bin/foot", "--app-id=swaydesk-menu", "/tmp/my menu", "a'b"})
 	want := `'/usr/bin/foot' '--app-id=swaydesk-menu' '/tmp/my menu' 'a'\''b'`
 	if got != want {
 		t.Fatalf("shellJoin() = %q, esperado %q", got, want)

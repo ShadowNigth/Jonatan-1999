@@ -142,15 +142,7 @@ func launchTerminalViaSway(term, appID, title string, width, height int, command
 		return launcher.StartDetached(binary, args...)
 	}
 	defer conn.Close()
-	return conn.CommandOK("exec --no-startup-id " + shellJoin(argv))
-}
-
-func shellJoin(args []string) string {
-	quoted := make([]string, len(args))
-	for i, arg := range args {
-		quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
-	}
-	return strings.Join(quoted, " ")
+	return conn.CommandOK("exec --no-startup-id " + launcher.ShellQuoteArgs(argv))
 }
 
 // buildItems reúne acciones, aplicaciones y comandos ordenados por uso.

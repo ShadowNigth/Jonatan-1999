@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -150,12 +151,39 @@ func handleClick(cfg *config.Config, name string) {
 		_ = launcher.LaunchTerminal(cfg.Terminal, "swaydesk-notify", "Notificaciones", 84, 24,
 			[]string{siblingExecutable("swaydesk"), "notifications", "center"})
 	case "power":
-		// Fuera de una terminal, swaymenu se relanza automáticamente en una
-		// terminal flotante para que el selector pueda leer el teclado.
-		if err := launcher.StartDetached(siblingExecutable("swaymenu"), "--power", "--float"); err != nil {
+		// La barra lanza la terminal mediante el compositor para que use el
+		// entorno Wayland de la sesión, igual que `swaymsg exec`.
+		if err := launchPowerMenu(cfg); err != nil {
 			actions.Notification("swaydesk", "No se pudo lanzar el menú de energía: "+err.Error(), "critical")
 		}
 	}
+}
+
+func launchPowerMenu(cfg *config.Config) error {
+	menu, err := exec.LookPath(siblingExecutable("swaymenu"))
+	if err != nil {
+		return fmt.Errorf("no se encontró swaymenu: %w", err)
+	}
+	command, err := powerMenuExecCommand(cfg, menu)
+	if err != nil {
+		return err
+	}
+	conn, err := swayipc.Dial()
+	if err != nil {
+		return fmt.Errorf("no se pudo conectar con sway: %w", err)
+	}
+	defer conn.Close()
+	return conn.CommandOK(command)
+}
+
+func powerMenuExecCommand(cfg *config.Config, menu string) (string, error) {
+	terminal, args, err := launcher.TerminalCommand(cfg.Terminal, "swaydesk-menu", "swaydesk", 58, 14,
+		[]string{menu, "--no-float", "--power"})
+	if err != nil {
+		return "", err
+	}
+	argv := append([]string{terminal}, args...)
+	return "exec --no-startup-id " + launcher.ShellQuoteArgs(argv), nil
 }
 
 func siblingExecutable(name string) string {

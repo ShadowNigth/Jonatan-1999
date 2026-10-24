@@ -181,6 +181,16 @@ func LaunchTerminal(term, appID, title string, width, height int, cmd []string) 
 	return StartDetached(binary, args...)
 }
 
+// ShellQuoteArgs convierte argumentos en una cadena segura para /bin/sh, por
+// ejemplo al enviarlos al comando `exec` de sway.
+func ShellQuoteArgs(args []string) string {
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+	}
+	return strings.Join(quoted, " ")
+}
+
 // StartDetached lanza un programa en su propia sesión, sin heredar la
 // terminal actual, para que sobreviva al cierre del menú.
 func StartDetached(name string, args ...string) error {
