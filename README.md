@@ -81,9 +81,10 @@ terceros.
 - **Barra de estado propia** (`swaybar`): islas redondeadas y translúcidas
   dibujadas píxel a píxel — sin GTK, Qt ni Cairo. Workspaces con la ventana
   enfocada, título, CPU, RAM, volumen, red, batería, reproductor y reloj, más
-  un botón rojo que abre el menú de energía; tipografía de mapa de bits con
-  fuentes PSF e iconos siempre visibles. Se adapta a la paleta, responde al
-  instante a eventos de sway y se configura desde `[bar]` en `config.toml`.
+  un botón rojo **PWR** que despliega las acciones de energía dentro de la
+  barra, sin abrir otra ventana; tipografía de mapa de bits con fuentes PSF e
+  iconos siempre visibles. Se adapta a la paleta, responde a eventos de sway y
+  se configura desde `[bar]` en `config.toml`.
 - **Notificaciones propias** (`swaynotify`): daemon completo de
   `org.freedesktop.Notifications` sobre un cliente **D-Bus escrito desde cero**
   (SASL EXTERNAL, formato binario con firmas, llamadas, señales y errores), y

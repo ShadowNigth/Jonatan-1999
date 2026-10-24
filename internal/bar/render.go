@@ -48,9 +48,11 @@ type Snapshot struct {
 	Notifications int
 	NotifDND      bool
 	// NotifReplies, cuántas de ellas admiten respuesta rápida.
-	NotifReplies int
-	Theme        string
-	Updates      int
+	NotifReplies  int
+	Theme         string
+	Updates       int
+	PowerMenuOpen bool
+	PowerPending  string
 }
 
 // Options configura el aspecto de la barra.
@@ -522,6 +524,9 @@ func (r *Renderer) centerItems(s Snapshot, fg, muted, accent RGBA) []item {
 
 // rightItems construye la isla derecha con los módulos configurados.
 func (r *Renderer) rightItems(s Snapshot, fg, muted, accent, ok, warn, errc RGBA) []item {
+	if s.PowerMenuOpen {
+		return powerMenuItems(s, fg, muted, accent, ok, warn, errc)
+	}
 	var items []item
 	// add separa los módulos con un punto medio para que la lectura sea clara.
 	add := func(text, label string, col RGBA) {
@@ -602,8 +607,8 @@ func (r *Renderer) rightItems(s Snapshot, fg, muted, accent, ok, warn, errc RGBA
 				add(fmt.Sprintf("%d", s.Updates), "act.", accent)
 			}
 		case "power":
-			// Control permanente: abre el menú de apagar/reiniciar/suspender.
-			items = append(items, item{text: "OFF", fg: errc, kind: itemPill, click: "power"})
+			// Botón independiente: abre el menú de energía dentro de la barra.
+			items = append(items, item{text: "PWR", fg: errc, kind: itemPill, click: "power"})
 		case "notify":
 			// Indicador del centro de notificaciones: al pulsarlo se abre.
 			// Con avisos en pantalla es una pastilla con el número; el «+»
@@ -636,6 +641,32 @@ func (r *Renderer) rightItems(s Snapshot, fg, muted, accent, ok, warn, errc RGBA
 		plain(s.Clock, fg)
 	}
 	return items
+}
+
+func powerMenuItems(s Snapshot, fg, muted, accent, ok, warn, errc RGBA) []item {
+	if s.PowerPending != "" {
+		label := map[string]string{
+			"logout":   "¿Cerrar sesión?",
+			"reboot":   "¿Reiniciar?",
+			"poweroff": "¿Apagar?",
+		}[s.PowerPending]
+		return []item{
+			{text: label, fg: warn},
+			{kind: itemGap},
+			{text: "SÍ", fg: errc, kind: itemPill, click: "power:confirm"},
+			{text: "NO", fg: ok, kind: itemPill, click: "power:cancel"},
+		}
+	}
+	return []item{
+		{text: "ENERGÍA", fg: accent},
+		{kind: itemGap},
+		{text: "BLOQ", fg: fg, kind: itemPill, click: "power:lock"},
+		{text: "SUSP", fg: accent, kind: itemPill, click: "power:suspend"},
+		{text: "SALIR", fg: warn, kind: itemPill, click: "power:logout"},
+		{text: "REINIC", fg: warn, kind: itemPill, click: "power:reboot"},
+		{text: "APAGAR", fg: errc, kind: itemPill, click: "power:poweroff"},
+		{text: "CERRAR", fg: muted, kind: itemPill, click: "power:close"},
+	}
 }
 
 func truncate(s string, n int) string {

@@ -1,40 +1,27 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ShadowNigth/swaydesk/internal/config"
-	"github.com/ShadowNigth/swaydesk/internal/launcher"
+	"github.com/ShadowNigth/swaydesk/internal/ui"
 )
 
-func TestPowerMenuExecCommandUsesTerminalAndTUIArgs(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "path with spaces")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	foot := filepath.Join(dir, "foot")
-	if err := os.WriteFile(foot, []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir)
-	menu := filepath.Join(dir, "swaymenu with spaces")
+func TestPowerMenuInlineToggleAndConfirmation(t *testing.T) {
+	cfg := config.Default()
+	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
+	state := powerMenuState{}
 
-	command, err := powerMenuExecCommand(&config.Config{Terminal: "foot"}, menu)
-	if err != nil {
-		t.Fatal(err)
+	if !state.handle(cfg, theme, "power") || !state.open {
+		t.Fatal("al pulsar PWR debe desplegar el menú dentro de la barra")
 	}
-	argv := []string{
-		foot,
-		"--app-id=swaydesk-menu",
-		"--title=swaydesk",
-		"-W", "58x14",
-		"-e", menu,
-		"--no-float", "--power",
+	if !state.handle(cfg, theme, "power:reboot") || state.pending != "reboot" {
+		t.Fatal("reiniciar debe pedir confirmación con la configuración predeterminada")
 	}
-	want := "exec --no-startup-id " + launcher.ShellQuoteArgs(argv)
-	if command != want {
-		t.Fatalf("powerMenuExecCommand() = %q, esperado %q", command, want)
+	if !state.handle(cfg, theme, "power:cancel") || state.pending != "" || !state.open {
+		t.Fatal("cancelar debe cerrar la confirmación y dejar abierto el menú")
+	}
+	if !state.handle(cfg, theme, "power:close") || state.open {
+		t.Fatal("cerrar debe plegar el menú")
 	}
 }

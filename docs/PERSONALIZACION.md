@@ -589,9 +589,12 @@ Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
 `volume`, `network`, `battery`, `updates`, `title` (ventana enfocada), `clock`,
 `clock24`, `date` y `power`.
 
-El botón rojo **OFF** queda al extremo derecho y abre el menú para bloquear,
-apagar, reiniciar, suspender o cerrar sesión. También aparece en configuraciones
-anteriores que todavía no listan `power`; Waybar ofrece el mismo botón.
+El nuevo botón rojo **PWR** queda al extremo derecho. Al pulsarlo, las acciones
+para bloquear, suspender o cerrar sesión aparecen dentro de la propia barra, sin
+crear una ventana que la cubra. Si `confirm_power = true`, cerrar sesión,
+reiniciar y apagar piden confirmación ahí mismo. También aparece en
+configuraciones anteriores que todavía no listan `power`; Waybar conserva su
+botón de energía.
 
 ```bash
 swaydesk bar                  # estado y módulos actuales

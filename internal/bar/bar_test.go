@@ -265,6 +265,47 @@ func TestNotifyModuleShowsCount(t *testing.T) {
 	}
 }
 
+func TestInlinePowerMenuActionsAreClickable(t *testing.T) {
+	r := New(Options{
+		Height:  38,
+		Margin:  6,
+		Padding: 14,
+		Gap:     10,
+		Islands: true,
+		Modules: []string{"power"},
+		Theme:   ui.PaletteByName("sakura"),
+		Face:    font.Builtin(),
+	})
+	snap := sampleSnapshot()
+	snap.PowerMenuOpen = true
+	r.Render(snap, 1200)
+	want := map[string]bool{
+		"power:lock": false, "power:suspend": false, "power:logout": false,
+		"power:reboot": false, "power:poweroff": false, "power:close": false,
+	}
+	for _, region := range r.Regions() {
+		if _, ok := want[region.Name]; ok {
+			want[region.Name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("falta la zona pulsable %q en el menú inline", name)
+		}
+	}
+
+	snap.PowerPending = "poweroff"
+	r.Render(snap, 1200)
+	confirm, cancel := false, false
+	for _, region := range r.Regions() {
+		confirm = confirm || region.Name == "power:confirm"
+		cancel = cancel || region.Name == "power:cancel"
+	}
+	if !confirm || !cancel {
+		t.Fatalf("no se generaron regiones de confirmar/cancelar: %+v", r.Regions())
+	}
+}
+
 func TestPowerButtonIsAlwaysClickable(t *testing.T) {
 	r := New(Options{
 		Height:  38,
