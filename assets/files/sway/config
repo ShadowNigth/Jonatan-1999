@@ -94,6 +94,8 @@ for_window [app_id="foot"] opacity {{TERM_OPACITY}}
 for_window [app_id="org.wezfurlong.wezterm"] opacity {{TERM_OPACITY}}
 for_window [app_id="Alacritty"] opacity {{TERM_OPACITY}}
 for_window [app_id="kitty"] opacity {{TERM_OPACITY}}
+# Thunar nativo en Wayland (app_id) y sobre XWayland (class).
+for_window [app_id="thunar"] opacity {{INACTIVE_OPACITY}}
 for_window [class="Thunar"] opacity {{INACTIVE_OPACITY}}
 for_window [class="org.gnome.Nautilus" title=".*"] opacity {{INACTIVE_OPACITY}}
 for_window [app_id="pavucontrol"] opacity {{INACTIVE_OPACITY}}

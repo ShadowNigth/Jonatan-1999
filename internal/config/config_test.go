@@ -85,6 +85,10 @@ border = "double"
 
 [input]
 keyboard_layout = "us"
+
+[gtk]
+theme = "Adwaita-dark"
+icon_theme = "Papirus-Dark"
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -101,6 +105,9 @@ keyboard_layout = "us"
 	}
 	if cfg.KeyboardLayout != "us" {
 		t.Fatalf("layout = %q", cfg.KeyboardLayout)
+	}
+	if cfg.GTKTheme != "Adwaita-dark" || cfg.GTKIconTheme != "Papirus-Dark" {
+		t.Fatalf("configuración GTK no aplicada: %q / %q", cfg.GTKTheme, cfg.GTKIconTheme)
 	}
 	// Los valores no presentes conservan el valor por defecto.
 	if cfg.Editor != "nvim" {

@@ -29,6 +29,13 @@ var archivosTema = []string{
 	"foot/foot.ini",
 	"mako/config",
 	"swaylock/config",
+	"gtk-3.0/settings.ini",
+	"gtk-3.0/gtk.css",
+}
+
+var gtkThemeAssets = map[string]bool{
+	"gtk-3.0/settings.ini": true,
+	"gtk-3.0/gtk.css":      true,
 }
 
 // preferredFonts lista las familias monoespaciadas buscadas, en orden.
@@ -96,6 +103,7 @@ func templateData(cfg *config.Config) map[string]string {
 	p := ui.PaletteByName(cfg.Theme)
 	ic := ui.IconsFor(cfg.NerdFont)
 	font := DetectFont(cfg.Font, cfg.NerdFont)
+	gtkTheme, gtkIconTheme, gtkDark := gtkAppearance(cfg, p)
 	fontSize := cfg.FontSize
 	if fontSize <= 0 {
 		fontSize = 11
@@ -109,6 +117,9 @@ func templateData(cfg *config.Config) map[string]string {
 	rgb := func(c ui.Color) string { return strings.TrimPrefix(string(c), "#") }
 	return map[string]string{
 		"THEME_NAME":          p.Name,
+		"GTK_THEME_NAME":      gtkTheme,
+		"GTK_ICON_THEME_NAME": gtkIconTheme,
+		"GTK_PREFER_DARK":     gtkDark,
 		"FOOT_COLORS_SECTION": footColorsSection(),
 		"THEME_BG_RGB":        rgb(p.Bg),
 		"THEME_BG_ALT_RGB":    rgb(p.BgAlt),
@@ -188,6 +199,241 @@ func templateData(cfg *config.Config) map[string]string {
 		"ICON_CLOCK":    ic.Clock,
 		"ICON_CALENDAR": ic.Calendar,
 	}
+}
+
+// gtkAppearance resuelve los temas GTK externos y sincroniza el modo claro u
+// oscuro con la paleta de swaydesk. «auto» prefiere Adwaita + Papirus.
+func gtkAppearance(cfg *config.Config, p ui.Palette) (theme, icons, preferDark string) {
+	preferDark = "1"
+	if p.Light {
+		preferDark = "0"
+	}
+
+	theme = strings.TrimSpace(cfg.GTKTheme)
+	if theme == "" || strings.EqualFold(theme, "auto") {
+		theme = "Adwaita"
+		if !p.Light && gtkThemeInstalled("Adwaita-dark") {
+			theme = "Adwaita-dark"
+		}
+		if !gtkThemeInstalled(theme) && gtkThemeInstalled("Adwaita") {
+			theme = "Adwaita"
+		}
+	}
+
+	icons = strings.TrimSpace(cfg.GTKIconTheme)
+	if icons == "" || strings.EqualFold(icons, "auto") {
+		icons = "Papirus"
+		if !p.Light {
+			icons = "Papirus-Dark"
+		}
+		if !iconThemeInstalled(icons) && iconThemeInstalled("Adwaita") {
+			icons = "Adwaita"
+		}
+	}
+	return theme, icons, preferDark
+}
+
+func gtkThemeInstalled(name string) bool {
+	home, _ := os.UserHomeDir()
+	for _, dir := range []string{
+		filepath.Join(home, ".themes"),
+		filepath.Join(home, ".local", "share", "themes"),
+		"/usr/share/themes",
+		"/usr/local/share/themes",
+	} {
+		if _, err := os.Stat(filepath.Join(dir, name, "gtk-3.0", "gtk.css")); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func iconThemeInstalled(name string) bool {
+	home, _ := os.UserHomeDir()
+	for _, dir := range []string{
+		filepath.Join(home, ".icons"),
+		filepath.Join(home, ".local", "share", "icons"),
+		"/usr/share/icons",
+		"/usr/local/share/icons",
+	} {
+		if _, err := os.Stat(filepath.Join(dir, name, "index.theme")); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// applyGTKSettings intenta sincronizar GSettings para que las aplicaciones GTK
+// abiertas reciban el tema/iconos sin exigir un daemon de escritorio concreto.
+func applyGTKSettings(cfg *config.Config) {
+	gsettings, err := exec.LookPath("gsettings")
+	if err != nil {
+		return
+	}
+	p := ui.PaletteByName(cfg.Theme)
+	theme, icons, _ := gtkAppearance(cfg, p)
+	for _, pair := range [][2]string{
+		{"gtk-theme", theme},
+		{"icon-theme", icons},
+	} {
+		_ = exec.Command(gsettings, "set", "org.gnome.desktop.interface", pair[0], pair[1]).Run()
+	}
+	scheme := "prefer-dark"
+	if p.Light {
+		scheme = "prefer-light"
+	}
+	_ = exec.Command(gsettings, "set", "org.gnome.desktop.interface", "color-scheme", scheme).Run()
+}
+
+func mergeGTKThemeAsset(rel, existing, generated string) string {
+	switch rel {
+	case "gtk-3.0/settings.ini":
+		return mergeGTKSettings(existing, generated)
+	case "gtk-3.0/gtk.css":
+		return mergeGTKCSS(existing, generated)
+	default:
+		return generated
+	}
+}
+
+type gtkSetting struct{ key, value string }
+
+func gtkSettings(data string) []gtkSetting {
+	var out []gtkSetting
+	section := ""
+	for _, line := range strings.Split(data, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			section = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+			continue
+		}
+		if section != "Settings" || trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") {
+			continue
+		}
+		i := strings.IndexByte(trimmed, '=')
+		if i < 1 {
+			continue
+		}
+		out = append(out, gtkSetting{key: strings.TrimSpace(trimmed[:i]), value: strings.TrimSpace(trimmed[i+1:])})
+	}
+	return out
+}
+
+// mergeGTKSettings actualiza las tres preferencias que gestiona swaydesk,
+// preservando el resto de settings.ini del usuario.
+func mergeGTKSettings(existing, generated string) string {
+	managed := map[string]bool{
+		"gtk-theme-name":                    true,
+		"gtk-icon-theme-name":               true,
+		"gtk-application-prefer-dark-theme": true,
+	}
+	var pairs []gtkSetting
+	for _, pair := range gtkSettings(generated) {
+		if managed[pair.key] {
+			pairs = append(pairs, pair)
+		}
+	}
+	if len(pairs) == 0 {
+		return generated
+	}
+	lines := strings.Split(existing, "\n")
+	start, end := -1, len(lines)
+	section := ""
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "[") || !strings.HasSuffix(trimmed, "]") {
+			continue
+		}
+		if section == "Settings" && end == len(lines) {
+			end = i
+		}
+		section = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+		if section == "Settings" && start < 0 {
+			start = i
+			end = len(lines)
+		}
+	}
+	if start < 0 {
+		base := strings.TrimRight(existing, "\n")
+		if base != "" {
+			base += "\n\n"
+		}
+		base += "[Settings]\n"
+		for _, pair := range pairs {
+			base += pair.key + "=" + pair.value + "\n"
+		}
+		return base
+	}
+
+	values := make(map[string]string, len(pairs))
+	for _, pair := range pairs {
+		values[pair.key] = pair.value
+	}
+	seen := make(map[string]bool, len(pairs))
+	out := append([]string(nil), lines[:start+1]...)
+	for _, line := range lines[start+1 : end] {
+		trimmed := strings.TrimSpace(line)
+		i := strings.IndexByte(trimmed, '=')
+		if i < 1 {
+			out = append(out, line)
+			continue
+		}
+		key := strings.TrimSpace(trimmed[:i])
+		value, managed := values[key]
+		if !managed {
+			out = append(out, line)
+			continue
+		}
+		if seen[key] {
+			continue
+		}
+		out = append(out, key+"="+value)
+		seen[key] = true
+	}
+	for _, pair := range pairs {
+		if !seen[pair.key] {
+			out = append(out, pair.key+"="+pair.value)
+		}
+	}
+	out = append(out, lines[end:]...)
+	return strings.TrimRight(strings.Join(out, "\n"), "\n") + "\n"
+}
+
+const (
+	gtkCSSStart = "/* BEGIN SWAYDESK GTK PALETTE */"
+	gtkCSSEnd   = "/* END SWAYDESK GTK PALETTE */"
+)
+
+func gtkCSSBlock(data string) (string, bool) {
+	start := strings.Index(data, gtkCSSStart)
+	if start < 0 {
+		return "", false
+	}
+	end := strings.Index(data[start:], gtkCSSEnd)
+	if end < 0 {
+		return "", false
+	}
+	end += start + len(gtkCSSEnd)
+	return data[start:end], true
+}
+
+// mergeGTKCSS conserva la hoja GTK del usuario y reemplaza únicamente el
+// bloque de paleta administrado por swaydesk.
+func mergeGTKCSS(existing, generated string) string {
+	block, ok := gtkCSSBlock(generated)
+	if !ok {
+		return generated
+	}
+	if start := strings.Index(existing, gtkCSSStart); start >= 0 {
+		if old, valid := gtkCSSBlock(existing[start:]); valid {
+			return existing[:start] + block + existing[start+len(old):]
+		}
+	}
+	base := strings.TrimRight(existing, "\n")
+	if base != "" {
+		base += "\n\n"
+	}
+	return base + block + "\n"
 }
 
 func itoa(n int) string { return fmt.Sprintf("%d", n) }
@@ -486,14 +732,31 @@ func Apply(cfg *config.Config, dest string) ([]Result, error) {
 	var results []Result
 	for _, rel := range archivosTema {
 		target := filepath.Join(dest, rel)
-		if _, err := os.Stat(target); err != nil {
-			continue
+		action := "actualizado"
+		content := files[rel]
+		previous, err := os.ReadFile(target)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return results, err
+			}
+			// Las instalaciones existentes pueden no tener aún el tema GTK;
+			// se añade sin regenerar otros componentes que no estaban instalados.
+			if !gtkThemeAssets[rel] {
+				continue
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return results, err
+			}
+			action = "creado"
+		} else if gtkThemeAssets[rel] {
+			content = mergeGTKThemeAsset(rel, string(previous), content)
 		}
-		if err := os.WriteFile(target, []byte(files[rel]), 0o644); err != nil {
+		if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
 			return results, err
 		}
-		results = append(results, Result{Path: target, Action: "actualizado", Modified: true})
+		results = append(results, Result{Path: target, Action: action, Modified: true})
 	}
+	applyGTKSettings(cfg)
 	ReloadWaybar()
 	ApplySwayColors(cfg)
 	return results, nil

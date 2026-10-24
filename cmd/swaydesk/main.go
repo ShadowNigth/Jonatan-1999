@@ -344,12 +344,23 @@ func applyTheme(cfg *config.Config, name string) error {
 	if _, err := setup.Apply(cfg, configDir()); err != nil {
 		return err
 	}
-	// Si el fondo es "theme" se relanza el demonio para usar la escena nueva.
-	if cfg.WallpaperKind == "scene" && wallpaper.RunningPID(cfg.Cache) != 0 {
-		wallpaper.StopDaemon(cfg.Cache)
-		_ = startWallpaperDaemon(cfg)
+	// Las escenas usan los colores de la paleta; GIF/vídeo y fondos por
+	// workspace también dependen del demonio. Reiniciarlo de forma separada
+	// conserva el fondo y evita dejarlo atado al proceso `swaydesk theme`.
+	if themeWallpaperNeedsDaemon(cfg) && wallpaper.WaylandReady() {
+		if err := runWallpaperDaemon(cfg, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "swaydesk: tema aplicado, pero no se pudo reanudar el fondo: %v\n", err)
+		}
 	}
 	return nil
+}
+
+func themeWallpaperNeedsDaemon(cfg *config.Config) bool {
+	spec, err := currentSpec(cfg)
+	if err != nil {
+		return false
+	}
+	return animatedSpec(spec) || len(cfg.WallpaperWorkspaces) > 0
 }
 
 func printThemeList(cfg *config.Config, th *ui.Theme) {

@@ -95,6 +95,7 @@ info "Go $(go version | awk '{print $3}')"
 # ── Dependencias ──────────────────────────────────────────────────────────
 DEP_PKGS=(
   waybar foot mako wl-clipboard grim slurp swayidle swaylock
+  thunar thunar-archive-plugin thunar-volman tumbler gvfs papirus-icon-theme adwaita-icon-theme
   cliphist ttf-jetbrains-mono-nerd
   # kbd trae las fuentes de consola PSF que usa la barra propia (swaybar)
   kbd

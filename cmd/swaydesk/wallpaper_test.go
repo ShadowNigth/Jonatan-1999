@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/wallpaper"
 )
 
@@ -40,5 +41,21 @@ func TestAnimatedSpec(t *testing.T) {
 	}
 	if animatedSpec(wallpaper.Spec{Kind: wallpaper.KindImage}) {
 		t.Fatal("una imagen fija no necesita demonio")
+	}
+}
+
+func TestThemeWallpaperNeedsDaemon(t *testing.T) {
+	cfg := config.Default()
+	if !themeWallpaperNeedsDaemon(cfg) {
+		t.Fatal("la escena por defecto debe continuar tras cambiar la paleta")
+	}
+	cfg.WallpaperKind = "image"
+	cfg.WallpaperPath = "/tmp/fondo.png"
+	if themeWallpaperNeedsDaemon(cfg) {
+		t.Fatal("una imagen fija sin fondos por workspace no necesita demonio")
+	}
+	cfg.WallpaperWorkspaces = map[string]string{"2": "scene:petals"}
+	if !themeWallpaperNeedsDaemon(cfg) {
+		t.Fatal("los fondos por workspace requieren conservar el demonio")
 	}
 }

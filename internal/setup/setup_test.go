@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/ui"
 )
 
 func TestRenderSinMarcadores(t *testing.T) {
@@ -28,7 +29,7 @@ func TestRenderSinMarcadores(t *testing.T) {
 			t.Fatalf("%s tiene marcadores sin sustituir: %q", name, content[idx:end])
 		}
 	}
-	for _, required := range []string{"sway/config", "waybar/config.json", "waybar/style.css", "foot/foot.ini", "mako/config", "swaylock/config", "swaydesk/config.toml", "applications/swaydesk-menu.desktop"} {
+	for _, required := range []string{"sway/config", "waybar/config.json", "waybar/style.css", "foot/foot.ini", "mako/config", "swaylock/config", "gtk-3.0/settings.ini", "gtk-3.0/gtk.css", "swaydesk/config.toml", "applications/swaydesk-menu.desktop"} {
 		if _, ok := files[required]; !ok {
 			t.Fatalf("falta la plantilla %q", required)
 		}
@@ -55,6 +56,137 @@ func TestRenderPaleta(t *testing.T) {
 	}
 	if strings.Contains(swayConf, "{{") {
 		t.Fatal("quedan marcadores en la configuración de sway")
+	}
+}
+
+func TestRenderGTKThemeFollowsPalette(t *testing.T) {
+	cfg := config.Default()
+	cfg.Theme = "gruvbox"
+	cfg.GTKTheme = "Adwaita-dark"
+	cfg.GTKIconTheme = "Papirus-Dark"
+	files, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := files["gtk-3.0/settings.ini"]
+	if !strings.Contains(settings, "gtk-theme-name=Adwaita-dark") ||
+		!strings.Contains(settings, "gtk-icon-theme-name=Papirus-Dark") ||
+		!strings.Contains(settings, "gtk-application-prefer-dark-theme=1") {
+		t.Fatalf("configuración GTK inesperada:\n%s", settings)
+	}
+	css := files["gtk-3.0/gtk.css"]
+	if !strings.Contains(css, "#282828") || !strings.Contains(css, "#83a598") {
+		t.Fatalf("la paleta Gruvbox no llegó al CSS GTK:\n%s", css)
+	}
+	if !strings.Contains(css, gtkCSSStart) || !strings.Contains(css, gtkCSSEnd) {
+		t.Fatal("la paleta GTK debe quedar delimitada para conservar CSS ajeno")
+	}
+	if strings.Contains(settings+css, "{{") {
+		t.Fatal("quedaron marcadores GTK sin sustituir")
+	}
+}
+
+func TestGTKAppearanceAutoPrefersInstalledThemes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, path := range []string{
+		filepath.Join(home, ".themes", "Adwaita-dark", "gtk-3.0", "gtk.css"),
+		filepath.Join(home, ".themes", "Adwaita", "gtk-3.0", "gtk.css"),
+		filepath.Join(home, ".local", "share", "icons", "Papirus-Dark", "index.theme"),
+		filepath.Join(home, ".local", "share", "icons", "Papirus", "index.theme"),
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name, theme, wantTheme, wantIcons, wantDark string
+	}{
+		{"oscuro", "dracula", "Adwaita-dark", "Papirus-Dark", "1"},
+		{"claro", "rei", "Adwaita", "Papirus", "0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.Theme = tc.theme
+			cfg.GTKTheme = "auto"
+			cfg.GTKIconTheme = "auto"
+			theme, icons, preferDark := gtkAppearance(cfg, ui.PaletteByName(cfg.Theme))
+			if theme != tc.wantTheme || icons != tc.wantIcons || preferDark != tc.wantDark {
+				t.Fatalf("gtkAppearance() = (%q, %q, %q), esperado (%q, %q, %q)",
+					theme, icons, preferDark, tc.wantTheme, tc.wantIcons, tc.wantDark)
+			}
+		})
+	}
+}
+
+func TestMergeGTKSettingsPreservesUserPreferences(t *testing.T) {
+	generated := "[Settings]\n" +
+		"gtk-theme-name=Adwaita-dark\n" +
+		"gtk-icon-theme-name=Papirus-Dark\n" +
+		"gtk-application-prefer-dark-theme=1\n" +
+		"gtk-enable-animations=1\n"
+	existing := "# Preferencias propias\n[Settings]\n" +
+		"gtk-theme-name=OldTheme\n" +
+		"gtk-icon-theme-name=OldIcons\n" +
+		"gtk-application-prefer-dark-theme=0\n" +
+		"gtk-enable-animations=0\n" +
+		"gtk-cursor-theme-name=MyCursor\n" +
+		"[Other]\nkeep=this\n"
+
+	got := mergeGTKSettings(existing, generated)
+	for _, want := range []string{
+		"gtk-theme-name=Adwaita-dark",
+		"gtk-icon-theme-name=Papirus-Dark",
+		"gtk-application-prefer-dark-theme=1",
+		"gtk-enable-animations=0",
+		"gtk-cursor-theme-name=MyCursor",
+		"[Other]\nkeep=this",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("mergeGTKSettings perdió o no actualizó %q:\n%s", want, got)
+		}
+	}
+	if count := strings.Count(got, "gtk-theme-name="); count != 1 {
+		t.Errorf("se duplicó gtk-theme-name (%d):\n%s", count, got)
+	}
+	if again := mergeGTKSettings(got, generated); again != got {
+		t.Errorf("la fusión GTK no es idempotente:\n%s\n--- segunda aplicación ---\n%s", got, again)
+	}
+}
+
+func TestMergeGTKCSSPreservesUserRules(t *testing.T) {
+	generated := "/* BEGIN SWAYDESK GTK PALETTE */\n" +
+		"@define-color swaydesk_bg #101010;\n" +
+		"/* END SWAYDESK GTK PALETTE */"
+	existing := "/* CSS propio */\n.user-widget { color: red; }\n\n" +
+		"/* BEGIN SWAYDESK GTK PALETTE */\n" +
+		"@define-color swaydesk_bg #000000;\n" +
+		"/* END SWAYDESK GTK PALETTE */\n\n" +
+		".another-user-widget { opacity: 0.9; }\n"
+
+	got := mergeGTKCSS(existing, generated)
+	for _, want := range []string{
+		"/* CSS propio */",
+		".user-widget { color: red; }",
+		"@define-color swaydesk_bg #101010;",
+		".another-user-widget { opacity: 0.9; }",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("mergeGTKCSS perdió o no actualizó %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "@define-color swaydesk_bg #000000;") {
+		t.Errorf("sobrevive la paleta GTK antigua:\n%s", got)
+	}
+	if count := strings.Count(got, gtkCSSStart); count != 1 {
+		t.Errorf("hay %d bloques de paleta swaydesk, esperado 1:\n%s", count, got)
+	}
+	if again := mergeGTKCSS(got, generated); again != got {
+		t.Errorf("la fusión CSS no es idempotente:\n%s\n--- segunda aplicación ---\n%s", got, again)
 	}
 }
 
@@ -129,8 +261,112 @@ func TestApplySinArchivos(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	if len(results) != 0 {
-		t.Fatalf("no debía actualizar nada, actualizó %d", len(results))
+	if len(results) != 2 {
+		t.Fatalf("solo debía inicializar los archivos GTK que faltaban, obtuvo %+v", results)
+	}
+	for _, r := range results {
+		rel, err := filepath.Rel(dest, r.Path)
+		if err != nil || !gtkThemeAssets[rel] {
+			t.Fatalf("Apply escribió un componente no instalado: %s", r.Path)
+		}
+	}
+}
+
+func TestApplyCreaTemaGTKParaInstalacionesExistentes(t *testing.T) {
+	cfg := config.Default()
+	cfg.Theme = "dracula"
+	dest := t.TempDir()
+	results, err := Apply(cfg, dest)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("Apply debía crear los dos archivos GTK, obtuvo %d resultados: %+v", len(results), results)
+	}
+	settings, err := os.ReadFile(filepath.Join(dest, "gtk-3.0", "settings.ini"))
+	if err != nil || !strings.Contains(string(settings), "gtk-theme-name=") {
+		t.Fatalf("no se creó la configuración GTK: %v", err)
+	}
+	css, err := os.ReadFile(filepath.Join(dest, "gtk-3.0", "gtk.css"))
+	if err != nil {
+		t.Fatalf("no se creó el CSS GTK: %v", err)
+	}
+	if !strings.Contains(string(css), "#282a36") || !strings.Contains(string(css), "#bd93f9") {
+		t.Fatalf("el CSS no refleja la paleta activa:\n%s", css)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "sway", "config")); !os.IsNotExist(err) {
+		t.Fatal("Apply no debe generar sway/config al añadir solo el tema GTK")
+	}
+}
+
+func TestApplyPreservesGTKCustomization(t *testing.T) {
+	cfg := config.Default()
+	cfg.Theme = "dracula"
+	dest := t.TempDir()
+	gtkDir := filepath.Join(dest, "gtk-3.0")
+	if err := os.MkdirAll(gtkDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(gtkDir, "settings.ini")
+	cssPath := filepath.Join(gtkDir, "gtk.css")
+	settings := "[Settings]\n" +
+		"gtk-theme-name=MyTheme\n" +
+		"gtk-icon-theme-name=MyIcons\n" +
+		"gtk-application-prefer-dark-theme=0\n" +
+		"gtk-enable-animations=0\n" +
+		"gtk-cursor-theme-name=MyCursor\n" +
+		"[Other]\nkeep=this\n"
+	css := "/* Mi CSS personalizado */\n.user-widget { color: red; }\n"
+	if err := os.WriteFile(settingsPath, []byte(settings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cssPath, []byte(css), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	generated, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results, err := Apply(cfg, dest)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("Apply debía actualizar solo los dos archivos GTK existentes, obtuvo %+v", results)
+	}
+	gotSettings, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pair := range gtkSettings(generated["gtk-3.0/settings.ini"]) {
+		if pair.key == "gtk-enable-animations" {
+			continue
+		}
+		if !strings.Contains(string(gotSettings), pair.key+"="+pair.value) {
+			t.Errorf("no se aplicó el ajuste generado %s=%s:\n%s", pair.key, pair.value, gotSettings)
+		}
+	}
+	for _, preserved := range []string{
+		"gtk-enable-animations=0",
+		"gtk-cursor-theme-name=MyCursor",
+		"[Other]\nkeep=this",
+	} {
+		if !strings.Contains(string(gotSettings), preserved) {
+			t.Errorf("se perdió la preferencia GTK del usuario %q:\n%s", preserved, gotSettings)
+		}
+	}
+	gotCSS, err := os.ReadFile(cssPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, preserved := range []string{"/* Mi CSS personalizado */", ".user-widget { color: red; }"} {
+		if !strings.Contains(string(gotCSS), preserved) {
+			t.Errorf("se perdió CSS del usuario %q:\n%s", preserved, gotCSS)
+		}
+	}
+	if !strings.Contains(string(gotCSS), gtkCSSStart) || !strings.Contains(string(gotCSS), gtkCSSEnd) {
+		t.Errorf("no se añadió el bloque de paleta delimitado:\n%s", gotCSS)
 	}
 }
 

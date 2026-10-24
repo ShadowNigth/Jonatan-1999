@@ -14,14 +14,16 @@ import (
 // Config agrupa todos los ajustes de swaydesk.
 type Config struct {
 	// General
-	Theme       string
-	NerdFont    bool
-	Terminal    string
-	Launcher    string // comando del menú flotante
-	Editor      string
-	FileManager string
-	Browser     string
-	Mod         string
+	Theme        string
+	NerdFont     bool
+	Terminal     string
+	Launcher     string // comando del menú flotante
+	Editor       string
+	FileManager  string
+	Browser      string
+	Mod          string
+	GTKTheme     string // auto, Adwaita-dark u otro tema GTK3 instalado
+	GTKIconTheme string // auto, Papirus-Dark u otro tema de iconos instalado
 
 	// Apariencia
 	Font           string // vacío = detección automática
@@ -148,6 +150,8 @@ func Default() *Config {
 		FileManager:    "thunar",
 		Browser:        "chromium",
 		Mod:            "Super",
+		GTKTheme:       "auto",
+		GTKIconTheme:   "auto",
 		FontSize:       11,
 		BarFontSize:    13,
 		KeyboardLayout: "latam",
@@ -317,6 +321,8 @@ func (c *Config) apply() {
 	str("general.file_manager", &c.FileManager)
 	str("general.browser", &c.Browser)
 	str("general.mod", &c.Mod)
+	str("gtk.theme", &c.GTKTheme)
+	str("gtk.icon_theme", &c.GTKIconTheme)
 	bl("general.nerd_font", &c.NerdFont)
 	bl("general.confirm_power", &c.ConfirmPower)
 	str("ui.font", &c.Font)
@@ -531,6 +537,12 @@ browser = %q
 # Pedir confirmación en el menú de apagado
 confirm_power = %t
 
+[gtk]
+# auto sigue el modo claro/oscuro de la paleta; también puedes indicar un tema instalado.
+theme = %q
+# auto usa Papirus/Papirus-Dark si está instalado; si no, Adwaita.
+icon_theme = %q
+
 [ui]
 # Fuente monoespaciada; vacío = detección automática entre las instaladas.
 font = %q
@@ -547,7 +559,7 @@ show_hidden = %t
 `,
 		strings.Join(paletteNames(), ", "),
 		c.Theme, c.NerdFont, c.Terminal, c.Launcher, c.Editor,
-		c.FileManager, c.Browser, c.ConfirmPower,
+		c.FileManager, c.Browser, c.ConfirmPower, c.GTKTheme, c.GTKIconTheme,
 		c.Font, c.FontSize, c.BarFontSize,
 		c.Width, c.Height, c.Border, c.HistorySize, c.ShowHidden) + fmt.Sprintf(`
 [input]

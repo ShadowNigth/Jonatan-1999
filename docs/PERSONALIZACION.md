@@ -16,6 +16,10 @@ file_manager = "thunar"
 browser = "chromium"
 confirm_power = true        # pedir confirmación antes de reiniciar/apagar
 
+[gtk]
+theme = "auto"             # sigue la paleta: Adwaita o Adwaita-dark
+icon_theme = "auto"        # Papirus / Papirus-Dark, o indica otro tema instalado
+
 [ui]
 font = "JetBrainsMono Nerd Font"   # vacío = autodetección con fc-list
 font_size = 11
@@ -79,6 +83,40 @@ Las categorías son `anime`, `oscuro`, `retro`, `claro` y `adaptativo`. El atajo
 `Tab` cambia de categoría dentro de la galería y `espacio` pausa la animación de
 la vista previa.
 
+### Thunar, GTK e iconos
+
+Thunar es el gestor de archivos recomendado para Swaydesk. Al cambiar de paleta,
+`Swaydesk` genera una hoja GTK 3 con sus colores, sincroniza el modo oscuro y
+selecciona `Papirus` o `Papirus-Dark` si el tema de iconos está instalado (si no,
+usa `Adwaita`). El tema GTK base se elige entre `Adwaita` y `Adwaita-dark`; puedes
+forzar otros temas instalados en `~/.config/swaydesk/config.toml`:
+
+```toml
+[gtk]
+theme = "auto"                 # o el nombre de un tema GTK 3 instalado
+icon_theme = "Papirus-Dark"    # o "auto", "Papirus", "Adwaita", etc.
+```
+
+Instala Thunar, el juego de iconos y complementos útiles en Arch:
+
+```bash
+sudo pacman -S thunar papirus-icon-theme tumbler gvfs thunar-archive-plugin thunar-volman
+```
+
+La opacidad está preparada para Thunar nativo de Wayland (`app_id=thunar`) y
+para XWayland (`class=Thunar`), al valor de `effects.inactive_opacity`. Si ya
+habías generado Sway antes de instalar Thunar, actualiza solo ese archivo y
+recarga:
+
+```bash
+swaydesk init --force --only sway
+swaymsg reload
+```
+
+Los cambios GTK se guardan y se notifican por GSettings cuando está disponible.
+Si una ventana de Thunar abierta no actualiza su hoja de estilos, ciérrala y
+vuelve a abrirla.
+
 ### Temas adaptativos
 
 `swaydesk theme --from-wallpaper` (o `swaydesk wallpaper adaptive [archivo]`)
@@ -103,7 +141,14 @@ swayctl                         # pestaña "Apariencia" (Super+i, Tab ×3)
 | `~/.config/foot/foot.ini` | terminal |
 | `~/.config/mako/config` | notificaciones |
 | `~/.config/swaylock/config` | pantalla de bloqueo |
+| `~/.config/gtk-3.0/settings.ini` y `gtk.css` | tema GTK, paleta e iconos de Thunar/otras apps GTK 3 |
+| sesión GTK vía GSettings (si está disponible) | tema/iconos para aplicaciones ya abiertas |
 | sesión de sway vía IPC | colores de borde y de título de las ventanas |
+
+Si el fondo es una escena, GIF, vídeo o tiene reglas por workspace, el demonio se
+reinicia desacoplado del proceso que cambia el tema para actualizar la paleta sin
+quedarse ligado al selector. Las imágenes estáticas no se tocan. Compruébalo con
+`swaydesk wallpaper status`.
 
 ### Añadir tu propia paleta
 
