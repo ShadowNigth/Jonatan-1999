@@ -22,6 +22,23 @@ func testRenderer() *Renderer {
 	})
 }
 
+func TestPowerModuleRemovedFromDefaultsAndLegacyConfig(t *testing.T) {
+	for _, module := range DefaultModules {
+		if module == "power" {
+			t.Fatal("el módulo de energía no debe aparecer en los valores por defecto")
+		}
+	}
+
+	r := New(Options{
+		Modules: []string{"clock", "power"},
+		Theme:   ui.PaletteByName("sakura"),
+		Face:    font.Builtin(),
+	})
+	if len(r.Opt.Modules) != 1 || r.Opt.Modules[0] != "clock" {
+		t.Fatalf("módulos después de retirar el control de energía: %v", r.Opt.Modules)
+	}
+}
+
 func sampleSnapshot() Snapshot {
 	return Snapshot{
 		Workspaces: []Workspace{
@@ -265,86 +282,6 @@ func TestNotifyModuleShowsCount(t *testing.T) {
 	}
 }
 
-func TestInlinePowerMenuActionsAreClickable(t *testing.T) {
-	r := New(Options{
-		Height:  38,
-		Margin:  6,
-		Padding: 14,
-		Gap:     10,
-		Islands: true,
-		Modules: []string{"power"},
-		Theme:   ui.PaletteByName("sakura"),
-		Face:    font.Builtin(),
-	})
-	snap := sampleSnapshot()
-	snap.PowerMenuOpen = true
-	r.Render(snap, 1200)
-	want := map[string]bool{
-		"power:lock": false, "power:suspend": false, "power:logout": false,
-		"power:reboot": false, "power:poweroff": false, "power:close": false,
-	}
-	for _, region := range r.Regions() {
-		if _, ok := want[region.Name]; ok {
-			want[region.Name] = true
-		}
-	}
-	for name, found := range want {
-		if !found {
-			t.Errorf("falta la zona pulsable %q en el menú inline", name)
-		}
-	}
-
-	snap.PowerPending = "poweroff"
-	r.Render(snap, 1200)
-	confirm, cancel := false, false
-	for _, region := range r.Regions() {
-		confirm = confirm || region.Name == "power:confirm"
-		cancel = cancel || region.Name == "power:cancel"
-	}
-	if !confirm || !cancel {
-		t.Fatalf("no se generaron regiones de confirmar/cancelar: %+v", r.Regions())
-	}
-}
-
-func TestPowerButtonIsAlwaysClickable(t *testing.T) {
-	r := New(Options{
-		Height:  38,
-		Margin:  6,
-		Padding: 14,
-		Gap:     10,
-		Islands: true,
-		Modules: []string{"clock"}, // configuración antigua sin el módulo nuevo
-		Theme:   ui.PaletteByName("sakura"),
-		Face:    font.Builtin(),
-	})
-	if !hasPowerModule(r.Opt.Modules) {
-		t.Fatal("el botón de apagado no se añadió a una configuración antigua")
-	}
-	r.Render(sampleSnapshot(), 1200)
-	var power *Region
-	for i := range r.Regions() {
-		if r.Regions()[i].Name == "power" {
-			power = &r.Regions()[i]
-			break
-		}
-	}
-	if power == nil {
-		t.Fatalf("no se generó una región pulsable de energía: %+v", r.Regions())
-	}
-	if got, ok := r.RegionAt(power.X+power.W/2, power.Y+power.H/2); !ok || got.Name != "power" {
-		t.Fatalf("clic en el botón de energía devolvió %+v, ok=%v", got, ok)
-	}
-	powerCount := 0
-	for _, module := range r.Opt.Modules {
-		if module == "power" {
-			powerCount++
-		}
-	}
-	if powerCount != 1 {
-		t.Fatalf("módulo power duplicado: %d", powerCount)
-	}
-}
-
 func TestNotifyRegionIsClickable(t *testing.T) {
 	r := New(Options{
 		Height:  38,
@@ -361,7 +298,7 @@ func TestNotifyRegionIsClickable(t *testing.T) {
 	r.Render(s, 1200)
 
 	regions := r.Regions()
-	if len(regions) != 2 {
+	if len(regions) != 1 {
 		t.Fatalf("regiones = %+v", regions)
 	}
 	var notify *Region
@@ -381,7 +318,7 @@ func TestNotifyRegionIsClickable(t *testing.T) {
 	}
 	// Un segundo Render no acumula zonas viejas.
 	r.Render(s, 1200)
-	if got := len(r.Regions()); got != 2 {
+	if got := len(r.Regions()); got != 1 {
 		t.Fatalf("regiones tras repintar = %d", got)
 	}
 }

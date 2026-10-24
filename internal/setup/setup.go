@@ -185,7 +185,6 @@ func templateData(cfg *config.Config) map[string]string {
 		"SWAYCTL_BIN":   binPath("swayctl"),
 		"SWAYCLIP_BIN":  binPath("swayclip"),
 		"ICON_LOGO":     ic.Workspace,
-		"ICON_POWER":    ic.Power,
 		"ICON_VOLUME":   ic.Volume,
 		"ICON_MUTED":    ic.Muted,
 		"ICON_WIFI":     ic.Wifi,

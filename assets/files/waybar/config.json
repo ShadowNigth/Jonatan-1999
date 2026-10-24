@@ -18,8 +18,7 @@
     "memory",
     "temperature",
     "battery",
-    "clock",
-    "custom/power"
+    "clock"
   ],
   "sway/workspaces": {
     "disable-scroll": false,
@@ -63,12 +62,6 @@
     "format": "  {{ICON_LOGO}} ",
     "tooltip": false,
     "on-click": "swaymenu --float",
-    "interval": "once"
-  },
-  "custom/power": {
-    "format": " {{ICON_POWER}} ",
-    "tooltip": false,
-    "on-click": "swaymenu --power --float",
     "interval": "once"
   },
   "custom/recording": {

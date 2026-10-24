@@ -197,7 +197,7 @@ func Default() *Config {
 		BarFontScale:         0,
 		BarShadow:            true,
 		BarExclusive:         true,
-		BarModules:           []string{"media", "notify", "cpu", "ram", "volume", "network", "battery", "clock", "power"},
+		BarModules:           []string{"media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"},
 
 		NotifyEnabled:      true,
 		NotifyPosition:     "top-right",

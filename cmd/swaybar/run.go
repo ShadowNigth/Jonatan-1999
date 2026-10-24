@@ -5,17 +5,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/ShadowNigth/swaydesk/internal/actions"
 	"github.com/ShadowNigth/swaydesk/internal/bar"
 	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/host"
 	"github.com/ShadowNigth/swaydesk/internal/launcher"
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
-	"github.com/ShadowNigth/swaydesk/internal/ui"
 	"github.com/ShadowNigth/swaydesk/internal/wayland"
 )
 
@@ -61,8 +58,7 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		return err
 	}
 
-	// Ratón: notificaciones abre el centro en terminal y PWR despliega las
-	// acciones de energía dentro de la barra, sin crear otra ventana.
+	// Ratón: el indicador de notificaciones abre el centro en una terminal.
 	clicks := make(chan string, 4)
 	if p, err := wayland.NewPointer(conn, wayland.PointerHandler{
 		Button: func(x, y float64, button uint32, pressed bool) {
@@ -92,8 +88,6 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 	defer tick.Stop()
 
 	last := ""
-	powerMenu := powerMenuState{}
-	powerTheme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 	draw := func() error {
 		w, h := panel.Size()
 		if w <= 0 || h <= 0 {
@@ -102,16 +96,14 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		snap := snapshot(cfg, collector)
 		snap.Clock = time.Now().Format("15:04")
 		snap.Date = shortDate()
-		snap.PowerMenuOpen = powerMenu.open
-		snap.PowerPending = powerMenu.pending
 		canvas := r.Render(snap, w/scale)
 		if scale > 1 {
 			canvas = canvas.ScaleCanvas(scale)
 		}
 		// Se evita repintar si nada cambió (menos CPU y parpadeos).
-		key := fmt.Sprintf("%d|%s|%s|%s|%.0f|%.0f|%d|%v|%d|%d|%v|%d|%t|%s",
+		key := fmt.Sprintf("%d|%s|%s|%s|%.0f|%.0f|%d|%v|%d|%d|%v|%d",
 			w, snap.Clock, snap.Title, snap.AppID, snap.CPU, snap.RAM, snap.Volumen, snap.Muted,
-			len(snap.Workspaces), snap.Notifications, snap.NotifDND, snap.NotifReplies, snap.PowerMenuOpen, snap.PowerPending)
+			len(snap.Workspaces), snap.Notifications, snap.NotifDND, snap.NotifReplies)
 		if key == last {
 			return nil
 		}
@@ -134,11 +126,7 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		case <-events:
 			_ = draw()
 		case name := <-clicks:
-			if powerMenu.handle(cfg, powerTheme, name) {
-				_ = draw()
-			} else {
-				handleClick(cfg, name)
-			}
+			handleClick(cfg, name)
 		case <-tick.C:
 			if panel.NeedsResize() {
 				_ = panel.Resize(2)
@@ -159,59 +147,6 @@ func handleClick(cfg *config.Config, name string) {
 		// El centro necesita teclado: se abre en una terminal flotante.
 		_ = launcher.LaunchTerminal(cfg.Terminal, "swaydesk-notify", "Notificaciones", 84, 24,
 			[]string{siblingExecutable("swaydesk"), "notifications", "center"})
-	}
-}
-
-type powerMenuState struct {
-	open    bool
-	pending string
-}
-
-func (p *powerMenuState) handle(cfg *config.Config, theme *ui.Theme, name string) bool {
-	if name == "power" {
-		p.open = !p.open
-		p.pending = ""
-		return true
-	}
-	if !strings.HasPrefix(name, "power:") {
-		return false
-	}
-	action := strings.TrimPrefix(name, "power:")
-	switch action {
-	case "close":
-		p.open, p.pending = false, ""
-		return true
-	case "cancel":
-		p.pending = ""
-		return true
-	case "confirm":
-		if p.pending != "" {
-			p.run(cfg, theme, p.pending)
-		}
-		p.open, p.pending = false, ""
-		return true
-	}
-	if !p.open {
-		return true
-	}
-	for _, item := range actions.PowerActions(false) {
-		if item.ID != action {
-			continue
-		}
-		if item.Danger && cfg.ConfirmPower {
-			p.pending = action
-			return true
-		}
-		p.run(cfg, theme, action)
-		p.open, p.pending = false, ""
-		return true
-	}
-	return true
-}
-
-func (p *powerMenuState) run(cfg *config.Config, theme *ui.Theme, action string) {
-	if err := actions.RunPowerAction(action, false, theme); err != nil {
-		actions.Notification("swaydesk", "No se pudo ejecutar la acción de energía: "+err.Error(), "critical")
 	}
 }
 

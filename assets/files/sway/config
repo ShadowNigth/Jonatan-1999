@@ -19,7 +19,7 @@ set $term {{TERMINAL}}
 # lleva la ruta completa.
 set $menu {{SWAYMENU_BIN}} --float
 set $menu_all {{SWAYMENU_BIN}} --float --commands
-set $power {{SWAYMENU_BIN}} --power
+set $power {{SWAYMENU_BIN}} --power --float
 set $themes {{SWAYDESK_BIN}} theme --gallery
 set $wall {{SWAYDESK_BIN}} wallpaper --gallery
 set $ctl {{SWAYCTL_BIN}}
@@ -142,8 +142,8 @@ bindsym $mod+b exec $browser
 bindsym $mod+Shift+f exec $files
 bindsym $mod+Shift+Return exec $term -e $editor
 
-# swaydesk
-bindsym $mod+p exec $power
+# Menú de energía flotante (Super+P)
+bindsym $mod+p exec --no-startup-id $power
 bindsym $mod+t exec $themes
 bindsym $mod+Shift+w exec $wall
 bindsym $mod+Shift+b exec $boot
@@ -249,7 +249,7 @@ bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
 # Recarga y salida
 bindsym $mod+Shift+c reload
 bindsym $mod+Shift+r restart
-bindsym $mod+Shift+e exec $power
+bindsym $mod+Shift+e exec --no-startup-id $power
 bindsym $mod+Shift+x exec $swaydesk lock
 
 ### Modos ##################################################################

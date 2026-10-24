@@ -80,11 +80,11 @@ terceros.
   vivo, metadatos (duración, tamaño, tipo) y exploración de tus carpetas.
 - **Barra de estado propia** (`swaybar`): islas redondeadas y translúcidas
   dibujadas píxel a píxel — sin GTK, Qt ni Cairo. Workspaces con la ventana
-  enfocada, título, CPU, RAM, volumen, red, batería, reproductor y reloj, más
-  un botón rojo **PWR** que despliega las acciones de energía dentro de la
-  barra, sin abrir otra ventana; tipografía de mapa de bits con fuentes PSF e
-  iconos siempre visibles. Se adapta a la paleta, responde a eventos de sway y
-  se configura desde `[bar]` en `config.toml`.
+  enfocada, título, CPU, RAM, volumen, red, batería, reproductor y reloj;
+  tipografía de mapa de bits con fuentes PSF e iconos siempre visibles. Se
+  adapta a la paleta, responde a eventos de sway y se configura desde `[bar]`
+  en `config.toml`. El menú de energía se abre con **Super+P** en una ventana
+  flotante, sin un botón en la barra.
 - **Notificaciones propias** (`swaynotify`): daemon completo de
   `org.freedesktop.Notifications` sobre un cliente **D-Bus escrito desde cero**
   (SASL EXTERNAL, formato binario con firmas, llamadas, señales y errores), y
@@ -350,7 +350,7 @@ volumen sin sesión gráfica.
 | `Super+Return` | Terminal | `Super+d` | Lanzador |
 | `Super+Shift+d` | Lanzador + comandos | `Super+b` | Navegador |
 | `Super+i` | Panel de control | `Super+c` | Portapapeles |
-| `Super+p` | Menú de energía | `Super+t` | Galería de temas |
+| `Super+P` | Menú de energía flotante | `Super+t` | Galería de temas |
 | `Super+Shift+t` | Galería de temas | `Super+Shift+w` | Selector de fondos |
 | `Super+Shift+l` | Bloquear | `Print` | Captura de pantalla |
 | `Super+q` | Cerrar ventana | `Super+f` | Pantalla completa |
@@ -362,8 +362,11 @@ volumen sin sesión gráfica.
 | `Super+Ctrl+n` | No molestar | `Super+Ctrl+Shift+n` | Cerrar notificaciones |
 | `Super+n` | Centro de notificaciones (o clic en la barra) | `Enter` | Responder o cerrar en el centro |
 
-La chuleta completa está en `Super+i` → *Atajos*, y en
-[`assets/files/sway/config`](assets/files/sway/config).
+El atajo ejecuta `swaymenu --power --float`; no hay botón de energía en swaybar
+ni en Waybar. Si conservas una configuración Sway antigua que no fue regenerada,
+añade un atajo equivalente al archivo activo (usa la ruta absoluta de `swaymenu`
+si Sway no la encuentra en su `PATH`). La chuleta completa está en `Super+i` →
+*Atajos*, y en [`assets/files/sway/config`](assets/files/sway/config).
 
 ### Lanzador
 
@@ -492,7 +495,7 @@ logo = true
 font = ""                  # fuente PSF (vacío = automática)
 shadow = true
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock", "power"]
+modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
 
 [boot]
 enabled = true             # animación al iniciar sesión

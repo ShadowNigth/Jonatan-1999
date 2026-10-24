@@ -348,8 +348,8 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
   fondo es menos opaco que a plena intensidad.
 - **`internal/bar`** — colores, composición alfa, esquinas redondeadas,
   medidas de texto, elección de variantes cuando falta espacio y zonas
-  pulsables (el indicador de notificaciones y el botón de energía se publican
-  como `Region`, y `RegionAt` resuelve el clic del ratón).
+  pulsables (el indicador de notificaciones se publica como `Region`, y
+  `RegionAt` resuelve el clic del ratón).
 - **`internal/font`** — PSF1/PSF2 sintéticos con gzip y tabla Unicode,
   archivos corruptos y la fuente incorporada.
 

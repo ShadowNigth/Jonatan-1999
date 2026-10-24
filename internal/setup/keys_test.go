@@ -1,6 +1,8 @@
 package setup
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -68,6 +70,27 @@ func TestParseBindings(t *testing.T) {
 			t.Fatalf("error inesperado en %q: %s", b.Sym, b.Error)
 		}
 	}
+}
+
+func TestPowerMenuShortcutOpensFloatingMenu(t *testing.T) {
+	path := filepath.Join("..", "..", "assets", "files", "sway", "config")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("leer plantilla Sway: %v", err)
+	}
+	for _, binding := range ParseBindings(string(data)) {
+		if binding.Sym != "Mod4+p" {
+			continue
+		}
+		if binding.Error != "" {
+			t.Fatalf("atajo Super+P inválido: %s", binding.Error)
+		}
+		if binding.Exec != "{{SWAYMENU_BIN}}" || strings.Join(binding.Args, " ") != "--power --float" {
+			t.Fatalf("Super+P debe abrir el menú flotante: %+v", binding)
+		}
+		return
+	}
+	t.Fatal("la plantilla Sway no define Super+P para el menú de energía")
 }
 
 func TestParseBindingsDuplicados(t *testing.T) {

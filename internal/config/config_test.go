@@ -118,6 +118,14 @@ icon_theme = "Papirus-Dark"
 	}
 }
 
+func TestDefaultBarModulesDoNotIncludePower(t *testing.T) {
+	for _, module := range Default().BarModules {
+		if module == "power" {
+			t.Fatal("el botón de energía ya no es un módulo de la barra")
+		}
+	}
+}
+
 func TestLoadSinArchivo(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg, err := Load()

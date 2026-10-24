@@ -56,7 +56,7 @@ func main() {
 	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 
 	if *power {
-		// Waybar, swaybar y los atajos de sway no tienen TTY. En esos casos
+		// Los atajos de sway y otros lanzadores no tienen TTY. En esos casos
 		// abre el menú dentro de una terminal flotante; desde una terminal
 		// interactiva conserva el comportamiento directo. El hijo relanzado
 		// lleva --no-float para impedir que vuelva a abrir otra terminal.

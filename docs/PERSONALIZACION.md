@@ -581,20 +581,14 @@ font = ""                  # ruta a un .psf / .psf.gz; vacío = fuente del siste
 font_scale = 1.0
 shadow = true              # sombra suave bajo las islas
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock", "power"]
+modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
 ```
 
 Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
 (indicador de `wf-recorder`), `cpu`, `ram`, `disk`, `temp`, `uptime`,
 `volume`, `network`, `battery`, `updates`, `title` (ventana enfocada), `clock`,
-`clock24`, `date` y `power`.
-
-El nuevo botón rojo **PWR** queda al extremo derecho. Al pulsarlo, las acciones
-para bloquear, suspender o cerrar sesión aparecen dentro de la propia barra, sin
-crear una ventana que la cubra. Si `confirm_power = true`, cerrar sesión,
-reiniciar y apagar piden confirmación ahí mismo. También aparece en
-configuraciones anteriores que todavía no listan `power`; Waybar conserva su
-botón de energía.
+`clock24` y `date`. No hay un módulo ni botón de energía en swaybar: usa
+**Super+P**, que abre `swaymenu --power --float` en una ventana flotante.
 
 ```bash
 swaydesk bar                  # estado y módulos actuales
@@ -897,8 +891,12 @@ Módulos disponibles: `logo`, `recording`, `clock`, `cpu`, `ram`, `battery`,
 }
 ```
 
-El botón rojo de apagado (`custom/power`) abre el selector de energía en una
-terminal flotante; desde Waybar no hay una TTY disponible para el menú.
+La plantilla Waybar tampoco incluye un botón `custom/power`. El menú de energía
+se abre con **Super+P** (`swaymenu --power --float`) desde la configuración Sway;
+también está disponible como `swaydesk power`. Si ya tienes una configuración
+Sway que el instalador conservó, agrega allí un atajo equivalente: `--no-config`
+no modifica archivos existentes y `--force` los reemplaza después de crear una
+copia de respaldo.
 
 Para ver el estado completo en JSON (útil para scripts):
 
