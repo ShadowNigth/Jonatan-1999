@@ -3,6 +3,7 @@
 package setup
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -755,13 +756,82 @@ func Apply(cfg *config.Config, dest string) ([]Result, error) {
 		}
 		results = append(results, Result{Path: target, Action: action, Modified: true})
 	}
+	legacyPowerFiles, err := removeLegacyWaybarPower(dest)
+	if err != nil {
+		return results, err
+	}
+	for _, path := range legacyPowerFiles {
+		results = append(results, Result{Path: path, Action: "botón custom/power retirado", Modified: true})
+	}
 	applyGTKSettings(cfg)
 	ReloadWaybar()
 	ApplySwayColors(cfg)
 	return results, nil
 }
 
-// ReloadWaybar pide a waybar que recargue su hoja de estilos.
+// removeLegacyWaybarPower quita solo el módulo obsoleto custom/power de
+// configuraciones JSON de Waybar existentes, preservando el resto del archivo.
+func removeLegacyWaybarPower(dest string) ([]string, error) {
+	var changed []string
+	for _, name := range []string{"config", "config.json", "config.jsonc"} {
+		path := filepath.Join(dest, "waybar", name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return changed, fmt.Errorf("leyendo %s: %w", path, err)
+		}
+		if !strings.Contains(string(data), `"custom/power"`) {
+			continue
+		}
+		var cfg map[string]any
+		if err := json.Unmarshal(data, &cfg); err != nil || cfg == nil {
+			// No se toca JSONC con comentarios ni archivos ajenos en otro formato.
+			continue
+		}
+		modified := false
+		for _, key := range []string{"modules-left", "modules-center", "modules-right"} {
+			modules, ok := cfg[key].([]any)
+			if !ok {
+				continue
+			}
+			filtered := make([]any, 0, len(modules))
+			for _, module := range modules {
+				if module == "custom/power" {
+					modified = true
+					continue
+				}
+				filtered = append(filtered, module)
+			}
+			if len(filtered) != len(modules) {
+				cfg[key] = filtered
+			}
+		}
+		if _, ok := cfg["custom/power"]; ok {
+			delete(cfg, "custom/power")
+			modified = true
+		}
+		if !modified {
+			continue
+		}
+		updated, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return changed, fmt.Errorf("serializando %s: %w", path, err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return changed, fmt.Errorf("consultando %s: %w", path, err)
+		}
+		if err := os.WriteFile(path, append(updated, '\n'), info.Mode().Perm()); err != nil {
+			return changed, fmt.Errorf("actualizando %s: %w", path, err)
+		}
+		changed = append(changed, path)
+	}
+	return changed, nil
+}
+
+// ReloadWaybar pide a waybar que recargue su configuración y hoja de estilos.
 func ReloadWaybar() {
 	if _, err := exec.LookPath("pkill"); err != nil {
 		return

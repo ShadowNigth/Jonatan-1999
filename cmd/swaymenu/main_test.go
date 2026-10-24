@@ -38,7 +38,7 @@ func TestShellJoinQuotesSwayExecArguments(t *testing.T) {
 	}
 }
 
-func TestBuildItemsKeepsPowerButNotThemePicker(t *testing.T) {
+func TestBuildItemsOmitsPowerAndLockActions(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_DATA_DIRS", filepath.Join(home, "share"))
@@ -46,18 +46,20 @@ func TestBuildItemsKeepsPowerButNotThemePicker(t *testing.T) {
 
 	cfg := config.Default()
 	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
-	items, payloads := buildItems(cfg, theme, false)
-	foundPower, foundTheme := false, false
+	items, _ := buildItems(cfg, theme, false)
+	foundPower, foundLock, foundTheme := false, false, false
 	for _, item := range items {
 		switch item.Key {
 		case "act:power":
-			foundPower = payloads[item.Key].action == "power"
+			foundPower = true
+		case "act:lock":
+			foundLock = true
 		case "act:theme":
 			foundTheme = true
 		}
 	}
-	if !foundPower {
-		t.Fatal("la acción de energía debe seguir disponible")
+	if foundPower || foundLock {
+		t.Fatalf("el lanzador no debe listar energía ni bloqueo: power=%v lock=%v", foundPower, foundLock)
 	}
 	if foundTheme {
 		t.Fatal("el selector de temas no debe aparecer en el lanzador de aplicaciones")

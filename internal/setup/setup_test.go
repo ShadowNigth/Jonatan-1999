@@ -29,9 +29,14 @@ func TestRenderSinMarcadores(t *testing.T) {
 			t.Fatalf("%s tiene marcadores sin sustituir: %q", name, content[idx:end])
 		}
 	}
-	for _, required := range []string{"sway/config", "waybar/config.json", "waybar/style.css", "foot/foot.ini", "mako/config", "swaylock/config", "gtk-3.0/settings.ini", "gtk-3.0/gtk.css", "swaydesk/config.toml", "applications/swaydesk-menu.desktop"} {
+	for _, required := range []string{"sway/config", "waybar/config.json", "waybar/style.css", "foot/foot.ini", "mako/config", "swaylock/config", "gtk-3.0/settings.ini", "gtk-3.0/gtk.css", "swaydesk/config.toml", "swaydesk/autostart.sh", "applications/swaydesk-menu.desktop"} {
 		if _, ok := files[required]; !ok {
 			t.Fatalf("falta la plantilla %q", required)
+		}
+	}
+	for _, service := range []string{"quiet swaydesk boot", "once swaynotify daemon", "once swayosd watch", "swaydesk wallpaper daemon --if-needed", "autostart.log"} {
+		if !strings.Contains(files["swaydesk/autostart.sh"], service) {
+			t.Errorf("el autostart debe diagnosticar el servicio %q", service)
 		}
 	}
 }
@@ -251,6 +256,45 @@ func TestInstallYRespaldo(t *testing.T) {
 	}
 	if backups == 0 {
 		t.Fatal("no se creó ningún respaldo")
+	}
+}
+
+func TestApplyRemovesLegacyWaybarPowerOnly(t *testing.T) {
+	cfg := config.Default()
+	dest := t.TempDir()
+	waybarDir := filepath.Join(dest, "waybar")
+	if err := os.MkdirAll(waybarDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(waybarDir, "config.json")
+	legacy := `{"modules-right":["cpu","custom/power","clock"],"custom/power":{"on-click":"swaymenu --power"},"custom/keep":{"format":"still here"}}`
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := Apply(cfg, dest)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(updated)
+	if strings.Contains(text, "custom/power") {
+		t.Fatalf("no se quitó el módulo de energía: %s", text)
+	}
+	if !strings.Contains(text, `"cpu"`) || !strings.Contains(text, `"clock"`) || !strings.Contains(text, "custom/keep") {
+		t.Fatalf("se perdió contenido ajeno de Waybar: %s", text)
+	}
+	found := false
+	for _, result := range results {
+		if result.Path == path && result.Action == "botón custom/power retirado" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Apply no reportó la migración de Waybar: %+v", results)
 	}
 }
 

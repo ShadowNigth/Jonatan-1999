@@ -168,8 +168,6 @@ func buildItems(cfg *config.Config, theme *ui.Theme, withCommands bool) ([]ui.It
 		{"swayctl", "Panel de control", "estado, temas, atajos", theme.Icons.Layout, "swayctl"},
 		{"swayclip", "Portapapeles", "historial de wl-clipboard", theme.Icons.Scroll, "swayclip"},
 		{"screenshot", "Captura de pantalla", "grim + slurp", theme.Icons.Camera, "grim"},
-		{"lock", "Bloquear pantalla", "swaylock", theme.Icons.Lock, "swaylock"},
-		{"power", "Energía", "apagar, reiniciar, suspender", theme.Icons.Power, ""},
 		{"edit-sway", "Editar configuración de sway", "~/.config/sway/config", theme.Icons.Gear, cfg.Editor},
 		{"edit-swaydesk", "Editar configuración de swaydesk", cfg.Path, theme.Icons.Doc, cfg.Editor},
 	}
@@ -388,7 +386,7 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 				if !ok {
 					return true
 				}
-				execute(it, byKey, theme, cfg, calcResult)
+				execute(it, byKey, cfg, calcResult)
 				return true
 			case k.Is("up") || (k.Ctrl && k.IsRune('p')):
 				sel.Move(-1)
@@ -425,7 +423,7 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 }
 
 // execute lanza la entrada seleccionada.
-func execute(it ui.Item, byKey map[string]payload, theme *ui.Theme, cfg *config.Config, calcResult string) {
+func execute(it ui.Item, byKey map[string]payload, cfg *config.Config, calcResult string) {
 	p, ok := byKey[it.Key]
 	if !ok {
 		if it.Key == "calc" && calcResult != "" {
@@ -442,17 +440,12 @@ func execute(it ui.Item, byKey map[string]payload, theme *ui.Theme, cfg *config.
 			actions.Notification("swaymenu", fmt.Sprintf("No se pudo lanzar %s: %v", it.Label, err), "critical")
 		}
 	case "action":
-		switch p.action {
-		case "power":
-			runPowerMenu(theme, cfg)
-		default:
-			runAction(p.action, theme, cfg)
-		}
+		runAction(p.action, cfg)
 	}
 }
 
 // runAction ejecuta una acción integrada por nombre.
-func runAction(id string, theme *ui.Theme, cfg *config.Config) {
+func runAction(id string, cfg *config.Config) {
 	fail := func(err error) {
 		if err != nil {
 			actions.Notification("swaydesk", err.Error(), "critical")
@@ -465,8 +458,6 @@ func runAction(id string, theme *ui.Theme, cfg *config.Config) {
 		fail(launcher.StartDetached(cfg.FileManager))
 	case "browser":
 		fail(launcher.StartDetached(cfg.Browser))
-	case "lock":
-		fail(actions.Lock())
 	case "screenshot":
 		fail(actions.Screenshot("region"))
 	case "reload":

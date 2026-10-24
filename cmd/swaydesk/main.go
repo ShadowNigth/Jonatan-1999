@@ -710,6 +710,71 @@ func processRunning(name string) bool {
 	return exec.Command("pgrep", "-x", name).Run() == nil
 }
 
+func autostartStatus(cfg *config.Config) (bool, string) {
+	swayPath := filepath.Join(configDir(), "sway", "config")
+	swayConfig, err := os.ReadFile(swayPath)
+	if err != nil || !strings.Contains(string(swayConfig), "autostart.sh") {
+		return false, "la configuración Sway no invoca swaydesk/autostart.sh"
+	}
+	path := filepath.Join(configDir(), "swaydesk", "autostart.sh")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, "no se pudo leer " + path
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, "no se pudo consultar " + path
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		return false, "autostart.sh no es ejecutable"
+	}
+	checks := []struct{ label, marker string }{
+		{"animación de arranque", "swaydesk boot"},
+		{"notificaciones", "swaynotify daemon"},
+		{"OSD", "swayosd watch"},
+		{"fondos por workspace", "swaydesk wallpaper daemon"},
+	}
+	var missing []string
+	for _, check := range checks {
+		if !strings.Contains(string(data), check.marker) {
+			missing = append(missing, check.label)
+		}
+	}
+	if len(missing) > 0 {
+		return false, "autostart antiguo; faltan: " + strings.Join(missing, ", ")
+	}
+	return true, path + " · registro: " + filepath.Join(cfg.Cache, "autostart.log")
+}
+
+func notifyDaemonStatus(cfg *config.Config) (bool, string) {
+	if cfg.NotifyEnabled && launcher.HasCommand("swaynotify") && hasNotifyDaemon() {
+		return true, "swaynotify activo y registrado en D-Bus"
+	}
+	if processRunning("mako") {
+		return true, "mako activo (reserva)"
+	}
+	if !cfg.NotifyEnabled {
+		return false, "notify.enabled = false y no hay mako activo"
+	}
+	if !launcher.HasCommand("swaynotify") {
+		return false, "falta swaynotify y no hay mako activo"
+	}
+	return false, "swaynotify no responde; comprueba D-Bus y el registro de autostart"
+}
+
+func osdWatchStatus(cfg *config.Config) (bool, string) {
+	if !cfg.OSDEnabled && !cfg.OSDMediaEnabled {
+		return false, "osd.enabled y osd.media_enabled están desactivados"
+	}
+	if !launcher.HasCommand("swayosd") {
+		return false, "falta el binario swayosd"
+	}
+	if !processRunning("swayosd") {
+		return false, "no está activo swayosd watch"
+	}
+	return true, fmt.Sprintf("watch activo · volumen=%v · MPRIS=%v", cfg.OSDEnabled, cfg.OSDMediaEnabled)
+}
+
 // ───────────────────────── doctor ─────────────────────────
 
 type check struct {
@@ -742,11 +807,17 @@ func wallpaperDaemonOK(cfg *config.Config) bool {
 }
 
 func wallpaperDaemonDetail(cfg *config.Config) string {
+	rules := len(cfg.WallpaperWorkspaces)
 	if !wallpaperDaemonNeeded(cfg) {
-		return "no hace falta con una imagen fija"
+		if rules == 0 {
+			return "imagen fija global · no hay reglas por workspace"
+		}
 	}
 	if pid := wallpaper.RunningPID(cfg.Cache); pid != 0 {
-		return fmt.Sprintf("activo (pid %d) · registro en ~/.cache/swaydesk/wallpaper.log", pid)
+		return fmt.Sprintf("activo (pid %d) · %d regla(s) por workspace · registro: %s", pid, rules, filepath.Join(cfg.Cache, "wallpaper.log"))
+	}
+	if rules > 0 {
+		return fmt.Sprintf("detenido con %d regla(s) por workspace", rules)
 	}
 	return "detenido: el fondo animado no se dibuja"
 }
@@ -909,12 +980,19 @@ func cmdDoctor(args []string) {
 	cfg, err := config.Load()
 	must(err)
 	th := ui.NewTheme(cfg.Theme, cfg.NerdFont)
+	autostartOK, autostartDetail := autostartStatus(cfg)
+	notifyOK, notifyDetail := notifyDaemonStatus(cfg)
+	osdOK, osdDetail := osdWatchStatus(cfg)
 
 	checks := []check{
 		{name: "sway", required: true, ok: launcher.HasCommand("sway") || swayipc.SwaySock() != "",
 			detail: "compositor", fix: "sudo pacman -S sway"},
 		{name: "socket IPC de sway", required: true, ok: swayipc.SwaySock() != "",
 			detail: swayipc.SwaySock(), fix: "exporta SWAYSOCK dentro de la sesión de sway"},
+		{name: "autostart swaydesk", required: false, ok: autostartOK,
+			detail: autostartDetail, fix: "swaydesk init --force --only swaydesk/autostart.sh (crea respaldo)"},
+		{name: "animación de arranque", required: false, ok: cfg.BootEnabled,
+			detail: fmt.Sprintf("boot.enabled = %v", cfg.BootEnabled), fix: "actívala en [boot] de config.toml"},
 		{name: "waybar", required: false, ok: launcher.HasCommand("waybar"),
 			detail: "barra de estado", fix: "sudo pacman -S waybar"},
 		{name: "foot", required: false, ok: launcher.HasCommand("foot"),
@@ -945,18 +1023,19 @@ func cmdDoctor(args []string) {
 		{name: "demonio de fondo", required: false, ok: wallpaperDaemonOK(cfg),
 			detail: wallpaperDaemonDetail(cfg),
 			fix:    "swaydesk wallpaper daemon · si falla: swaydesk wallpaper logs"},
+		{name: "reglas por workspace", required: false, ok: len(cfg.WallpaperWorkspaces) > 0,
+			detail: fmt.Sprintf("%d regla(s) guardadas en config.toml", len(cfg.WallpaperWorkspaces)),
+			fix:    "swaydesk wallpaper workspaces set <workspace> <fondo>"},
 		{name: "swaybar (propia)", required: false, ok: launcher.HasCommand("swaybar") && cfg.BarEnabled,
 			detail: "barra de estado de swaydesk", fix: "make build && make install"},
 		{name: "fuentes de consola", required: false, ok: font.Available(),
 			detail: "texto de swaybar (PSF)", fix: "sudo pacman -S kbd"},
-		{name: "swaynotify (propio)", required: false,
-			ok:     launcher.HasCommand("swaynotify") && cfg.NotifyEnabled && hasNotifyDaemon(),
-			detail: "notificaciones de swaydesk (D-Bus, sin mako)",
-			fix:    "make build && make install; reinicia la sesión"},
-		{name: "swayosd (propio)", required: false,
-			ok:     launcher.HasCommand("swayosd") && cfg.OSDEnabled,
-			detail: "aviso en pantalla del volumen",
-			fix:    "make build && make install; reinicia la sesión"},
+		{name: "notificaciones", required: false,
+			ok: notifyOK, detail: notifyDetail,
+			fix: "revisa D-Bus y ~/.cache/swaydesk/autostart.log"},
+		{name: "OSD volumen/MPRIS", required: false,
+			ok: osdOK, detail: osdDetail,
+			fix: "swaydesk osd show · revisa ~/.cache/swaydesk/autostart.log"},
 		{name: "bus de sesión (D-Bus)", required: false, ok: dbus.SessionAvailable(),
 			detail: "necesario para las notificaciones", fix: "arranca la sesión con dbus"},
 		{name: "swayfx", required: false, ok: setup.IsSwayfx(),
@@ -1002,7 +1081,7 @@ func cmdDoctor(args []string) {
 		name string
 	}{
 		{filepath.Join(configDir(), "sway", "config"), "sway"},
-		{filepath.Join(configDir(), "waybar", "config"), "waybar"},
+		{filepath.Join(configDir(), "waybar", "config.json"), "waybar"},
 		{filepath.Join(configDir(), "waybar", "style.css"), "waybar (estilo)"},
 		{filepath.Join(configDir(), "foot", "foot.ini"), "foot"},
 		{filepath.Join(configDir(), "mako", "config"), "mako"},

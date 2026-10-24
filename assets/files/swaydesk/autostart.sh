@@ -18,8 +18,23 @@
 PATH="$HOME/.local/bin:$HOME/bin:$PATH"
 export PATH
 
+LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/swaydesk"
+LOG_FILE=/dev/null
+if mkdir -p "$LOG_DIR" 2>/dev/null; then
+    LOG_FILE="$LOG_DIR/autostart.log"
+fi
+log() {
+    [ "$LOG_FILE" = /dev/null ] && return 0
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$LOG_FILE" 2>/dev/null
+}
 have() { command -v "$1" >/dev/null 2>&1; }
-quiet() { "$@" >/dev/null 2>&1 & }
+quiet() {
+    log "iniciando: $*"
+    "$@" >>"$LOG_FILE" 2>&1 &
+}
+DBUS_STATUS=ausente
+[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && DBUS_STATUS=presente
+log "--- autostart; WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-vacío}; SWAYSOCK=${SWAYSOCK:-vacío}; D-Bus=$DBUS_STATUS ---"
 
 # alive NOMBRE — ¿hay un proceso con ese nombre exacto?
 alive() {
@@ -31,7 +46,10 @@ alive() {
 # se cerró (o nunca llegó a arrancar), el siguiente reload lo recupera.
 once() {
     _nombre="$1"; shift
-    alive "$_nombre" && return 0
+    if alive "$_nombre"; then
+        log "ya está activo: $_nombre"
+        return 0
+    fi
     quiet "$_nombre" "$@"
 }
 

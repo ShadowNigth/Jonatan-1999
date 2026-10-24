@@ -201,6 +201,9 @@ Recarga siempre con `Super+Shift+c` o `swaymsg reload`.
   bórralo para reiniciar el orden de resultados.
 - La calculadora se activa empezando el filtro por `=`:
   `=2^10`, `=sqrt(144)+3`, `=100*1.19` (IVA), `=round(2.5)`.
+- El lanzador no muestra acciones de energía ni de bloqueo. Usa `Super+P` para
+  abrir el menú de energía y `Super+Shift+L` para bloquear la pantalla; ambos
+  atajos se conservan en la configuración de Sway.
 
 ### Añadir una acción al menú
 
@@ -228,6 +231,24 @@ swayclip --backend clipman
 Para tener historial persistente, `~/.config/swaydesk/autostart.sh` arranca
 `wl-paste --type text --watch cliphist store` si `cliphist` está instalado.
 Puedes borrar la entrada seleccionada con `Ctrl+d`.
+
+### Si no aparecen OSD, notificaciones o la animación de arranque
+
+El autostart nuevo inicia `swaynotify`, `swayosd watch` y el demonio de fondos,
+pero una instalación con `--no-config` deja intactos los archivos de inicio que
+ya existían. Comprueba primero `swaydesk doctor`; si marca `autostart swaydesk`
+como antiguo, actualiza solo ese archivo (se crea un respaldo) y recarga Sway:
+
+```bash
+swaydesk init --force --only swaydesk/autostart.sh
+swaymsg reload
+tail -n 80 "${XDG_CACHE_HOME:-$HOME/.cache}/swaydesk/autostart.log"
+```
+
+Pruebas manuales útiles: `swaydesk osd show`, `swaydesk notifications test`,
+`swaydesk wallpaper status` y `swaydesk boot`. Si el aviso o la notificación
+fallan también al lanzarlos manualmente, conserva el mensaje de error y el
+registro de autostart para localizar el problema concreto.
 
 ### Si un fondo no se aplica
 
@@ -891,12 +912,15 @@ Módulos disponibles: `logo`, `recording`, `clock`, `cpu`, `ram`, `battery`,
 }
 ```
 
-La plantilla Waybar tampoco incluye un botón `custom/power`. El menú de energía
-se abre con **Super+P** (`swaymenu --power --float`) desde la configuración Sway;
-también está disponible como `swaydesk power`. Si ya tienes una configuración
-Sway que el instalador conservó, agrega allí un atajo equivalente: `--no-config`
-no modifica archivos existentes y `--force` los reemplaza después de crear una
-copia de respaldo.
+La plantilla Waybar tampoco incluye un botón `custom/power`. `swaydesk apply`
+retira esa entrada obsoleta de las configuraciones JSON de Waybar sin cambiar
+los demás módulos. Reinicia la barra (`Super+Ctrl+B`) para que un proceso viejo
+cargue los cambios. El menú de energía se abre con **Super+P**
+(`swaymenu --power --float`) desde la configuración Sway; también está
+disponible como `swaydesk power`. Si ya tienes una configuración Sway que el
+instalador conservó, agrega allí un atajo equivalente: `--no-config` no modifica
+archivos existentes y `--force` los reemplaza después de crear una copia de
+respaldo.
 
 Para ver el estado completo en JSON (útil para scripts):
 
