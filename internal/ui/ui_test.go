@@ -2,6 +2,7 @@ package ui
 
 import (
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -114,7 +115,9 @@ func TestFilterItems(t *testing.T) {
 
 func TestKeyReader(t *testing.T) {
 	pr, pw := io.Pipe()
+	defer pw.Close()
 	kr := NewKeyReader(pr)
+	defer kr.Close()
 	go func() {
 		for _, chunk := range []string{
 			"a", "\x1b[A", "\x1b[B", "\x1b[Z", "\x03", "\r", "\x7f", "ñ", "\x1b[1;5C", "\x1bx",
@@ -142,6 +145,70 @@ func TestKeyReader(t *testing.T) {
 		if got.Rune != w.Rune || got.Name != w.Name || got.Ctrl != w.Ctrl || got.Alt != w.Alt {
 			t.Fatalf("clave %d = %+v, esperaba %+v", i, got, w)
 		}
+	}
+}
+
+func TestKeyReaderCloseStopsBlockedPipe(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	kr := NewKeyReader(pr)
+	keys := kr.Keys()
+	kr.Close()
+
+	select {
+	case _, ok := <-keys:
+		if ok {
+			t.Fatal("el lector publicó una tecla al cerrarse sin entrada")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Close no liberó el lector bloqueado")
+	}
+}
+
+func TestFileKeyReaderClosesWithoutClosingFile(t *testing.T) {
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readEnd.Close()
+	defer writeEnd.Close()
+
+	kr := NewKeyReader(readEnd)
+	keys := kr.Keys()
+	if _, err := writeEnd.Write([]byte("q")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case key, ok := <-keys:
+		if !ok || key.Rune != 'q' {
+			t.Fatalf("tecla inesperada: %+v, abierto=%v", key, ok)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("el lector de archivos no recibió la tecla")
+	}
+
+	kr.Close()
+	select {
+	case _, ok := <-keys:
+		if ok {
+			t.Fatal("quedó una tecla tras cerrar el reader")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("el reader de archivo no se detuvo al cerrar")
+	}
+	kr2 := NewKeyReader(readEnd)
+	keys2 := kr2.Keys()
+	defer kr2.Close()
+	if _, err := writeEnd.Write([]byte("x")); err != nil {
+		t.Fatalf("Close cerró el descriptor que pertenece al llamador: %v", err)
+	}
+	select {
+	case key, ok := <-keys2:
+		if !ok || key.Rune != 'x' {
+			t.Fatalf("segundo menú recibió una tecla inesperada: %+v, abierto=%v", key, ok)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("el segundo menú no recibió entrada tras cerrar el primero")
 	}
 }
 
@@ -272,7 +339,9 @@ func TestPalettesCompletas(t *testing.T) {
 
 func TestTimeoutDeEscape(t *testing.T) {
 	pr, pw := io.Pipe()
+	defer pw.Close()
 	kr := NewKeyReader(pr)
+	defer kr.Close()
 	done := make(chan Key, 1)
 	go func() {
 		k, _ := kr.Read()

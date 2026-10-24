@@ -47,6 +47,9 @@ func (s *Screen) Close() {
 	s.once.Do(func() {
 		s.closed = true
 		signal.Stop(s.sigCh)
+		if s.Keys != nil {
+			s.Keys.Close()
+		}
 		s.Term.HideCursor(false)
 		s.Term.AltScreen(false)
 		_ = s.Term.ExitRaw()

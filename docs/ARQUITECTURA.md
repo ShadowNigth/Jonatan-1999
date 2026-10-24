@@ -272,6 +272,11 @@ pantalla alternativa (`\x1b[?1049h`), restaurada con `defer sc.Close()`.
 - `SS3` (`\x1bOP` = F1),
 - y distingue `Esc` solo (timeout de 35 ms) de `Alt+tecla`.
 
+Al cerrar `Screen`, se cancela y se espera al lector de entrada antes de restaurar
+el terminal. Esto evita dejar varios lectores compitiendo por `stdin` cuando un
+menú abre otro selector (por ejemplo, la confirmación de apagado); el TTY se
+sondea con `select` y nunca se cierra el descriptor compartido.
+
 **Colores.** Las paletas se declaran en `#rrggbb`. En `truecolor` se emiten
 `\x1b[38;2;r;g;bm`; si el terminal solo soporta 256 colores se aproxima al índice
 xterm-256 más cercano comparando con el cubo 6×6×6 y la rampa de grises; si
