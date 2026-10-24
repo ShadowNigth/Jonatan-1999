@@ -179,6 +179,27 @@ func TestTerminalCommandBuildsFootInvocation(t *testing.T) {
 	}
 }
 
+func TestRelaunchInTerminalIfNeededKeepsInteractiveTerminal(t *testing.T) {
+	relaunched, err := RelaunchInTerminalIfNeeded(true, "", "swaydesk-test", "", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("no debía intentar relanzar desde una terminal interactiva: %v", err)
+	}
+	if relaunched {
+		t.Fatal("una sesión interactiva no debe abrir otra terminal")
+	}
+}
+
+func TestRelaunchInTerminalIfNeededReportsMissingTerminal(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	relaunched, err := RelaunchInTerminalIfNeeded(false, "", "swaydesk-test", "", 0, 0, []string{"--example"})
+	if !relaunched {
+		t.Fatal("sin TTY debe marcar el intento de relanzamiento, incluso si falla")
+	}
+	if err == nil {
+		t.Fatal("sin un emulador disponible se esperaba un error visible para el llamador")
+	}
+}
+
 func TestPreferredTerminal(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if got := PreferredTerminal(""); got != "" {

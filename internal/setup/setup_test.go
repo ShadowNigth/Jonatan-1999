@@ -68,6 +68,14 @@ func TestRenderPaleta(t *testing.T) {
 	if !strings.Contains(swayConf, "bindsym $mod+Return exec") {
 		t.Fatal("faltan atajos en la configuración de sway")
 	}
+	for _, binding := range []string{
+		"bindsym $mod+c exec --no-startup-id $swayclip",
+		"bindsym $mod+i exec --no-startup-id $swayctl",
+	} {
+		if !strings.Contains(swayConf, binding) {
+			t.Errorf("falta el atajo de teclado: %s", binding)
+		}
+	}
 	if strings.Contains(swayConf, "{{") {
 		t.Fatal("quedan marcadores en la configuración de sway")
 	}
@@ -121,9 +129,12 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 		t.Fatalf("el centro debe contener solo el reloj, obtuvo %v", waybar.ModulesCenter)
 	}
 	for _, module := range waybar.ModulesRight {
-		if module == "clock" || module == "sway/window" {
-			t.Fatalf("módulo duplicado o título de ventana en la derecha: %v", waybar.ModulesRight)
+		if module == "clock" || module == "sway/window" || module == "cpu" || module == "memory" {
+			t.Fatalf("módulo duplicado, de CPU/RAM o título de ventana en la derecha: %v", waybar.ModulesRight)
 		}
+	}
+	if strings.Contains(files["waybar/config.json"], `"cpu"`) || strings.Contains(files["waybar/config.json"], `"memory"`) {
+		t.Fatal("la plantilla de Waybar no debe configurar ni mostrar CPU o RAM")
 	}
 	if strings.Contains(files["waybar/config.json"], "sway/window") {
 		t.Fatal("la configuración aún contiene el módulo del título de ventana")
@@ -165,8 +176,6 @@ func TestWaybarLabelsAreSpanish(t *testing.T) {
 		"Sin conexión",
 		"Silenciado",
 		"Volumen: {volume}%",
-		"Uso de CPU:",
-		"Memoria usada:",
 		"Temperatura:",
 		"Batería:",
 	} {
@@ -374,7 +383,7 @@ func TestInstallYRespaldo(t *testing.T) {
 	}
 }
 
-func TestApplyRemovesLegacyWaybarPowerOnly(t *testing.T) {
+func TestApplyRemovesUnusedLegacyWaybarModules(t *testing.T) {
 	cfg := config.Default()
 	dest := t.TempDir()
 	waybarDir := filepath.Join(dest, "waybar")
@@ -382,7 +391,7 @@ func TestApplyRemovesLegacyWaybarPowerOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(waybarDir, "config.json")
-	legacy := `{"modules-right":["cpu","custom/power","clock"],"custom/power":{"on-click":"swaymenu --power"},"custom/keep":{"format":"still here"}}`
+	legacy := `{"modules-right":["cpu","memory","custom/power","clock","temperature"],"cpu":{"format":"{usage}%"},"memory":{"format":"{percentage}%"},"custom/power":{"on-click":"swaymenu --power"},"custom/keep":{"format":"still here"}}`
 	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -395,16 +404,46 @@ func TestApplyRemovesLegacyWaybarPowerOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(updated)
-	if strings.Contains(text, "custom/power") {
-		t.Fatalf("no se quitó el módulo de energía: %s", text)
+	var got map[string]any
+	if err := json.Unmarshal(updated, &got); err != nil {
+		t.Fatalf("JSON actualizado inválido: %v", err)
 	}
-	if !strings.Contains(text, `"cpu"`) || !strings.Contains(text, `"clock"`) || !strings.Contains(text, "custom/keep") {
-		t.Fatalf("se perdió contenido ajeno de Waybar: %s", text)
+	modules, ok := got["modules-right"].([]any)
+	if !ok {
+		t.Fatalf("modules-right no quedó como lista: %#v", got["modules-right"])
+	}
+	for _, module := range modules {
+		if module == "cpu" || module == "memory" || module == "custom/power" {
+			t.Fatalf("Apply dejó un módulo que debía retirar: %v", modules)
+		}
+	}
+	if _, ok := got["cpu"]; ok {
+		t.Fatal("se conservó la definición Waybar de CPU")
+	}
+	if _, ok := got["memory"]; ok {
+		t.Fatal("se conservó la definición Waybar de memoria")
+	}
+	if _, ok := got["custom/power"]; ok {
+		t.Fatal("se conservó la definición del botón de energía")
+	}
+	if _, ok := got["custom/keep"]; !ok {
+		t.Fatal("se perdió la configuración personalizada ajena a CPU/RAM")
+	}
+	for _, keep := range []string{"clock", "temperature"} {
+		found := false
+		for _, module := range modules {
+			if module == keep {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("Apply quitó el módulo que debía conservar: %s", keep)
+		}
 	}
 	found := false
 	for _, result := range results {
-		if result.Path == path && result.Action == "botón custom/power retirado" {
+		if result.Path == path && result.Action == "módulos heredados de Waybar retirados" {
 			found = true
 		}
 	}

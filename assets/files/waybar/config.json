@@ -14,8 +14,6 @@
     "tray",
     "pulseaudio",
     "network",
-    "cpu",
-    "memory",
     "temperature",
     "battery"
   ],
@@ -87,18 +85,6 @@
     "tooltip-format-disconnected": "Sin conexión",
     "tooltip-format-disabled": "Wi-Fi desactivado",
     "on-click": "nm-connection-editor"
-  },
-  "cpu": {
-    "format": "{{ICON_CPU}} {usage}%",
-    "interval": 3,
-    "on-click": "swayctl",
-    "tooltip-format": "Uso de CPU: {usage}% · carga: {load}"
-  },
-  "memory": {
-    "format": "{{ICON_RAM}} {percentage}%",
-    "interval": 5,
-    "tooltip-format": "Memoria usada: {used} de {total}",
-    "on-click": "swayctl"
   },
   "temperature": {
     "format": "{{ICON_TEMP}} {temperatureC}°C",

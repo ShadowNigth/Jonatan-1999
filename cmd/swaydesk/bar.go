@@ -179,7 +179,7 @@ func barModules(cfg *config.Config, theme *ui.Theme, args []string) {
 		fmt.Printf("  %s %s\n", active, m)
 	}
 	fmt.Println()
-	fmt.Println(ui.Dim("uso: swaydesk bar modules cpu ram volume clock"))
+	fmt.Println(ui.Dim("uso: swaydesk bar modules media notify volume network battery clock"))
 	fmt.Println()
 }
 

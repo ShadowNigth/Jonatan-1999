@@ -190,8 +190,6 @@ func templateData(cfg *config.Config) map[string]string {
 		"ICON_MUTED":    ic.Muted,
 		"ICON_WIFI":     ic.Wifi,
 		"ICON_NET":      ic.Network,
-		"ICON_CPU":      ic.CPU,
-		"ICON_RAM":      ic.RAM,
 		"ICON_TEMP":     ic.Warn,
 		"ICON_BATTERY":  ic.Battery,
 		"ICON_CHARGING": ic.Charging,
@@ -756,12 +754,12 @@ func Apply(cfg *config.Config, dest string) ([]Result, error) {
 		}
 		results = append(results, Result{Path: target, Action: action, Modified: true})
 	}
-	legacyPowerFiles, err := removeLegacyWaybarPower(dest)
+	legacyBarFiles, err := removeUnusedWaybarModules(dest)
 	if err != nil {
 		return results, err
 	}
-	for _, path := range legacyPowerFiles {
-		results = append(results, Result{Path: path, Action: "botón custom/power retirado", Modified: true})
+	for _, path := range legacyBarFiles {
+		results = append(results, Result{Path: path, Action: "módulos heredados de Waybar retirados", Modified: true})
 	}
 	applyGTKSettings(cfg)
 	ReloadWaybar()
@@ -769,9 +767,9 @@ func Apply(cfg *config.Config, dest string) ([]Result, error) {
 	return results, nil
 }
 
-// removeLegacyWaybarPower quita solo el módulo obsoleto custom/power de
-// configuraciones JSON de Waybar existentes, preservando el resto del archivo.
-func removeLegacyWaybarPower(dest string) ([]string, error) {
+// removeUnusedWaybarModules quita CPU, RAM y el antiguo botón de energía de
+// configuraciones JSON existentes, preservando los demás módulos y opciones.
+func removeUnusedWaybarModules(dest string) ([]string, error) {
 	var changed []string
 	for _, name := range []string{"config", "config.json", "config.jsonc"} {
 		path := filepath.Join(dest, "waybar", name)
@@ -782,7 +780,9 @@ func removeLegacyWaybarPower(dest string) ([]string, error) {
 			}
 			return changed, fmt.Errorf("leyendo %s: %w", path, err)
 		}
-		if !strings.Contains(string(data), `"custom/power"`) {
+		text := string(data)
+		if !strings.Contains(text, `"custom/power"`) &&
+			!strings.Contains(text, `"cpu"`) && !strings.Contains(text, `"memory"`) {
 			continue
 		}
 		var cfg map[string]any
@@ -798,7 +798,8 @@ func removeLegacyWaybarPower(dest string) ([]string, error) {
 			}
 			filtered := make([]any, 0, len(modules))
 			for _, module := range modules {
-				if module == "custom/power" {
+				switch module {
+				case "cpu", "memory", "custom/power":
 					modified = true
 					continue
 				}
@@ -808,9 +809,11 @@ func removeLegacyWaybarPower(dest string) ([]string, error) {
 				cfg[key] = filtered
 			}
 		}
-		if _, ok := cfg["custom/power"]; ok {
-			delete(cfg, "custom/power")
-			modified = true
+		for _, module := range []string{"cpu", "memory", "custom/power"} {
+			if _, ok := cfg[module]; ok {
+				delete(cfg, module)
+				modified = true
+			}
 		}
 		if !modified {
 			continue

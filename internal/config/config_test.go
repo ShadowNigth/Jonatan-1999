@@ -118,10 +118,13 @@ icon_theme = "Papirus-Dark"
 	}
 }
 
-func TestDefaultBarModulesDoNotIncludePower(t *testing.T) {
+func TestDefaultBarModulesExcludePowerCPUAndRAM(t *testing.T) {
 	for _, module := range Default().BarModules {
-		if module == "power" {
+		switch module {
+		case "power":
 			t.Fatal("el botón de energía ya no es un módulo de la barra")
+		case "cpu", "ram":
+			t.Fatalf("CPU y RAM no deben activarse en la barra por defecto: %q", module)
 		}
 	}
 }

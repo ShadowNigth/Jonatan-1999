@@ -33,10 +33,13 @@ func TestOpacityZeroMustBeExplicit(t *testing.T) {
 	}
 }
 
-func TestPowerModuleRemovedFromDefaultsAndLegacyConfig(t *testing.T) {
+func TestPowerAndStatsModulesRemovedFromDefaultsAndLegacyConfig(t *testing.T) {
 	for _, module := range DefaultModules {
-		if module == "power" {
+		switch module {
+		case "power":
 			t.Fatal("el módulo de energía no debe aparecer en los valores por defecto")
+		case "cpu", "ram":
+			t.Fatalf("CPU y RAM no deben aparecer por defecto en la barra: %q", module)
 		}
 	}
 

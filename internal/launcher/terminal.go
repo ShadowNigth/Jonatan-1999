@@ -181,6 +181,21 @@ func LaunchTerminal(term, appID, title string, width, height int, cmd []string) 
 	return StartDetached(binary, args...)
 }
 
+// RelaunchInTerminalIfNeeded relanza el ejecutable actual en una terminal
+// flotante cuando el llamador no tiene TTY (por ejemplo, un atajo de sway).
+// args son los argumentos originales que debe recibir el proceso relanzado.
+func RelaunchInTerminalIfNeeded(interactive bool, term, appID, title string, width, height int, args []string) (bool, error) {
+	if interactive {
+		return false, nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return true, fmt.Errorf("obteniendo la ruta del ejecutable: %w", err)
+	}
+	command := append([]string{exe}, args...)
+	return true, LaunchTerminal(term, appID, title, width, height, command)
+}
+
 // ShellQuoteArgs convierte argumentos en una cadena segura para /bin/sh, por
 // ejemplo al enviarlos al comando `exec` de sway.
 func ShellQuoteArgs(args []string) string {

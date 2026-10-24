@@ -22,8 +22,6 @@ set $menu_all {{SWAYMENU_BIN}} --float --commands
 set $power {{SWAYMENU_BIN}} --power --float
 set $themes {{SWAYDESK_BIN}} theme --gallery
 set $wall {{SWAYDESK_BIN}} wallpaper --gallery
-set $ctl {{SWAYCTL_BIN}}
-set $clip {{SWAYCLIP_BIN}}
 set $boot {{SWAYDESK_BIN}} boot --force
 set $lock swaylock -f -c {{THEME_BG_HEX}}
 set $browser {{BROWSER}}
@@ -149,8 +147,9 @@ bindsym $mod+Shift+w exec $wall
 bindsym $mod+Shift+b exec $boot
 # Reiniciar la barra (por ejemplo, al cambiar la configuración)
 bindsym $mod+Ctrl+b exec sh -c 'pkill -x swaybar; pkill -x waybar; sleep 0.2; ~/.config/swaydesk/autostart.sh >/dev/null 2>&1 &' 
-bindsym $mod+c exec --no-startup-id $clip
-bindsym $mod+i exec --no-startup-id $ctl
+# swayclip y swayctl abren una terminal flotante cuando Sway los lanza sin TTY.
+bindsym $mod+c exec --no-startup-id $swayclip
+bindsym $mod+i exec --no-startup-id $swayctl
 bindsym $mod+Shift+l exec $lock
 bindsym $mod+Shift+n exec --no-startup-id $swaydesk notify "swaydesk" "Notificaciones de prueba"
 # Modo «no molestar» de las notificaciones propias

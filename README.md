@@ -322,7 +322,7 @@ Barra propia
   bar                        Estado de la barra (o `bar status`)
   bar on | off               Usar swaybar o volver a waybar
   bar preview [--width N]    Vista previa en PNG
-  bar modules cpu ram clock  Elige los módulos de la derecha
+  bar modules media notify volume network battery clock  Elige módulos
   bar opacity 0.68          Ajusta la translucidez de ambas barras (0–1)
 ```
 
@@ -369,10 +369,12 @@ la salida de audio y muestra solo el estado, el porcentaje y la barra.
 | `Super+n` | Centro de notificaciones (o clic en la barra) | `Enter` | Responder o cerrar en el centro |
 
 El atajo ejecuta `swaymenu --power --float`; no hay botón de energía en swaybar
-ni en Waybar. Si conservas una configuración Sway antigua que no fue regenerada,
-añade un atajo equivalente al archivo activo (usa la ruta absoluta de `swaymenu`
-si Sway no la encuentra en su `PATH`). La chuleta completa está en `Super+i` →
-*Atajos*, y en [`assets/files/sway/config`](assets/files/sway/config).
+ni en Waybar. `Super+i` y `Super+c` lanzan interfaces de terminal: si Sway las
+inicia sin TTY, se reabren en una ventana flotante de la terminal configurada.
+Si conservas una configuración Sway antigua que no fue regenerada, añade un
+atajo equivalente al archivo activo (usa la ruta absoluta de `swaymenu` si Sway
+no la encuentra en su `PATH`). La chuleta completa está en `Super+i` → *Atajos*,
+y en [`assets/files/sway/config`](assets/files/sway/config).
 
 ### Lanzador
 
@@ -407,7 +409,7 @@ segundo para el reloj y las métricas; si no hay cambios no consume CPU apenas.
 |---|---|
 | Izquierda | Logotipo, workspaces (el enfocado resaltado, los ocupados en color), ventanas flotantes |
 | Centro | Título de la ventana enfocada y `app_id`, recortado al hueco libre |
-| Derecha | Reproductor, notificaciones, CPU, RAM, volumen, red, batería y reloj |
+| Derecha | Reproductor, notificaciones, volumen, red, batería y reloj |
 
 - `panel del tema` — los colores salen de la paleta activa; al cambiar de tema
   la barra se recolorea sola (escucha la señal `SIGUSR2`).
@@ -501,7 +503,7 @@ logo = true
 font = ""                  # fuente PSF (vacío = automática)
 shadow = true
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
+modules = ["media", "notify", "volume", "network", "battery", "clock"]
 
 [boot]
 enabled = true             # animación al iniciar sesión

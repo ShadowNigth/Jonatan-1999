@@ -44,6 +44,17 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "swayclip: %v\n", err)
 	}
+	if relaunched, launchErr := launcher.RelaunchInTerminalIfNeeded(
+		ui.IsInteractive(), cfg.Terminal, "swaydesk-clip", "swaydesk · portapapeles", 0, 0, os.Args[1:],
+	); relaunched {
+		if launchErr != nil {
+			message := "no se pudo abrir el portapapeles en una terminal: " + launchErr.Error()
+			fmt.Fprintf(os.Stderr, "swayclip: %s\n", message)
+			actions.Notification("swayclip", message, "critical")
+			os.Exit(1)
+		}
+		return
+	}
 	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 
 	b := pickBackend(*backendName)

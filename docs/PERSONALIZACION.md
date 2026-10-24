@@ -334,7 +334,9 @@ archivo (editaste y no recargaste; avisa con `swaymsg reload`).
 
 Si los binarios viven en `~/.local/bin`, la configuración generada los usa con
 **ruta absoluta** (`swaydesk init` la resuelve al escribir), así que los atajos
-funcionan aunque sway no herede tu `PATH`.
+funcionan aunque sway no herede tu `PATH`. `Super+i` y `Super+c` ejecutan
+interfaces TUI; al no tener TTY, detectan la situación y se relanzan en una
+terminal flotante con el identificador de ventana adecuado.
 
 Los atajos que lanzan programas que no tienes instalados se marcan igual
 (`thunar`, `brightnessctl`…): al final del listado sale un resumen con los que
@@ -605,7 +607,7 @@ font = ""                  # ruta a un .psf / .psf.gz; vacío = fuente del siste
 font_scale = 1.0
 shadow = true              # sombra suave bajo las islas
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
+modules = ["media", "notify", "volume", "network", "battery", "clock"]
 ```
 
 Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
@@ -616,7 +618,7 @@ Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
 
 ```bash
 swaydesk bar                  # estado y módulos actuales
-swaydesk bar modules cpu ram volume network battery clock
+swaydesk bar modules media notify volume network battery clock
 swaydesk bar opacity 0.68     # opacidad común (0 = invisible, 1 = opaco)
 swaydesk bar off              # desactiva swaybar; el autostart usa waybar
 swaydesk bar preview --width 1600 --out ~/barra.png   # PNG sin sesión gráfica
@@ -648,8 +650,8 @@ es un poco más grande, no cambia de formato al hacer clic y ya no aparece el
 título de ventana ni se repite el reloj a la derecha. Al pasar el puntero sobre
 el reloj, Waybar abre el calendario mensual en español, ampliado y con la semana
 iniciando el lunes; la rueda del mouse avanza o retrocede un mes. Los rótulos de
-volumen, red, CPU, memoria,
-temperatura y batería están en español; el modo de teclado se llama
+volumen, red, temperatura y batería están en español; la plantilla ya no muestra
+métricas de CPU ni memoria. El modo de teclado se llama
 `redimensionar` y el indicador de grabación dice `GRABANDO`. Los nombres de apps y
 redes que vienen de la bandeja o del sistema conservan el idioma que les da cada
 aplicación.

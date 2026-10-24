@@ -63,8 +63,6 @@ tooltip label {
 }
 
 /* ─── Módulos genéricos ─────────────────────────────────────────────── */
-#cpu,
-#memory,
 #temperature,
 #battery,
 #pulseaudio,
@@ -84,8 +82,6 @@ tooltip label {
     font-weight: 600;
 }
 
-#cpu:hover,
-#memory:hover,
 #temperature:hover,
 #battery:hover,
 #pulseaudio:hover,

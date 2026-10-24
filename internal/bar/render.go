@@ -74,7 +74,7 @@ type Options struct {
 }
 
 // DefaultModules es la lista de módulos de la derecha por defecto.
-var DefaultModules = []string{"media", "recording", "notify", "cpu", "ram", "volume", "network", "battery", "clock"}
+var DefaultModules = []string{"media", "recording", "notify", "volume", "network", "battery", "clock"}
 
 // withoutPowerModule descarta el módulo obsoleto de energía de configuraciones existentes.
 func withoutPowerModule(modules []string) []string {
