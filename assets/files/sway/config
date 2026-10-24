@@ -70,7 +70,7 @@ focus_wrapping yes
 client.focused          {{THEME_ACCENT_HEX}} {{THEME_ACCENT_HEX}} {{THEME_BG_HEX}} {{THEME_ACCENT_HEX}} {{THEME_ACCENT_HEX}}
 # Los bordes admiten alfa (#RRGGBBAA): ventanas sin foco más discretas.
 client.focused_inactive {{THEME_BG_SEL_HEX}}{{INACTIVE_ALPHA_HEX}}  {{THEME_BG_SEL_HEX}}  {{THEME_FG_HEX}} {{THEME_BG_SEL_HEX}}  {{THEME_BG_SEL_HEX}}
-client.unfocused        {{THEME_BG_ALT_HEX}}{{INACTIVE_ALPHA_HEX}}  {{THEME_BG_ALT_HEX}}  {{THEME_FG_DIM_HEX}} {{THEME_BG_ALT_HEX}} {{THEME_BG_ALT_HEX}}
+client.unfocused        {{THEME_BG_ALT_HEX}}{{BAR_ALPHA_HEX}}  {{THEME_BG_ALT_HEX}}  {{THEME_FG_DIM_HEX}} {{THEME_BG_ALT_HEX}} {{THEME_BG_ALT_HEX}}
 client.urgent           {{THEME_ERR_HEX}}     {{THEME_ERR_HEX}}     {{THEME_BG_HEX}} {{THEME_ERR_HEX}}     {{THEME_ERR_HEX}}
 client.placeholder      {{THEME_BG_HEX}}       {{THEME_BG_HEX}}       {{THEME_FG_DIM_HEX}} {{THEME_BG_HEX}}   {{THEME_BG_HEX}}
 

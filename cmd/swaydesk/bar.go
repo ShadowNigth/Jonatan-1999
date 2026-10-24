@@ -63,11 +63,11 @@ func saveBarConfig(cfg *config.Config) error { return cfg.Save() }
 func barOpacity(cfg *config.Config, args []string) {
 	if len(args) == 0 {
 		fmt.Printf("Waybar: %.2f · swaybar: %.2f\n", cfg.BarOpacity, cfg.BarBackgroundOpacity)
-		fmt.Println("uso: swaydesk bar opacity 0 (transparente) … 1 (opaco)")
+		fmt.Println("uso: swaydesk bar opacity 0.68 (0 = transparente, 1 = opaco)")
 		return
 	}
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "uso: swaydesk bar opacity <0..1> (0 transparente, 1 opaco)")
+		fmt.Fprintln(os.Stderr, "uso: swaydesk bar opacity 0.68 (valor entre 0 y 1)")
 		os.Exit(2)
 	}
 	opacity, err := parseBarOpacity(args[0])
@@ -140,7 +140,7 @@ func barStatus(cfg *config.Config, theme *ui.Theme) {
 	}
 	fmt.Println()
 	fmt.Printf("  %s %s\n", ui.Dim("vista previa"), ui.Dim("swaydesk bar preview"))
-	fmt.Printf("  %s %s\n", ui.Dim("opacidad"), ui.Dim("swaydesk bar opacity 0 (wallpaper visible)"))
+	fmt.Printf("  %s %s\n", ui.Dim("opacidad"), ui.Dim("swaydesk bar opacity 0.68"))
 	fmt.Printf("  %s %s\n\n", ui.Dim("desactivar"), ui.Dim("swaydesk bar off (vuelve waybar)"))
 }
 

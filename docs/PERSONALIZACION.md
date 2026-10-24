@@ -49,8 +49,7 @@ dir = "~/Imágenes/Fondos"   # carpeta que explora el selector
 
 [effects]
 terminal_opacity = 0.94     # alpha de foot (1 = opaco)
-bar_opacity = 0.00         # fondo de Waybar: 0 muestra el wallpaper
-                            # sin teñir; 1 es opaco
+bar_opacity = 0.68          # alpha de waybar
 active_opacity = 1.00       # ventana enfocada
 inactive_opacity = 0.94     # ventanas sin foco
 blur = false                # requiere swayfx
@@ -544,9 +543,7 @@ La mayoría de las aplicaciones de Wayland respetan el alpha de sus propias
 superficies, así que swaydesk ajusta cada pieza por separado:
 
 - **foot**: `[colors] alpha` ← `effects.terminal_opacity`.
-- **waybar**: el fondo y el borde usan `effects.bar_opacity` (0 por defecto,
-  para ver el wallpaper sin tinte). Los tooltips conservan el fondo del tema
-  para que sigan siendo legibles.
+- **waybar**: `background: alpha(@bg, bar_opacity)` en los módulos y tooltips.
 - **mako**: color de fondo y borde con canal alfa derivado del tema.
 - **sway**: `client.focused_inactive` / `client.unfocused` con alfa y reglas
   `for_window [app_id=…] opacity …` para terminales, gestores de archivos,
@@ -617,7 +614,7 @@ Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
 ```bash
 swaydesk bar                  # estado y módulos actuales
 swaydesk bar modules cpu ram volume network battery clock
-swaydesk bar opacity 0        # fondo transparente; el wallpaper se ve tal cual (1 = opaco)
+swaydesk bar opacity 0.68     # opacidad común (0 = invisible, 1 = opaco)
 swaydesk bar off              # desactiva swaybar; el autostart usa waybar
 swaydesk bar preview --width 1600 --out ~/barra.png   # PNG sin sesión gráfica
 swaybar --demo --preview      # datos de ejemplo, útil para probar el diseño

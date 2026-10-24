@@ -150,7 +150,8 @@ func templateData(cfg *config.Config) map[string]string {
 
 		"TERM_OPACITY":        opacity(cfg.TerminalOpacity, 0.94),
 		"TERM_ALPHA_HEX":      alphaHex(cfg.TerminalOpacity, 0.94),
-		"BAR_OPACITY":         opacity(cfg.BarOpacity, 0),
+		"BAR_OPACITY":         opacity(cfg.BarOpacity, 0.68),
+		"BAR_ALPHA_HEX":       alphaHex(cfg.BarOpacity, 0.68),
 		"ACTIVE_OPACITY":      opacity(cfg.ActiveOpacity, 1.0),
 		"ACTIVE_ALPHA_HEX":    alphaHex(cfg.ActiveOpacity, 1.0),
 		"INACTIVE_OPACITY":    opacity(cfg.InactiveOpacity, 0.94),
@@ -445,9 +446,8 @@ func defaultInt(v, def int) int {
 }
 
 // opacity normaliza un valor 0..1 y lo formatea para foot/waybar/sway.
-// Cero es válido: permite generar fondos totalmente transparentes.
 func opacity(v, def float64) string {
-	if v < 0 || v > 1 {
+	if v <= 0 || v > 1 {
 		v = def
 	}
 	return fmt.Sprintf("%.2f", v)

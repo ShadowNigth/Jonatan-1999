@@ -112,7 +112,7 @@ type Config struct {
 
 	// Efectos de escritorio
 	TerminalOpacity float64
-	BarOpacity      float64 // alpha del fondo de Waybar (0 = wallpaper visible)
+	BarOpacity      float64
 	ActiveOpacity   float64
 	InactiveOpacity float64
 	Blur            bool
@@ -176,7 +176,7 @@ func Default() *Config {
 		WallpaperTransition:   "fade",
 		WallpaperTransitionMS: 450,
 		TerminalOpacity:       0.94,
-		BarOpacity:            0,
+		BarOpacity:            0.68,
 		ActiveOpacity:         1.0,
 		InactiveOpacity:       0.94,
 		Blur:                  false,
