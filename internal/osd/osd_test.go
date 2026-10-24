@@ -103,6 +103,33 @@ func TestRenderSizeAndAlpha(t *testing.T) {
 	}
 }
 
+func TestMutedLayoutStacksTitleAndValueWhenNeeded(t *testing.T) {
+	r := New(Options{
+		Width:   180,
+		Padding: 12,
+		Face:    font.Builtin(),
+		Theme:   ui.PaletteByName("sakura"),
+	})
+	active := Volume(50, false, "")
+	muted := Volume(50, true, "")
+
+	if !r.textFitsInline(active) {
+		t.Fatal("un porcentaje corto debería compartir fila con el título")
+	}
+	if r.textFitsInline(muted) {
+		t.Fatal("«silenciado» debe pasar a otra fila si no cabe junto al título")
+	}
+	_, activeHeight := r.Size(active)
+	_, mutedHeight := r.Size(muted)
+	wantHeight := activeHeight + r.lineH(r.sc) + 2*r.sc
+	if mutedHeight != wantHeight {
+		t.Fatalf("alto del OSD silenciado = %d; se esperaba %d", mutedHeight, wantHeight)
+	}
+	if canvas := r.Render(muted, 1); canvas.H != mutedHeight {
+		t.Fatalf("el lienzo silenciado mide %d px de alto, se esperaban %d", canvas.H, mutedHeight)
+	}
+}
+
 func TestRenderOmitsTechnicalAudioDevice(t *testing.T) {
 	r := testRenderer(1)
 	withoutDevice := Volume(45, false, "")

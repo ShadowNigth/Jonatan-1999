@@ -334,9 +334,9 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 			return false
 		case k.Is("backspace"):
 			sel.Backspace()
-		case k.Ctrl && k.IsRune('u'):
+		case k.IsCtrlRune('u'):
 			sel.ClearFilter()
-		case k.Ctrl && k.IsRune('w'):
+		case k.IsCtrlRune('w'):
 			f := strings.TrimRight(sel.Filter, " ")
 			if i := strings.LastIndexByte(f, ' '); i >= 0 {
 				sel.SetFilter(f[:i+1])
@@ -388,9 +388,9 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 				}
 				execute(it, byKey, cfg, calcResult)
 				return true
-			case k.Is("up") || (k.Ctrl && k.IsRune('p')):
+			case k.Is("up") || k.IsCtrlRune('p'):
 				sel.Move(-1)
-			case k.Is("down") || (k.Ctrl && k.IsRune('n')):
+			case k.Is("down") || k.IsCtrlRune('n'):
 				sel.Move(1)
 			case k.Is("pgup"):
 				sel.Move(-8)
@@ -403,10 +403,10 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 			case k.Is("backspace"):
 				sel.Backspace()
 				refresh()
-			case k.Ctrl && k.IsRune('u'):
+			case k.IsCtrlRune('u'):
 				sel.ClearFilter()
 				refresh()
-			case k.Ctrl && k.IsRune('w'):
+			case k.IsCtrlRune('w'):
 				f := strings.TrimRight(sel.Filter, " ")
 				if i := strings.LastIndexByte(f, ' '); i >= 0 {
 					sel.SetFilter(f[:i+1])

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ShadowNigth/swaydesk/internal/ui"
 )
 
 func TestParseCliphistListImageEntries(t *testing.T) {
@@ -79,6 +81,43 @@ func TestCliphistCopyPreservesImageMIME(t *testing.T) {
 	}
 	if string(clipboard) != "png-bytes" {
 		t.Fatalf("datos copiados inesperados: %q", clipboard)
+	}
+}
+
+func TestDeleteShortcutRecognizesCtrlD(t *testing.T) {
+	ctrlD := ui.Key{Rune: 'd', Ctrl: true, Name: "ctrl+d"}
+	if !isDeleteShortcut(ctrlD) {
+		t.Fatal("Ctrl+D no activa el borrado")
+	}
+	if isDeleteShortcut(ui.Key{Rune: 'd'}) || isDeleteShortcut(ui.Key{Rune: 'x', Ctrl: true}) ||
+		isDeleteShortcut(ui.Key{Rune: 'd', Ctrl: true, Alt: true}) {
+		t.Fatal("se reconoció una tecla distinta de Ctrl+D")
+	}
+}
+
+func TestCliphistRemoveSendsSelectedEntry(t *testing.T) {
+	binDir := t.TempDir()
+	inputPath := filepath.Join(t.TempDir(), "cliphist-input.txt")
+	t.Setenv("PATH", binDir)
+	t.Setenv("CLIPHIST_TEST_INPUT", inputPath)
+	writeSwayclipExecutable(t, binDir, "cliphist", "#!/bin/sh\n[ \"$1\" = delete ] || exit 2\n/usr/bin/cat > \"$CLIPHIST_TEST_INPUT\"\n")
+
+	const raw = "42\tpreview seleccionado"
+	if err := (cliphist{}).remove(clipItem{raw: raw}); err != nil {
+		t.Fatalf("cliphist.remove: %v", err)
+	}
+	got, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != raw+"\n" {
+		t.Fatalf("cliphist recibió %q; se esperaba %q", got, raw+"\n")
+	}
+}
+
+func TestClipmanRemoveReportsUnsupported(t *testing.T) {
+	if err := (clipman{}).remove(clipItem{}); err == nil {
+		t.Fatal("clipman no debería informar que borró una entrada individual")
 	}
 }
 

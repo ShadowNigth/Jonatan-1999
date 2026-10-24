@@ -37,7 +37,7 @@ type backend interface {
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "swayclip · historial del portapapeles\n\nUso: swayclip [--backend auto|cliphist|clipman|cliente]")
-		fmt.Fprintln(os.Stderr, "  Enter copia la entrada seleccionada, Ctrl+D la borra, Esc cierra.")
+		fmt.Fprintln(os.Stderr, "  Enter copia la entrada seleccionada, Ctrl+D la borra con cliphist, Esc cierra.")
 	}
 	backendName := flag.String("backend", "auto", "backend a usar: auto, cliphist, clipman o cliente")
 	flag.Parse()
@@ -274,7 +274,7 @@ func (clipman) copy(it clipItem) error {
 
 func (clipman) remove(it clipItem) error {
 	// clipman no permite borrar entradas concretas desde la CLI.
-	return fmt.Errorf("clipman no permite borrar entradas individuales")
+	return fmt.Errorf("clipman no permite borrar entradas individuales; instala cliphist para usar Ctrl+D")
 }
 
 // client es el modo mínimo: sólo muestra el contenido actual del portapapeles.
@@ -379,7 +379,7 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 				}
 				actions.Notification("Portapapeles", "Entrada copiada", "low")
 				return true
-			case k.Ctrl && k.IsRune('d'):
+			case isDeleteShortcut(k):
 				if len(filter) == 0 {
 					return false
 				}
@@ -398,11 +398,11 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 				status = "entrada borrada"
 				rebuild()
 				applyFilter()
-			case k.Is("up") || (k.Ctrl && k.IsRune('p')):
+			case k.Is("up") || k.IsCtrlRune('p'):
 				if cursor > 0 {
 					cursor--
 				}
-			case k.Is("down") || (k.Ctrl && k.IsRune('n')):
+			case k.Is("down") || k.IsCtrlRune('n'):
 				if cursor < len(filter)-1 {
 					cursor++
 				}
@@ -417,7 +417,7 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 			case k.Is("backspace"):
 				sel.Backspace()
 				applyFilter()
-			case k.Ctrl && k.IsRune('u'):
+			case k.IsCtrlRune('u'):
 				sel.ClearFilter()
 				applyFilter()
 			case k.Rune >= 32 && !k.Ctrl && !k.Alt:
@@ -427,6 +427,10 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 			return false
 		}, nil)
 }
+
+// isDeleteShortcut reconoce Ctrl+D aunque el decodificador también asigne
+// Name="ctrl+d" a las teclas de control.
+func isDeleteShortcut(k ui.Key) bool { return k.IsCtrlRune('d') }
 
 // viewClip dibuja la lista y la vista previa de la entrada seleccionada.
 func viewClip(t *ui.Theme, sel *ui.Selector, items []clipItem, cursor, offset int, status string, preview []string, w, h int) string {

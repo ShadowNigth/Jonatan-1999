@@ -236,8 +236,10 @@ swayclip --backend clipman
 Para tener historial persistente, `~/.config/swaydesk/autostart.sh` arranca
 vigilantes de texto e imágenes con `cliphist` si está instalado. `swayclip`
 identifica las entradas de imagen y `Enter` restaura su MIME (por ejemplo,
-`image/png`) al portapapeles; la vista previa se mantiene textual. Puedes borrar
-la entrada seleccionada con `Ctrl+d`.
+`image/png`) al portapapeles; la vista previa se mantiene textual. `Ctrl+d` borra
+la entrada seleccionada con `cliphist` (el backend automático lo prioriza).
+`clipman` no permite borrar entradas individuales desde su CLI; si solo tienes
+ese backend, instala `cliphist` para habilitar el borrado individual.
 
 ### Si no aparecen OSD, notificaciones o la animación de arranque
 

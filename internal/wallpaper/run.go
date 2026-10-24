@@ -125,7 +125,7 @@ func RunTerminal(eng *Engine, opts Options) error {
 				return nil
 			}
 			switch {
-			case key.Is("esc") || key.IsRune('q') || (key.Ctrl && key.IsRune('c')):
+			case key.Is("esc") || key.IsRune('q') || key.IsCtrlRune('c'):
 				return nil
 			case key.IsRune(' '):
 				paused = !paused

@@ -13,12 +13,13 @@ import (
 
 // Key representa una pulsación de tecla ya decodificada.
 type Key struct {
-	// Rune es el carácter imprimible (0 si no lo es).
+	// Rune es el carácter asociado (0 si no se puede representar); Ctrl+letra
+	// conserva aquí su letra para identificar el atajo.
 	Rune rune
-	// Name es el nombre de la tecla para las no imprimibles:
+	// Name es el nombre de una tecla especial o de una combinación Ctrl+letra:
 	// "up", "down", "left", "right", "home", "end", "pgup", "pgdn",
 	// "delete", "insert", "enter", "esc", "tab", "backtab", "backspace",
-	// "space", "f1".."f12".
+	// "space", "f1".."f12", "ctrl+a".."ctrl+z".
 	Name string
 	// Ctrl y Alt indican modificadores.
 	Ctrl bool
@@ -45,8 +46,12 @@ func (k Key) String() string {
 // Is verifica si la tecla corresponde a un nombre concreto ("enter", "esc"...).
 func (k Key) Is(name string) bool { return k.Name == name }
 
-// IsRune verifica si la tecla es un carácter concreto.
+// IsRune verifica si la tecla es un carácter sin modificadores.
 func (k Key) IsRune(r rune) bool { return k.Rune == r && k.Name == "" }
+
+// IsCtrlRune verifica una combinación Ctrl + letra sin Alt. Rune conserva la
+// letra decodificada aunque Name también identifique la combinación ("ctrl+d").
+func (k Key) IsCtrlRune(r rune) bool { return k.Ctrl && !k.Alt && k.Rune == r }
 
 // KeyReader decodifica pulsaciones desde un lector de bytes.
 type KeyReader struct {

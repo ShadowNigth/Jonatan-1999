@@ -113,6 +113,22 @@ func TestFilterItems(t *testing.T) {
 	}
 }
 
+func TestCtrlRune(t *testing.T) {
+	k, err := (&KeyReader{}).decodeFirst(0x04) // Ctrl+D
+	if err != nil {
+		t.Fatalf("decodificando Ctrl+D: %v", err)
+	}
+	if k.Rune != 'd' || !k.Ctrl || k.Name != "ctrl+d" {
+		t.Fatalf("Ctrl+D se decodificó como %+v", k)
+	}
+	if !k.IsCtrlRune('d') {
+		t.Fatal("IsCtrlRune no reconoció Ctrl+D")
+	}
+	if k.IsCtrlRune('x') || k.IsRune('d') || (Key{Rune: 'd', Ctrl: true, Alt: true}).IsCtrlRune('d') {
+		t.Fatal("la tecla de control coincidió con una tecla distinta o con un modificador extra")
+	}
+}
+
 func TestKeyReader(t *testing.T) {
 	pr, pw := io.Pipe()
 	defer pw.Close()
