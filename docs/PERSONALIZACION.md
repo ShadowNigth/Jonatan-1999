@@ -903,11 +903,19 @@ swaydesk osd preview osd.png  # PNG del aviso de volumen, sin sesión gráfica
 ```
 
 Los atajos `XF86AudioRaiseVolume`, `XF86AudioLowerVolume` y `XF86AudioMute`
-llaman a `swaydesk volume …`, que usa `swayosd` cuando está instalado. El
+llaman a `$swaydesk volume …`, usando la ruta absoluta del binario que define
+la configuración. En muchos portátiles corresponden a **Fn+F11** (subir),
+**Fn+F10** (bajar) y **Fn+F9** (silenciar); Fn la interpreta el firmware y Sway
+recibe las teclas multimedia XF86. Se usa `swayosd` cuando está instalado. El
 autostart deja `swayosd watch` en marcha: vigila el volumen cada 300 ms y
 escucha las señales MPRIS del bus D-Bus de sesión. Al iniciar no muestra la
 pista que ya estaba sonando; después, una pista nueva dispara la tarjeta. La
 carátula acepta URI `file://` o HTTP(S); se omite si ya no está disponible.
+
+No se asignan F9/F10/F11 sin Fn para evitar quitarles su función normal en
+aplicaciones. Si el firmware de un teclado no genera las teclas XF86 al pulsar
+Fn+F9/F10/F11, hay que consultar el keysym que produce ese teclado antes de
+crear un override.
 
 Puedes desactivar los avisos por separado: `osd.enabled = false` mantiene la
 integración multimedia, mientras `osd.media_enabled = false` deja solo el

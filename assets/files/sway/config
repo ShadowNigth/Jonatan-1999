@@ -231,10 +231,11 @@ bindsym $mod+minus scratchpad show
 bindsym $mod+Shift+minus move scratchpad
 
 # Medios y hardware
-# El volumen muestra un aviso flotante con el nivel (swayosd) al cambiarlo.
-bindsym XF86AudioRaiseVolume exec --no-startup-id swaydesk volume up
-bindsym XF86AudioLowerVolume exec --no-startup-id swaydesk volume down
-bindsym XF86AudioMute exec --no-startup-id swaydesk volume mute
+# En portátiles, Fn+F9/F10/F11 suele emitir estas teclas XF86 multimedia.
+# El volumen muestra un aviso flotante con el nivel al cambiarlo.
+bindsym XF86AudioRaiseVolume exec --no-startup-id $swaydesk volume up
+bindsym XF86AudioLowerVolume exec --no-startup-id $swaydesk volume down
+bindsym XF86AudioMute exec --no-startup-id $swaydesk volume mute
 # Subir o bajar sin teclas multimedia, y repetir el aviso del volumen
 bindsym $mod+equal exec --no-startup-id swayosd volume up
 bindsym $mod+Shift+equal exec --no-startup-id swayosd volume down

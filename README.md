@@ -366,11 +366,13 @@ la salida de audio y muestra solo el estado, el porcentaje y la barra.
 | `Super+P` | Menú de energía flotante | `Super+t` | Galería de temas |
 | `Super+Shift+t` | Galería de temas | `Super+Shift+w` | Selector de fondos |
 | `Super+Shift+l` | Bloquear | `Print` | Captura de pantalla |
+| `Fn+F9` | Silenciar | `Fn+F10` | Bajar volumen |
+| `Fn+F11` | Subir volumen |  |  |
 | `Super+q` | Cerrar ventana | `Super+f` | Pantalla completa |
 | `Super+h/j/k/l` | Foco | `Super+Shift+hjkl` | Mover ventana |
 | `Super+r` | Modo redimensionar | `Super+1..0` | Workspaces |
 | `Super+Shift+1..0` | Mover al workspace | `Super+Shift+c` | Recargar sway |
-| `Super+Shift+b` | Repetir la animación de arranque | `Super+Shift+w` | Selector de fondos |
+| `Super+Shift+b` | Repetir la animación de arranque |  |  |
 | `Super+Ctrl+b` | Reiniciar la barra | `Super+Shift+n` | Notificación de prueba |
 | `Super+Ctrl+n` | No molestar | `Super+Ctrl+Shift+n` | Cerrar notificaciones |
 | `Super+n` | Centro de notificaciones (o clic en la barra) | `Enter` | Responder o cerrar en el centro |
@@ -387,7 +389,8 @@ y en [`assets/files/sway/config`](assets/files/sway/config).
 seleccionan una región. Todas guardan el PNG en `~/Capturas` (no dentro de
 `Imágenes`), lo copian como imagen al portapapeles y muestran una notificación
 con la ruta. `swaydesk apply` migra esos tres atajos si todavía usan las órdenes
-antiguas de `grim`, sin tocar los demás atajos ni los overrides personalizados.
+antiguas de `grim` y actualiza los atajos multimedia predeterminados para usar
+la ruta de `swaydesk` definida en la configuración, sin tocar overrides personalizados.
 
 ### Lanzador
 

@@ -74,6 +74,9 @@ func TestRenderPaleta(t *testing.T) {
 		"bindsym Print exec --no-startup-id $swaydesk screenshot full",
 		"bindsym $mod+Print exec --no-startup-id $swaydesk screenshot region",
 		"bindsym $mod+Shift+Print exec --no-startup-id $swaydesk screenshot region",
+		"bindsym XF86AudioMute exec --no-startup-id $swaydesk volume mute",
+		"bindsym XF86AudioLowerVolume exec --no-startup-id $swaydesk volume down",
+		"bindsym XF86AudioRaiseVolume exec --no-startup-id $swaydesk volume up",
 	} {
 		if !strings.Contains(swayConf, binding) {
 			t.Errorf("falta el atajo de teclado: %s", binding)
@@ -503,6 +506,58 @@ func TestApplyMigratesLegacyScreenshotBindings(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("Apply no informó la migración de capturas: %+v", results)
+	}
+}
+
+func TestApplyMigratesVolumeBindingsToSwaydeskPath(t *testing.T) {
+	dest := t.TempDir()
+	swayDir := filepath.Join(dest, "sway")
+	if err := os.MkdirAll(swayDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(swayDir, "config")
+	legacy := strings.Join([]string{
+		"set $swaydesk /home/test/.local/bin/swaydesk",
+		"bindsym XF86AudioMute exec --no-startup-id swaydesk volume mute",
+		"bindsym XF86AudioLowerVolume exec --no-startup-id swaydesk volume down",
+		"bindsym XF86AudioRaiseVolume exec --no-startup-id swaydesk volume up",
+		"bindsym XF86AudioPlay exec playerctl play-pause",
+		"",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := Apply(config.Default(), dest)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(updated)
+	for _, want := range []string{
+		"bindsym XF86AudioMute exec --no-startup-id $swaydesk volume mute",
+		"bindsym XF86AudioLowerVolume exec --no-startup-id $swaydesk volume down",
+		"bindsym XF86AudioRaiseVolume exec --no-startup-id $swaydesk volume up",
+		"bindsym XF86AudioPlay exec playerctl play-pause",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("la migración debía conservar o crear %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "exec --no-startup-id swaydesk volume") {
+		t.Fatalf("quedaron atajos de volumen dependientes del PATH:\n%s", text)
+	}
+	found := false
+	for _, result := range results {
+		if result.Path == path && result.Action == "atajos de volumen actualizados" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Apply no informó la migración de volumen: %+v", results)
 	}
 }
 
