@@ -58,8 +58,8 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		return err
 	}
 
-	// Ratón: la barra solo tiene una zona pulsable, el indicador de
-	// notificaciones, que abre el centro en una terminal flotante.
+	// Ratón: el indicador de notificaciones abre el centro y el botón OFF
+	// abre el menú de energía; ambos usan terminales flotantes.
 	clicks := make(chan string, 4)
 	if p, err := wayland.NewPointer(conn, wayland.PointerHandler{
 		Button: func(x, y float64, button uint32, pressed bool) {
@@ -146,15 +146,22 @@ func handleClick(cfg *config.Config, name string) {
 	switch name {
 	case "notify":
 		// El centro necesita teclado: se abre en una terminal flotante.
-		exe := "swaydesk"
-		if self, err := os.Executable(); err == nil {
-			if hermano := filepath.Join(filepath.Dir(self), "swaydesk"); fileExists(hermano) {
-				exe = hermano
-			}
-		}
 		_ = launcher.LaunchTerminal(cfg.Terminal, "swaydesk-notify", "Notificaciones", 84, 24,
-			[]string{exe, "notifications", "center"})
+			[]string{siblingExecutable("swaydesk"), "notifications", "center"})
+	case "power":
+		// Fuera de una terminal, swaymenu se relanza automáticamente en una
+		// terminal flotante para que el selector pueda leer el teclado.
+		_ = launcher.StartDetached(siblingExecutable("swaymenu"), "--power", "--float")
 	}
+}
+
+func siblingExecutable(name string) string {
+	if self, err := os.Executable(); err == nil {
+		if sibling := filepath.Join(filepath.Dir(self), name); fileExists(sibling) {
+			return sibling
+		}
+	}
+	return name
 }
 
 // fileExists indica si existe la ruta.

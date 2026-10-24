@@ -73,7 +73,16 @@ type Options struct {
 }
 
 // DefaultModules es la lista de módulos de la derecha por defecto.
-var DefaultModules = []string{"media", "recording", "notify", "cpu", "ram", "volume", "network", "battery", "clock"}
+var DefaultModules = []string{"media", "recording", "notify", "cpu", "ram", "volume", "network", "battery", "clock", "power"}
+
+func hasPowerModule(modules []string) bool {
+	for _, module := range modules {
+		if module == "power" {
+			return true
+		}
+	}
+	return false
+}
 
 // item es un fragmento de texto con su color dentro de una isla.
 type item struct {
@@ -151,7 +160,11 @@ func New(opt Options) *Renderer {
 		opt.Spacing = 0
 	}
 	if len(opt.Modules) == 0 {
-		opt.Modules = DefaultModules
+		opt.Modules = append([]string(nil), DefaultModules...)
+	} else if !hasPowerModule(opt.Modules) {
+		// El botón de apagado es un control permanente, igual que en Waybar.
+		// Lo añadimos también a configuraciones antiguas que no lo conocían.
+		opt.Modules = append(append([]string(nil), opt.Modules...), "power")
 	}
 	r := &Renderer{Opt: opt, Theme: opt.Theme, face: opt.Face}
 	if r.Theme.Bg == "" {
@@ -588,6 +601,9 @@ func (r *Renderer) rightItems(s Snapshot, fg, muted, accent, ok, warn, errc RGBA
 			if s.Updates > 0 {
 				add(fmt.Sprintf("%d", s.Updates), "act.", accent)
 			}
+		case "power":
+			// Control permanente: abre el menú de apagar/reiniciar/suspender.
+			items = append(items, item{text: "OFF", fg: errc, kind: itemPill, click: "power"})
 		case "notify":
 			// Indicador del centro de notificaciones: al pulsarlo se abre.
 			// Con avisos en pantalla es una pastilla con el número; el «+»

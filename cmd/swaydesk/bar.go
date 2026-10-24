@@ -55,6 +55,15 @@ func cmdBar(args []string) {
 
 func saveBarConfig(cfg *config.Config) error { return cfg.Save() }
 
+func hasBarModule(modules []string, target string) bool {
+	for _, module := range modules {
+		if module == target {
+			return true
+		}
+	}
+	return false
+}
+
 func barStatus(cfg *config.Config, theme *ui.Theme) {
 	p := theme.Palette
 	state := "waybar"
@@ -66,7 +75,11 @@ func barStatus(cfg *config.Config, theme *ui.Theme) {
 	fmt.Printf("  %-12s %s\n", ui.Dim("posición"), cfg.BarPosition)
 	fmt.Printf("  %-12s %d px (margen %d, relleno %d)\n", ui.Dim("alto"), cfg.BarHeight, cfg.BarMargin, cfg.BarPadding)
 	fmt.Printf("  %-12s %.0f %% · islas %v\n", ui.Dim("opacidad"), cfg.BarBackgroundOpacity*100, cfg.BarIslands)
-	fmt.Printf("  %-12s %s\n", ui.Dim("módulos"), strings.Join(cfg.BarModules, " · "))
+	modules := append([]string(nil), cfg.BarModules...)
+	if !hasBarModule(modules, "power") {
+		modules = append(modules, "power")
+	}
+	fmt.Printf("  %-12s %s\n", ui.Dim("módulos"), strings.Join(modules, " · "))
 	if !launcher.HasCommand("swaybar") {
 		fmt.Printf("  %s\n", ui.Style{Fg: p.Warn}.Render("• swaybar no está en el PATH: instala con make install"))
 	}
@@ -77,7 +90,7 @@ func barStatus(cfg *config.Config, theme *ui.Theme) {
 
 func barModules(cfg *config.Config, theme *ui.Theme, args []string) {
 	p := theme.Palette
-	available := []string{"media", "recording", "cpu", "ram", "disk", "temp", "uptime", "volume", "network", "battery", "updates", "title", "clock", "date"}
+	available := []string{"media", "recording", "cpu", "ram", "disk", "temp", "uptime", "volume", "network", "battery", "updates", "title", "clock", "date", "power"}
 	if len(args) > 1 {
 		list := strings.Split(strings.Join(args[1:], ","), ",")
 		var clean []string
@@ -87,6 +100,9 @@ func barModules(cfg *config.Config, theme *ui.Theme, args []string) {
 				continue
 			}
 			clean = append(clean, m)
+		}
+		if !hasBarModule(clean, "power") {
+			clean = append(clean, "power")
 		}
 		cfg.BarModules = clean
 		if err := saveBarConfig(cfg); err != nil {
@@ -98,9 +114,13 @@ func barModules(cfg *config.Config, theme *ui.Theme, args []string) {
 		return
 	}
 	fmt.Printf("\n  %s\n\n", ui.Style{Fg: p.Accent, Bg: p.Bg}.B().Render("módulos disponibles"))
+	activeModules := append([]string(nil), cfg.BarModules...)
+	if !hasBarModule(activeModules, "power") {
+		activeModules = append(activeModules, "power")
+	}
 	for _, m := range available {
 		active := " "
-		for _, cur := range cfg.BarModules {
+		for _, cur := range activeModules {
 			if cur == m {
 				active = ui.Style{Fg: p.Ok}.Render("●")
 			}

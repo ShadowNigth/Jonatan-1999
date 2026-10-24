@@ -129,7 +129,7 @@ aplicarla como cualquier otra.
 ```bash
 swaydesk theme                  # lista con muestras de color
 swaydesk theme gruvbox          # cambia y aplica en caliente
-swaymenu --themes               # selector interactivo (Super+t)
+swaydesk theme --gallery        # selector interactivo (Super+t)
 swayctl                         # pestaña "Apariencia" (Super+i, Tab ×3)
 ```
 
@@ -581,13 +581,17 @@ font = ""                  # ruta a un .psf / .psf.gz; vacío = fuente del siste
 font_scale = 1.0
 shadow = true              # sombra suave bajo las islas
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
+modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock", "power"]
 ```
 
 Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
 (indicador de `wf-recorder`), `cpu`, `ram`, `disk`, `temp`, `uptime`,
 `volume`, `network`, `battery`, `updates`, `title` (ventana enfocada), `clock`,
-`clock24` y `date`.
+`clock24`, `date` y `power`.
+
+El botón rojo **OFF** queda al extremo derecho y abre el menú para bloquear,
+apagar, reiniciar, suspender o cerrar sesión. También aparece en configuraciones
+anteriores que todavía no listan `power`; Waybar ofrece el mismo botón.
 
 ```bash
 swaydesk bar                  # estado y módulos actuales
@@ -889,6 +893,9 @@ Módulos disponibles: `logo`, `recording`, `clock`, `cpu`, `ram`, `battery`,
   "format": "⏱ {}"
 }
 ```
+
+El botón rojo de apagado (`custom/power`) abre el selector de energía en una
+terminal flotante; desde Waybar no hay una TTY disponible para el menú.
 
 Para ver el estado completo en JSON (útil para scripts):
 

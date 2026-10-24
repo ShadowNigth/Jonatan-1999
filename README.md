@@ -80,10 +80,10 @@ terceros.
   vivo, metadatos (duración, tamaño, tipo) y exploración de tus carpetas.
 - **Barra de estado propia** (`swaybar`): islas redondeadas y translúcidas
   dibujadas píxel a píxel — sin GTK, Qt ni Cairo. Workspaces con la ventana
-  enfocada, título, CPU, RAM, volumen, red, batería, reproductor y reloj;
-  tipografía de mapa de bits con fuentes PSF del sistema e iconos siempre
-  visibles; se adapta sola a la paleta activa, se refresca al instante con los
-  eventos de sway y se configura entera desde `[bar]` en `config.toml`.
+  enfocada, título, CPU, RAM, volumen, red, batería, reproductor y reloj, más
+  un botón rojo que abre el menú de energía; tipografía de mapa de bits con
+  fuentes PSF e iconos siempre visibles. Se adapta a la paleta, responde al
+  instante a eventos de sway y se configura desde `[bar]` en `config.toml`.
 - **Notificaciones propias** (`swaynotify`): daemon completo de
   `org.freedesktop.Notifications` sobre un cliente **D-Bus escrito desde cero**
   (SASL EXTERNAL, formato binario con firmas, llamadas, señales y errores), y
@@ -491,7 +491,7 @@ logo = true
 font = ""                  # fuente PSF (vacío = automática)
 shadow = true
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
+modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock", "power"]
 
 [boot]
 enabled = true             # animación al iniciar sesión
@@ -529,7 +529,7 @@ rounding = 12              # solo swayfx
 Cambiar de tema en caliente:
 
 ```bash
-swaydesk theme gruvbox     # o Super+t / swaymenu --themes
+swaydesk theme gruvbox     # o Super+t / swaydesk theme --gallery
 ```
 
 Esto reescribe `waybar/style.css`, `foot/foot.ini`, `mako/config`,

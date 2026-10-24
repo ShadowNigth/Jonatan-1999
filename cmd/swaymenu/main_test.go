@@ -1,0 +1,54 @@
+package main
+
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/ShadowNigth/swaydesk/internal/config"
+	"github.com/ShadowNigth/swaydesk/internal/ui"
+)
+
+func TestPowerMenuUsesFloatingTerminalOutsideTTY(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		forceFloat  bool
+		interactive bool
+		want        bool
+	}{
+		{name: "barra sin TTY", want: true},
+		{name: "terminal directa", interactive: true, want: false},
+		{name: "forzar flotante", forceFloat: true, interactive: true, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := powerMenuNeedsTerminal(tc.forceFloat, tc.interactive); got != tc.want {
+				t.Fatalf("powerMenuNeedsTerminal() = %v, esperado %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildItemsKeepsPowerButNotThemePicker(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_DIRS", filepath.Join(home, "share"))
+	t.Setenv("PATH", filepath.Join(home, "bin"))
+
+	cfg := config.Default()
+	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
+	items, payloads := buildItems(cfg, theme, false)
+	foundPower, foundTheme := false, false
+	for _, item := range items {
+		switch item.Key {
+		case "act:power":
+			foundPower = payloads[item.Key].action == "power"
+		case "act:theme":
+			foundTheme = true
+		}
+	}
+	if !foundPower {
+		t.Fatal("la acción de energía debe seguir disponible")
+	}
+	if foundTheme {
+		t.Fatal("el selector de temas no debe aparecer en el lanzador de aplicaciones")
+	}
+}

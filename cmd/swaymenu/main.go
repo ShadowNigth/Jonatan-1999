@@ -56,6 +56,13 @@ func main() {
 	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 
 	if *power {
+		// Waybar, swaybar y los atajos de sway no tienen TTY. En esos casos
+		// abre el menú dentro de una terminal flotante; desde una terminal
+		// interactiva conserva el comportamiento directo.
+		if powerMenuNeedsTerminal(*float, ui.IsInteractive()) {
+			runFloating(cfg, 58, 14)
+			return
+		}
 		runPowerMenu(theme, cfg)
 		return
 	}
@@ -74,6 +81,10 @@ func main() {
 	}
 
 	runMenu(theme, cfg, *filter, *withCmds || cfg.Bool("launcher.commands", false))
+}
+
+func powerMenuNeedsTerminal(forceFloat, interactive bool) bool {
+	return forceFloat || !interactive
 }
 
 // runFloating lanza una copia del menú dentro de una ventana de terminal
@@ -130,7 +141,6 @@ func buildItems(cfg *config.Config, theme *ui.Theme, withCommands bool) ([]ui.It
 		{"screenshot", "Captura de pantalla", "grim + slurp", theme.Icons.Camera, "grim"},
 		{"lock", "Bloquear pantalla", "swaylock", theme.Icons.Lock, "swaylock"},
 		{"power", "Energía", "apagar, reiniciar, suspender", theme.Icons.Power, ""},
-		{"theme", "Cambiar tema", "paletas de color", theme.Icons.Theme, ""},
 		{"edit-sway", "Editar configuración de sway", "~/.config/sway/config", theme.Icons.Gear, cfg.Editor},
 		{"edit-swaydesk", "Editar configuración de swaydesk", cfg.Path, theme.Icons.Doc, cfg.Editor},
 	}
@@ -406,8 +416,6 @@ func execute(it ui.Item, byKey map[string]payload, theme *ui.Theme, cfg *config.
 		switch p.action {
 		case "power":
 			runPowerMenu(theme, cfg)
-		case "theme":
-			runThemePicker(theme, cfg)
 		default:
 			runAction(p.action, theme, cfg)
 		}
