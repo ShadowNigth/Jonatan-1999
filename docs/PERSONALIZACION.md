@@ -181,6 +181,24 @@ Para tener historial persistente, `~/.config/swaydesk/autostart.sh` arranca
 `wl-paste --type text --watch cliphist store` si `cliphist` está instalado.
 Puedes borrar la entrada seleccionada con `Ctrl+d`.
 
+### Si un fondo no se aplica
+
+- **Escenas, GIF y vídeo los dibuja el demonio** (`swaydesk wallpaper daemon`).
+  `set` y la galería ya lo arrancan o lo reinician solos; si no aparece nada,
+  comprueba que esté vivo: `swaydesk wallpaper status` (o
+  `ps -x | grep 'wallpaper daemon'`).
+- Una **imagen fija** no necesita demonio: se aplica al instante con
+  `output * bg` vía IPC y queda escrita en
+  `~/.config/sway/config.d/50-wallpaper.conf`, que se carga al recargar sway.
+- `Super+Shift+w` ejecuta `swaydesk wallpaper --gallery`. Si el atajo no hace
+  nada, prueba esa orden en la terminal: el error te dirá si falta el binario
+  (`swaydesk keys` → ✘), si es la versión antigua (`swaydesk: comando
+  desconocido "keys"`) o si no hay terminal configurada.
+- Los archivos se buscan en `wallpaper.dir` (por defecto `~/Imágenes/Fondos`) y
+  en `~/Imágenes`, `~/Pictures`, `~/Vídeos`, **incluidas las subcarpetas**.
+- Con `sway` puro (sin swayfx) las escenas también funcionan: usan
+  `wlr-layer-shell`, no efectos del compositor.
+
 ### Si `swaydesk: orden no encontrada`
 
 Los binarios se instalan en `~/.local/bin`, que muchas veces no está en el

@@ -42,7 +42,10 @@ func cmdWallpaper(args []string) {
 		fmt.Println("✔ demonio de fondo detenido")
 		return
 	}
-	if hasFlag(args, "--pick") {
+	// Banderas de la galería: es exactamente lo que ejecuta Super+Shift+w
+	// (`swaydesk wallpaper --gallery`). Sin esto caía en `set` y respondía
+	// «no se reconoce el fondo "--gallery"».
+	if isGalleryRequest(args) {
 		must(runWallpaperGallery(cfg))
 		return
 	}
@@ -89,6 +92,12 @@ func cmdWallpaper(args []string) {
 		// Atajo: `swaydesk wallpaper <algo>` equivale a `wallpaper set <algo>`.
 		must(setWallpaper(cfg, args))
 	}
+}
+
+// isGalleryRequest reconoce las banderas que abren el selector de fondos:
+// `swaydesk wallpaper --gallery` es lo que ejecuta Super+Shift+w.
+func isGalleryRequest(args []string) bool {
+	return hasFlag(args, "--gallery") || hasFlag(args, "--pick") || hasFlag(args, "-g")
 }
 
 func printWallpaperHelp() {
@@ -178,7 +187,7 @@ func listScenes(cfg *config.Config, theme *ui.Theme, asJSON bool) {
 	}
 	fmt.Println()
 	fmt.Printf("  %s %s\n", ui.Style{Fg: p.Accent, Bg: p.Bg}.B().Render("archivos"),
-		ui.Dim("buscando en "+cfg.WallpaperDir))
+		ui.Dim("en "+cfg.WallpaperDir+" y ~/Imágenes, ~/Pictures, ~/Vídeos"))
 	files := findWallpapers(cfg)
 	if len(files) == 0 {
 		fmt.Printf("  %s\n", ui.Dim("no se encontraron imágenes, gifs ni vídeos"))
@@ -203,24 +212,28 @@ func findWallpapers(cfg *config.Config) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, dir := range dirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if e.IsDir() {
-				continue
+		// Subcarpetas incluidas (hasta tres niveles): la gente organiza los
+		// fondos en ~/Imágenes/Fondos/anime/… y antes no aparecían.
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
 			}
-			if !wallpaper.Supported(e.Name()) {
-				continue
+			if d.IsDir() {
+				if rel, relErr := filepath.Rel(dir, path); relErr == nil {
+					if base := d.Name(); rel != "." &&
+						(strings.HasPrefix(base, ".") || strings.Count(rel, string(os.PathSeparator)) >= 3) {
+						return filepath.SkipDir
+					}
+				}
+				return nil
 			}
-			p := filepath.Join(dir, e.Name())
-			if seen[p] {
-				continue
+			if !wallpaper.Supported(d.Name()) || seen[path] {
+				return nil
 			}
-			seen[p] = true
-			out = append(out, p)
-		}
+			seen[path] = true
+			out = append(out, path)
+			return nil
+		})
 	}
 	sort.Strings(out)
 	return out
@@ -312,13 +325,10 @@ func setWallpaper(cfg *config.Config, args []string) error {
 	// Fondo estático de respaldo en sway (visible debajo y al iniciar sesión).
 	applyStaticFallback(cfg, spec)
 
-	// El demonio animado se reinicia con el nuevo fondo.
-	if wallpaper.RunningPID(cfg.Cache) != 0 {
-		wallpaper.StopDaemon(cfg.Cache)
-		if err := startWallpaperDaemon(cfg); err != nil {
-			fmt.Printf("  %s\n", ui.Dim("el demonio animado no pudo reiniciarse: "+err.Error()))
-		}
-	}
+	// El demonio animado se pone al día con el fondo nuevo. Si el fondo es una
+	// escena, un GIF o un vídeo, se arranca aunque no estuviera en marcha: si no,
+	// el fondo se guardaba pero no se veía nada.
+	syncWallpaperDaemon(cfg, spec)
 
 	if cfg.WallpaperAdaptive && spec.Path != "" {
 		if err := adaptThemeToWallpaper(cfg, ui.NewTheme(cfg.Theme, cfg.NerdFont)); err == nil {
@@ -506,17 +516,48 @@ func workspacePlan(cfg *config.Config, spec wallpaper.Spec) *wallpaper.Workspace
 	return wallpaper.NewWorkspaceMap(spec.Source(), cfg.WallpaperWorkspaces)
 }
 
-// restartWallpaperDaemon aplica los cambios si el demonio estaba en marcha.
+// animatedSpec indica si el fondo lo tiene que dibujar el demonio (todo lo que
+// no es una imagen fija: escenas, GIF y vídeo).
+func animatedSpec(spec wallpaper.Spec) bool {
+	switch spec.Kind {
+	case wallpaper.KindScene, wallpaper.KindGIF, wallpaper.KindVideo:
+		return true
+	}
+	return false
+}
+
+// syncWallpaperDaemon deja el demonio acorde al fondo nuevo. Lo (re)inicia en
+// segundo plano si el fondo es animado —aunque no estuviera corriendo, que era
+// el motivo de «pongo un fondo y no se ve»— o si ya estaba en marcha (para
+// imágenes fijas basta el `output bg` de sway, pero el demonio manda).
+// No bloquea: `runWallpaperDaemon` relanza un hijo en primer plano.
+func syncWallpaperDaemon(cfg *config.Config, spec wallpaper.Spec) {
+	if wallpaper.RunningPID(cfg.Cache) == 0 && !animatedSpec(spec) {
+		return
+	}
+	if !wallpaper.WaylandReady() {
+		fmt.Printf("  %s\n", ui.Dim("sin compositor Wayland: el fondo animado no se puede dibujar desde aquí"))
+		return
+	}
+	if err := runWallpaperDaemon(cfg, nil); err != nil {
+		fmt.Printf("  %s\n", ui.Dim("el demonio de fondo no pudo arrancar: "+err.Error()))
+		return
+	}
+	fmt.Printf("  %s\n", ui.Dim("demonio de fondo al día con el nuevo fondo"))
+}
+
+// restartWallpaperDaemon aplica los cambios del plan de fondos por workspace.
 func restartWallpaperDaemon(cfg *config.Config) {
-	if wallpaper.RunningPID(cfg.Cache) == 0 {
+	spec, err := currentSpec(cfg)
+	if err != nil {
 		return
 	}
-	wallpaper.StopDaemon(cfg.Cache)
-	if err := startWallpaperDaemon(cfg); err != nil {
-		fmt.Printf("  %s\n", ui.Dim("el demonio animado no pudo reiniciarse: "+err.Error()))
+	// Con fondos por workspace el demonio es imprescindible aunque el fondo
+	// base sea una imagen fija.
+	if wallpaper.RunningPID(cfg.Cache) == 0 && !animatedSpec(spec) && len(cfg.WallpaperWorkspaces) == 0 {
 		return
 	}
-	fmt.Printf("  %s\n", ui.Dim("demonio reiniciado con la nueva configuración"))
+	syncWallpaperDaemon(cfg, spec)
 }
 
 // wallpaperWorkspaces muestra y edita los fondos por workspace.
@@ -722,10 +763,7 @@ func runWallpaperGallery(cfg *config.Config) error {
 		return err
 	}
 	applyStaticFallback(cfg, res.Spec)
-	if wallpaper.RunningPID(cfg.Cache) != 0 {
-		wallpaper.StopDaemon(cfg.Cache)
-		_ = startWallpaperDaemon(cfg)
-	}
+	syncWallpaperDaemon(cfg, res.Spec)
 	if cfg.WallpaperAdaptive && res.Spec.Path != "" {
 		_ = adaptThemeToWallpaper(cfg, ui.NewTheme(cfg.Theme, cfg.NerdFont))
 	}
