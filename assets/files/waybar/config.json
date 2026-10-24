@@ -121,6 +121,12 @@
   "clock": {
     "format": "{{ICON_CLOCK}} {:%H:%M · %d/%m/%Y}",
     "format-alt": "{{ICON_CALENDAR}} {:%d/%m/%Y}",
-    "tooltip-format": "Fecha: {:%d/%m/%Y}"
+    "tooltip": true,
+    "tooltip-format": "<tt><small>{calendar}</small></tt>",
+    "locale": "es_AR.UTF-8",
+    "calendar": {
+      "mode": "month",
+      "first-day-of-week": 1
+    }
   }
 }

@@ -85,8 +85,15 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 		ModulesCenter []string `json:"modules-center"`
 		ModulesRight  []string `json:"modules-right"`
 		Clock         struct {
-			Format    string `json:"format"`
-			FormatAlt string `json:"format-alt"`
+			Format        string `json:"format"`
+			FormatAlt     string `json:"format-alt"`
+			Tooltip       bool   `json:"tooltip"`
+			TooltipFormat string `json:"tooltip-format"`
+			Locale        string `json:"locale"`
+			Calendar      struct {
+				Mode           string `json:"mode"`
+				FirstDayOfWeek int    `json:"first-day-of-week"`
+			} `json:"calendar"`
 		} `json:"clock"`
 	}
 	if err := json.Unmarshal([]byte(files["waybar/config.json"]), &waybar); err != nil {
@@ -109,8 +116,11 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 	if !strings.Contains(waybar.Clock.FormatAlt, "%d/%m/%Y") {
 		t.Fatalf("el formato alternativo debe mantener la fecha numérica: %q", waybar.Clock.FormatAlt)
 	}
-	if !strings.Contains(files["waybar/config.json"], "Fecha: {:%d/%m/%Y}") {
-		t.Fatal("la ayuda del reloj debe estar en español y usar fecha numérica")
+	if !waybar.Clock.Tooltip || !strings.Contains(waybar.Clock.TooltipFormat, "{calendar}") {
+		t.Fatal("al pasar el puntero por el reloj debe mostrarse el calendario")
+	}
+	if waybar.Clock.Locale != "es_AR.UTF-8" || waybar.Clock.Calendar.Mode != "month" || waybar.Clock.Calendar.FirstDayOfWeek != 1 {
+		t.Fatalf("calendario debe quedar en español y empezar en lunes: %+v", waybar.Clock)
 	}
 }
 
