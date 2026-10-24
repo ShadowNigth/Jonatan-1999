@@ -93,7 +93,12 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 			Calendar      struct {
 				Mode           string `json:"mode"`
 				FirstDayOfWeek int    `json:"first-day-of-week"`
+				OnScroll       int    `json:"on-scroll"`
 			} `json:"calendar"`
+			Actions struct {
+				OnScrollUp   string `json:"on-scroll-up"`
+				OnScrollDown string `json:"on-scroll-down"`
+			} `json:"actions"`
 		} `json:"clock"`
 	}
 	if err := json.Unmarshal([]byte(files["waybar/config.json"]), &waybar); err != nil {
@@ -119,8 +124,14 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 	if !waybar.Clock.Tooltip || !strings.Contains(waybar.Clock.TooltipFormat, "{calendar}") {
 		t.Fatal("al pasar el puntero por el reloj debe mostrarse el calendario")
 	}
+	if !strings.Contains(waybar.Clock.TooltipFormat, "size='large'") {
+		t.Fatal("el calendario del tooltip debe tener texto ampliado")
+	}
 	if waybar.Clock.Locale != "es_AR.UTF-8" || waybar.Clock.Calendar.Mode != "month" || waybar.Clock.Calendar.FirstDayOfWeek != 1 {
 		t.Fatalf("calendario debe quedar en español y empezar en lunes: %+v", waybar.Clock)
+	}
+	if waybar.Clock.Calendar.OnScroll != 1 || waybar.Clock.Actions.OnScrollUp != "shift_up" || waybar.Clock.Actions.OnScrollDown != "shift_down" {
+		t.Fatalf("la rueda debe cambiar el mes de uno en uno: %+v", waybar.Clock)
 	}
 }
 

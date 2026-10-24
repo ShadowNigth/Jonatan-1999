@@ -122,11 +122,16 @@
     "format": "{{ICON_CLOCK}} {:%H:%M · %d/%m/%Y}",
     "format-alt": "{{ICON_CALENDAR}} {:%d/%m/%Y}",
     "tooltip": true,
-    "tooltip-format": "<tt><small>{calendar}</small></tt>",
+    "tooltip-format": "<tt><span size='large'>{calendar}</span></tt>",
     "locale": "es_AR.UTF-8",
     "calendar": {
       "mode": "month",
-      "first-day-of-week": 1
+      "first-day-of-week": 1,
+      "on-scroll": 1
+    },
+    "actions": {
+      "on-scroll-up": "shift_up",
+      "on-scroll-down": "shift_down"
     }
   }
 }

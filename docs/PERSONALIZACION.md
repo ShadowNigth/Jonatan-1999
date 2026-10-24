@@ -642,7 +642,8 @@ varias versiones ignoran `config.json` al buscar automáticamente y caen en
 `~/.config/waybar/style.css` y se colorea con el tema activo. En esa plantilla
 el centro muestra hora y fecha numéricas; ya no aparece el título de ventana ni
 se repite el reloj a la derecha. Al pasar el puntero sobre el reloj, Waybar abre
-el calendario mensual en español con la semana iniciando el lunes. Los rótulos
+el calendario mensual en español, ampliado y con la semana iniciando el lunes;
+la rueda del mouse avanza o retrocede un mes. Los rótulos
 de volumen, red, CPU, memoria,
 temperatura y batería están en español; el modo de teclado se llama
 `redimensionar` y el indicador de grabación dice `GRABANDO`. Los nombres de apps y
