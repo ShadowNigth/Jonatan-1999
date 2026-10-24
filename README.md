@@ -30,7 +30,7 @@ terceros.
 |---|---|
 | `swaymenu` | Lanzador de aplicaciones con búsqueda difusa, historial de uso, calculadora y acciones del escritorio |
 | `swayctl` | Panel de control: estado del sistema, workspaces, ventanas, temas y chuleta de atajos |
-| `swayclip` | Historial del portapapeles (cliphist / clipman) con búsqueda y vista previa |
+| `swayclip` | Historial del portapapeles (cliphist / clipman) con búsqueda y vista previa de texto e imágenes |
 | `swaydesk` | CLI central: instala la configuración, aplica temas, diagnostica, controla la sesión |
 | `swaybar` | Barra de estado propia dibujada en píxeles sobre `wlr-layer-shell` (sustituye a waybar) |
 | `swaynotify` | Daemon de notificaciones: habla `org.freedesktop.Notifications` por D-Bus y dibuja las tarjetas en píxeles (sustituye a mako) |
@@ -57,7 +57,8 @@ terceros.
   lista de ventanas con acciones (enfocar, cerrar, flotar, pantalla completa),
   cambio de tema en vivo y chuleta de atajos.
 - **Portapapeles** con soporte de `cliphist`, `clipman` o `wl-paste`, búsqueda,
-  vista previa y borrado de entradas.
+  vista previa y borrado de entradas; `swayclip` renderiza las capturas PNG
+  del historial `cliphist` en el panel de vista previa.
 - **31 paletas de color**, 21 de ellas con estética **anime** (Sakura, Miku, Asuka, Rei,
   Zero Two, Neon Tokyo, Cyberpunk, Vaporwave, Ghibli, Hoshizora, Oni, Mecha…),
   además de las clásicas (Catppuccin, Tokyo Night, Nord, Gruvbox, Dracula,
@@ -304,7 +305,7 @@ Sesión
   notify <título> [cuerpo]       Notificación de escritorio
   volume <up|down|mute>          Volumen (con aviso en pantalla si hay swayosd)
   osd [show|preview|volume …]    Avisos en pantalla: estado, repetir, PNG
-  screenshot [region|full]       Captura con grim
+  screenshot [region|full]       Captura, copia al portapapeles y muestra miniatura
   lock | reload | power [acción] Sesión y energía
 
 Notificaciones
@@ -375,6 +376,12 @@ Si conservas una configuración Sway antigua que no fue regenerada, añade un
 atajo equivalente al archivo activo (usa la ruta absoluta de `swaymenu` si Sway
 no la encuentra en su `PATH`). La chuleta completa está en `Super+i` → *Atajos*,
 y en [`assets/files/sway/config`](assets/files/sway/config).
+
+`Print` captura la pantalla completa; `Super+Print` y `Super+Shift+Print`
+seleccionan una región. Todas guardan el PNG, lo copian como imagen al
+portapapeles y muestran una miniatura en una notificación. `swaydesk apply`
+migra esos tres atajos si todavía usan las órdenes antiguas de `grim`, sin tocar
+los demás atajos ni los overrides personalizados.
 
 ### Lanzador
 

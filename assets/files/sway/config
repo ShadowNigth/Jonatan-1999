@@ -159,10 +159,10 @@ bindsym $mod+Ctrl+Shift+n exec --no-startup-id $swaydesk notifications clear
 # Centro de notificaciones (también se abre con clic en el indicador de la barra)
 bindsym $mod+n exec --no-startup-id $swaydesk notifications center
 
-# Capturas de pantalla
-bindsym Print exec sh -c 'mkdir -p ~/Capturas && grim ~/Capturas/$(date +%Y%m%d-%H%M%S).png'
-bindsym $mod+Print exec sh -c 'mkdir -p ~/Capturas && grim -g "$(slurp)" ~/Capturas/$(date +%Y%m%d-%H%M%S).png'
-bindsym $mod+Shift+Print exec sh -c 'grim -g "$(slurp)" - | wl-copy'
+# Cada captura se guarda, copia como PNG al portapapeles y muestra una miniatura.
+bindsym Print exec --no-startup-id $swaydesk screenshot full
+bindsym $mod+Print exec --no-startup-id $swaydesk screenshot region
+bindsym $mod+Shift+Print exec --no-startup-id $swaydesk screenshot region
 
 # Gestión de ventanas
 bindsym $mod+q kill

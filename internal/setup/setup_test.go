@@ -71,6 +71,9 @@ func TestRenderPaleta(t *testing.T) {
 	for _, binding := range []string{
 		"bindsym $mod+c exec --no-startup-id $swayclip",
 		"bindsym $mod+i exec --no-startup-id $swayctl",
+		"bindsym Print exec --no-startup-id $swaydesk screenshot full",
+		"bindsym $mod+Print exec --no-startup-id $swaydesk screenshot region",
+		"bindsym $mod+Shift+Print exec --no-startup-id $swaydesk screenshot region",
 	} {
 		if !strings.Contains(swayConf, binding) {
 			t.Errorf("falta el atajo de teclado: %s", binding)
@@ -449,6 +452,57 @@ func TestApplyRemovesUnusedLegacyWaybarModules(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("Apply no reportó la migración de Waybar: %+v", results)
+	}
+}
+
+func TestApplyMigratesLegacyScreenshotBindings(t *testing.T) {
+	dest := t.TempDir()
+	swayDir := filepath.Join(dest, "sway")
+	if err := os.MkdirAll(swayDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(swayDir, "config")
+	legacy := strings.Join([]string{
+		`bindsym Print exec sh -c 'mkdir -p ~/Capturas && grim ~/Capturas/$(date +%Y%m%d-%H%M%S).png'`,
+		`bindsym $mod+Print exec sh -c 'mkdir -p ~/Capturas && grim -g "$(slurp)" ~/Capturas/$(date +%Y%m%d-%H%M%S).png'`,
+		`bindsym $mod+Shift+Print exec sh -c 'grim -g "$(slurp)" - | wl-copy'`,
+		"bindsym Super+F1 exec firefox",
+		"",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := Apply(config.Default(), dest)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(updated)
+	for _, want := range []string{
+		"bindsym Print exec --no-startup-id $swaydesk screenshot full",
+		"bindsym $mod+Print exec --no-startup-id $swaydesk screenshot region",
+		"bindsym $mod+Shift+Print exec --no-startup-id $swaydesk screenshot region",
+		"bindsym Super+F1 exec firefox",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("la migración debía conservar o crear %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "grim ") || strings.Contains(text, "wl-copy") {
+		t.Fatalf("quedaron binds de captura antiguos: %s", text)
+	}
+	found := false
+	for _, result := range results {
+		if result.Path == path && result.Action == "atajos de captura actualizados" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Apply no informó la migración de capturas: %+v", results)
 	}
 }
 

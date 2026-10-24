@@ -186,7 +186,11 @@ output eDP-1 scale 1.25
   el archivo en `assets/files/sway/config` y ejecuta
   `swaydesk init --force --only sway`.
 
-Recarga siempre con `Super+Shift+c` o `swaymsg reload`.
+Recarga siempre con `Super+Shift+c` o `swaymsg reload`. Por defecto, `Print`
+captura toda la pantalla y `Super+Print` / `Super+Shift+Print` seleccionan una
+región; todas guardan el PNG, lo copian al portapapeles como `image/png` y muestran
+una miniatura en una notificación. Al ejecutar `swaydesk apply`, los atajos
+predeterminados antiguos de `grim` se migran sin reemplazar el resto de Sway.
 
 ## 4. Menús y acciones
 
@@ -229,7 +233,9 @@ swayclip --backend clipman
 ```
 
 Para tener historial persistente, `~/.config/swaydesk/autostart.sh` arranca
-`wl-paste --type text --watch cliphist store` si `cliphist` está instalado.
+vigilantes de texto e imágenes con `cliphist` si está instalado. Al seleccionar
+una captura PNG (o una imagen PNG/JPEG/GIF), `swayclip` dibuja su miniatura en
+el panel de vista previa y `Enter` restaura el MIME de imagen al portapapeles.
 Puedes borrar la entrada seleccionada con `Ctrl+d`.
 
 ### Si no aparecen OSD, notificaciones o la animación de arranque
@@ -965,7 +971,7 @@ swaydesk status --json | jq '.system.cpu_percent, .sway.focused'
 ```bash
 swaydesk notify "Título" "Cuerpo" --urgency low
 swaydesk volume up          # wpctl / pactl / amixer, lo que exista
-swaydesk screenshot region  # grim + slurp, guarda en ~/Capturas
+swaydesk screenshot region  # guarda PNG, copia la imagen y muestra una miniatura
 swaydesk lock
 swaydesk power reboot
 ```

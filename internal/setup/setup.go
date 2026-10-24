@@ -761,10 +761,64 @@ func Apply(cfg *config.Config, dest string) ([]Result, error) {
 	for _, path := range legacyBarFiles {
 		results = append(results, Result{Path: path, Action: "módulos heredados de Waybar retirados", Modified: true})
 	}
+	screenshotFiles, err := migrateScreenshotBindings(dest)
+	if err != nil {
+		return results, err
+	}
+	for _, path := range screenshotFiles {
+		results = append(results, Result{Path: path, Action: "atajos de captura actualizados", Modified: true})
+	}
+	if len(screenshotFiles) > 0 && filepath.Clean(dest) == filepath.Clean(configDir()) {
+		reloadSwayConfig()
+	}
 	applyGTKSettings(cfg)
 	ReloadWaybar()
 	ApplySwayColors(cfg)
 	return results, nil
+}
+
+// migrateScreenshotBindings reemplaza solo los tres binds originales de captura
+// que usaban grim directamente; respeta el resto de la configuración personal.
+func migrateScreenshotBindings(dest string) ([]string, error) {
+	path := filepath.Join(dest, "sway", "config")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("leyendo %s: %w", path, err)
+	}
+	text := string(data)
+	updated := strings.ReplaceAll(text,
+		`bindsym Print exec sh -c 'mkdir -p ~/Capturas && grim ~/Capturas/$(date +%Y%m%d-%H%M%S).png'`,
+		`bindsym Print exec --no-startup-id $swaydesk screenshot full`)
+	updated = strings.ReplaceAll(updated,
+		`bindsym $mod+Print exec sh -c 'mkdir -p ~/Capturas && grim -g "$(slurp)" ~/Capturas/$(date +%Y%m%d-%H%M%S).png'`,
+		`bindsym $mod+Print exec --no-startup-id $swaydesk screenshot region`)
+	updated = strings.ReplaceAll(updated,
+		`bindsym $mod+Shift+Print exec sh -c 'grim -g "$(slurp)" - | wl-copy'`,
+		`bindsym $mod+Shift+Print exec --no-startup-id $swaydesk screenshot region`)
+	if updated == text {
+		return nil, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("consultando %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, []byte(updated), info.Mode().Perm()); err != nil {
+		return nil, fmt.Errorf("actualizando %s: %w", path, err)
+	}
+	return []string{path}, nil
+}
+
+// reloadSwayConfig recarga Sway después de una migración automática de atajos.
+func reloadSwayConfig() {
+	c, err := dialSway()
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	_ = c.CommandOK("reload")
 }
 
 // removeUnusedWaybarModules quita CPU, RAM y el antiguo botón de energía de
