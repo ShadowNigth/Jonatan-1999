@@ -640,8 +640,12 @@ iniciar la otra, así no quedan Waybar y swaybar superpuestas. Si el archivo
 varias versiones ignoran `config.json` al buscar automáticamente y caen en
 `/etc/xdg/waybar/config.jsonc`. La hoja de estilos de swaydesk se mantiene en
 `~/.config/waybar/style.css` y se colorea con el tema activo. En esa plantilla
-el centro muestra ahora hora y fecha; ya no aparece el título de la ventana, y
-el reloj se quita de la derecha para que no quede duplicado.
+el centro muestra hora y fecha numéricas; ya no aparece el título de ventana ni
+se repite el reloj a la derecha. Los rótulos de volumen, red, CPU, memoria,
+temperatura y batería están en español; el modo de teclado se llama
+`redimensionar` y el indicador de grabación dice `GRABANDO`. Los nombres de apps y
+redes que vienen de la bandeja o del sistema conservan el idioma que les da cada
+aplicación.
 
 ## 8c. Notificaciones propias (`swaynotify`)
 

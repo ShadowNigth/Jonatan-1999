@@ -673,7 +673,7 @@ func moduleOutput(name string, d *statusData, cfg *config.Config) string {
 		return ic.Workspace + " swaydesk"
 	case "recording":
 		if processRunning("wf-recorder") || processRunning("wl-screenrec") {
-			return ic.Dot + " REC"
+			return ic.Dot + " GRABANDO"
 		}
 		return ""
 	case "clock":

@@ -254,7 +254,7 @@ bindsym $mod+Shift+x exec $swaydesk lock
 
 ### Modos ##################################################################
 
-mode "resize" {
+mode "redimensionar" {
     bindsym h resize shrink width 20 px
     bindsym j resize grow height 20 px
     bindsym k resize shrink height 20 px
@@ -266,7 +266,7 @@ mode "resize" {
     bindsym Return mode "default"
     bindsym Escape mode "default"
 }
-bindsym $mod+r mode "resize"
+bindsym $mod+r mode "redimensionar"
 
 ### Entrada ################################################################
 

@@ -69,35 +69,42 @@
   },
   "pulseaudio": {
     "format": "{{ICON_VOLUME}} {volume}%",
-    "format-muted": "{{ICON_MUTED}} silencio",
+    "format-muted": "{{ICON_MUTED}} Silenciado",
     "scroll-step": 5,
     "on-click": "swaydesk volume mute",
     "on-click-right": "pavucontrol",
-    "tooltip-format": "{desc}"
+    "tooltip-format": "Volumen: {volume}%"
   },
   "network": {
-    "format-wifi": "{{ICON_WIFI}} {essid}",
-    "format-ethernet": "{{ICON_NET}} cable",
-    "format-disconnected": "sin red",
-    "tooltip-format": "{essid} · {signalStrength}% · {ipaddr}",
+    "format-wifi": "{{ICON_WIFI}} Wi-Fi: {essid}",
+    "format-ethernet": "{{ICON_NET}} Cable",
+    "format-disconnected": "Sin conexión",
+    "format-disabled": "Wi-Fi desactivado",
+    "format-linked": "Conectando…",
+    "tooltip-format": "Red: {essid} · señal: {signalStrength}% · IP: {ipaddr}",
+    "tooltip-format-wifi": "Wi-Fi: {essid} · señal: {signalStrength}% · IP: {ipaddr}",
+    "tooltip-format-ethernet": "Cable · IP: {ipaddr}",
+    "tooltip-format-disconnected": "Sin conexión",
+    "tooltip-format-disabled": "Wi-Fi desactivado",
     "on-click": "nm-connection-editor"
   },
   "cpu": {
     "format": "{{ICON_CPU}} {usage}%",
     "interval": 3,
     "on-click": "swayctl",
-    "tooltip-format": "carga {load}"
+    "tooltip-format": "Uso de CPU: {usage}% · carga: {load}"
   },
   "memory": {
     "format": "{{ICON_RAM}} {percentage}%",
     "interval": 5,
-    "tooltip-format": "{used} / {total}",
+    "tooltip-format": "Memoria usada: {used} de {total}",
     "on-click": "swayctl"
   },
   "temperature": {
     "format": "{{ICON_TEMP}} {temperatureC}°C",
     "critical-threshold": 80,
-    "interval": 5
+    "interval": 5,
+    "tooltip-format": "Temperatura: {temperatureC}°C"
   },
   "battery": {
     "states": {
@@ -108,14 +115,12 @@
     "format-charging": "{{ICON_CHARGING}} {capacity}%",
     "format-plugged": "{{ICON_PLUG}} {capacity}%",
     "format-alt": "{{ICON_BATTERY}} {time}",
+    "tooltip-format": "Batería: {capacity}% · autonomía: {time}",
     "interval": 30
   },
   "clock": {
     "format": "{{ICON_CLOCK}} {:%H:%M · %d/%m/%Y}",
-    "format-alt": "{{ICON_CALENDAR}} {:%A %d %B %Y}",
-    "tooltip-format": "{calendar}",
-    "calendar": {
-      "mode": "month"
-    }
+    "format-alt": "{{ICON_CALENDAR}} {:%d/%m/%Y}",
+    "tooltip-format": "Fecha: {:%d/%m/%Y}"
   }
 }

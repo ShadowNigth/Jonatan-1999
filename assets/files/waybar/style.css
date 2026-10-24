@@ -157,7 +157,7 @@ window#waybar.empty #window {
     color: transparent;
 }
 
-/* ─── Modo de sway (resize) ─────────────────────────────────────────── */
+/* ─── Modo de sway (redimensionar) ──────────────────────────────────── */
 #mode {
     color: @bg;
     background: @warn;

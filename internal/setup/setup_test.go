@@ -71,6 +71,9 @@ func TestRenderPaleta(t *testing.T) {
 	if strings.Contains(swayConf, "{{") {
 		t.Fatal("quedan marcadores en la configuración de sway")
 	}
+	if !strings.Contains(swayConf, `mode "redimensionar"`) || strings.Contains(swayConf, `mode "resize"`) {
+		t.Fatal("el modo indicado en Waybar debe tener nombre en español")
+	}
 }
 
 func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
@@ -103,8 +106,36 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 	if !strings.Contains(waybar.Clock.Format, "%H:%M") || !strings.Contains(waybar.Clock.Format, "%d/%m/%Y") {
 		t.Fatalf("el reloj central debe mostrar hora y fecha: %q", waybar.Clock.Format)
 	}
-	if !strings.Contains(waybar.Clock.FormatAlt, "%A %d %B %Y") {
-		t.Fatalf("el formato alternativo debe ofrecer la fecha larga: %q", waybar.Clock.FormatAlt)
+	if !strings.Contains(waybar.Clock.FormatAlt, "%d/%m/%Y") {
+		t.Fatalf("el formato alternativo debe mantener la fecha numérica: %q", waybar.Clock.FormatAlt)
+	}
+	if !strings.Contains(files["waybar/config.json"], "Fecha: {:%d/%m/%Y}") {
+		t.Fatal("la ayuda del reloj debe estar en español y usar fecha numérica")
+	}
+}
+
+func TestWaybarLabelsAreSpanish(t *testing.T) {
+	files, err := Render(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	waybarConfig := files["waybar/config.json"]
+	for _, label := range []string{
+		"Wi-Fi:",
+		"Sin conexión",
+		"Silenciado",
+		"Volumen: {volume}%",
+		"Uso de CPU:",
+		"Memoria usada:",
+		"Temperatura:",
+		"Batería:",
+	} {
+		if !strings.Contains(waybarConfig, label) {
+			t.Errorf("falta etiqueta en español %q", label)
+		}
+	}
+	if strings.Contains(waybarConfig, "sway/window") {
+		t.Fatal("el título de ventana no debe aparecer en Waybar")
 	}
 }
 

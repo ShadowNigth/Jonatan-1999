@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/ShadowNigth/swaydesk/internal/config"
+)
 
 func TestParseBarOpacity(t *testing.T) {
 	for raw, want := range map[string]float64{
@@ -22,5 +29,19 @@ func TestParseBarOpacity(t *testing.T) {
 		if got, err := parseBarOpacity(raw); err == nil {
 			t.Errorf("parseBarOpacity(%q) = %v; debía rechazarlo", raw, got)
 		}
+	}
+}
+
+func TestRecordingModuleUsesSpanishLabel(t *testing.T) {
+	binDir := t.TempDir()
+	pgrep := filepath.Join(binDir, "pgrep")
+	if err := os.WriteFile(pgrep, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+
+	got := moduleOutput("recording", &statusData{}, config.Default())
+	if !strings.HasSuffix(got, "GRABANDO") {
+		t.Fatalf("indicador de grabación no español: %q", got)
 	}
 }
