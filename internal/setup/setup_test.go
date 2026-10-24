@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +70,41 @@ func TestRenderPaleta(t *testing.T) {
 	}
 	if strings.Contains(swayConf, "{{") {
 		t.Fatal("quedan marcadores en la configuración de sway")
+	}
+}
+
+func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
+	files, err := Render(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var waybar struct {
+		ModulesCenter []string `json:"modules-center"`
+		ModulesRight  []string `json:"modules-right"`
+		Clock         struct {
+			Format    string `json:"format"`
+			FormatAlt string `json:"format-alt"`
+		} `json:"clock"`
+	}
+	if err := json.Unmarshal([]byte(files["waybar/config.json"]), &waybar); err != nil {
+		t.Fatalf("configuración Waybar no válida: %v", err)
+	}
+	if len(waybar.ModulesCenter) != 1 || waybar.ModulesCenter[0] != "clock" {
+		t.Fatalf("el centro debe contener solo el reloj, obtuvo %v", waybar.ModulesCenter)
+	}
+	for _, module := range waybar.ModulesRight {
+		if module == "clock" || module == "sway/window" {
+			t.Fatalf("módulo duplicado o título de ventana en la derecha: %v", waybar.ModulesRight)
+		}
+	}
+	if strings.Contains(files["waybar/config.json"], "sway/window") {
+		t.Fatal("la configuración aún contiene el módulo del título de ventana")
+	}
+	if !strings.Contains(waybar.Clock.Format, "%H:%M") || !strings.Contains(waybar.Clock.Format, "%d/%m/%Y") {
+		t.Fatalf("el reloj central debe mostrar hora y fecha: %q", waybar.Clock.Format)
+	}
+	if !strings.Contains(waybar.Clock.FormatAlt, "%A %d %B %Y") {
+		t.Fatalf("el formato alternativo debe ofrecer la fecha larga: %q", waybar.Clock.FormatAlt)
 	}
 }
 

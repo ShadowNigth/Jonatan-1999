@@ -8,7 +8,7 @@
   "margin-left": 0,
   "margin-right": 0,
   "modules-left": ["custom/logo", "sway/workspaces", "sway/mode", "sway/scratchpad"],
-  "modules-center": ["sway/window"],
+  "modules-center": ["clock"],
   "modules-right": [
     "custom/recording",
     "tray",
@@ -17,8 +17,7 @@
     "cpu",
     "memory",
     "temperature",
-    "battery",
-    "clock"
+    "battery"
   ],
   "sway/workspaces": {
     "disable-scroll": false,
@@ -43,13 +42,6 @@
   "sway/mode": {
     "format": "  {}  ",
     "tooltip": false
-  },
-  "sway/window": {
-    "format": "{title}",
-    "max-length": 60,
-    "rewrite": {
-      "": "sway"
-    }
   },
   "sway/scratchpad": {
     "format": "{icon} {count}",
@@ -119,8 +111,8 @@
     "interval": 30
   },
   "clock": {
-    "format": "{{ICON_CLOCK}} {:%H:%M}",
-    "format-alt": "{{ICON_CALENDAR}} {:%a %d %b %Y}",
+    "format": "{{ICON_CLOCK}} {:%H:%M · %d/%m/%Y}",
+    "format-alt": "{{ICON_CALENDAR}} {:%A %d %B %Y}",
     "tooltip-format": "{calendar}",
     "calendar": {
       "mode": "month"

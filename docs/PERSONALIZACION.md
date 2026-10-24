@@ -639,7 +639,9 @@ iniciar la otra, así no quedan Waybar y swaybar superpuestas. Si el archivo
 `~/.config/waybar/config.json` existe, Waybar se inicia con `--config` explícito:
 varias versiones ignoran `config.json` al buscar automáticamente y caen en
 `/etc/xdg/waybar/config.jsonc`. La hoja de estilos de swaydesk se mantiene en
-`~/.config/waybar/style.css` y se colorea con el tema activo.
+`~/.config/waybar/style.css` y se colorea con el tema activo. En esa plantilla
+el centro muestra ahora hora y fecha; ya no aparece el título de la ventana, y
+el reloj se quita de la derecha para que no quede duplicado.
 
 ## 8c. Notificaciones propias (`swaynotify`)
 
