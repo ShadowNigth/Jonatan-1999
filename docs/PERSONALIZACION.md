@@ -184,9 +184,14 @@ Puedes borrar la entrada seleccionada con `Ctrl+d`.
 ### Si un fondo no se aplica
 
 - **Escenas, GIF y vídeo los dibuja el demonio** (`swaydesk wallpaper daemon`).
-  `set` y la galería ya lo arrancan o lo reinician solos; si no aparece nada,
-  comprueba que esté vivo: `swaydesk wallpaper status` (o
-  `ps -x | grep 'wallpaper daemon'`).
+  `set` y la galería ya lo arrancan o lo reinician solos. `swaydesk wallpaper
+  status` dice si está `activo (pid N)` o `detenido: por eso no se ve el fondo`.
+- Si el demonio **no arranca**, ahora se ve el motivo: su salida va a
+  `~/.cache/swaydesk/wallpaper.log` y `swaydesk wallpaper logs` lo muestra (con
+  `--clear` lo vacía). Al arrancarlo se comprueba que siga vivo un par de
+  segundos; si murió, se imprime el registro en lugar de un «✔» falso.
+- `swaydesk doctor` incluye el chequeo **demonio de fondo**, que solo exige el
+  demonio cuando el fondo actual lo necesita.
 - Una **imagen fija** no necesita demonio: se aplica al instante con
   `output * bg` vía IPC y queda escrita en
   `~/.config/sway/config.d/50-wallpaper.conf`, que se carga al recargar sway.

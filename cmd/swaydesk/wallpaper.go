@@ -3,16 +3,17 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/adaptive"
 	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/gallery"
-	"github.com/ShadowNigth/swaydesk/internal/launcher"
 	"github.com/ShadowNigth/swaydesk/internal/setup"
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 	"github.com/ShadowNigth/swaydesk/internal/ui"
@@ -74,6 +75,8 @@ func cmdWallpaper(args []string) {
 		} else {
 			fmt.Println("· no había ningún demonio en ejecución")
 		}
+	case "logs", "log", "registro":
+		printWallpaperLog(cfg, rest)
 	case "status", "estado":
 		wallpaperStatus(cfg, theme)
 	case "adaptive", "adaptativo":
@@ -110,6 +113,7 @@ func printWallpaperHelp() {
   daemon [--if-needed]    Demonio de fondo animado (--if-needed: no reiniciar
                           si ya está en marcha, para el autostart)
   stop                    Detiene el demonio
+  logs                    Registro del demonio (por qué no arranca)
   status                  Estado del fondo actual
   mode <fill|fit|...>     Modo de ajuste de imágenes y vídeos
   workspaces [list]       Fondos por workspace y transición actual
@@ -475,16 +479,91 @@ func runWallpaperDaemon(cfg *config.Config, args []string) error {
 	if hasFlag(args, "--foreground") || hasFlag(args, "-f") {
 		return startWallpaperDaemon(cfg)
 	}
-	// Se relanza en segundo plano para no bloquear el arranque de sway.
+	// Se relanza en segundo plano (con la salida a un registro: si muere, el
+	// motivo queda escrito en vez de perderse).
+	if err := spawnWallpaperDaemon(cfg); err != nil {
+		return err
+	}
+	// Comprobar que sobrevive de verdad. Antes se decía «iniciado» aunque
+	// hubiera muerto al instante por falta de compositor o de shm.
+	for i := 0; i < 30; i++ {
+		if pid := wallpaper.RunningPID(cfg.Cache); pid != 0 {
+			fmt.Printf("✔ demonio de fondo animado iniciado (pid %d)\n", pid)
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	tail := lastLogLines(wallpaperLogPath(cfg), 12)
+	if tail == "" {
+		tail = "(el registro está vacío)"
+	}
+	return fmt.Errorf("el demonio no llegó a arrancar. Registro %s:\n%s",
+		wallpaperLogPath(cfg), tail)
+}
+
+// wallpaperLogPath es el registro del demonio de fondo.
+func wallpaperLogPath(cfg *config.Config) string {
+	return filepath.Join(cfg.Cache, "wallpaper.log")
+}
+
+// spawnWallpaperDaemon lanza `swaydesk wallpaper daemon --foreground` en su
+// propia sesión, con stdout y stderr al registro.
+func spawnWallpaperDaemon(cfg *config.Config) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	if err := launcher.StartDetached(exe, "wallpaper", "daemon", "--foreground"); err != nil {
+	logPath := wallpaperLogPath(cfg)
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return err
 	}
-	fmt.Println("✔ demonio de fondo animado iniciado")
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	cmd := exec.Command(exe, "wallpaper", "daemon", "--foreground")
+	cmd.Stdout, cmd.Stderr = f, f
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+// lastLogLines devuelve las últimas n líneas no vacías de un archivo.
+func lastLogLines(path string, n int) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// printWallpaperLog muestra el registro del demonio; `--clear` lo vacía.
+func printWallpaperLog(cfg *config.Config, args []string) {
+	path := wallpaperLogPath(cfg)
+	if hasFlag(args, "--clear") || hasFlag(args, "-c") {
+		if err := os.Remove(path); err == nil {
+			fmt.Printf("✔ registro borrado (%s)\n", path)
+		} else {
+			fmt.Printf("· no había registro (%s)\n", path)
+		}
+		return
+	}
+	fmt.Printf("  %s %s\n", ui.Dim("registro"), path)
+	txt := lastLogLines(path, 40)
+	if txt == "" {
+		fmt.Printf("  %s\n", ui.Dim("vacío: el demonio no ha escrito nada todavía"))
+		return
+	}
+	fmt.Println()
+	fmt.Println(txt)
 }
 
 func startWallpaperDaemon(cfg *config.Config) error {
@@ -716,8 +795,11 @@ func wallpaperStatus(cfg *config.Config, theme *ui.Theme) {
 	fmt.Printf("  %-12s %s\n", ui.Dim("origen"), where)
 	if pid := wallpaper.RunningPID(cfg.Cache); pid != 0 {
 		fmt.Printf("  %-12s %s\n", ui.Dim("demonio"), ui.Style{Fg: p.Ok}.Render(fmt.Sprintf("activo (pid %d)", pid)))
+	} else if animatedSpec(wallpaper.Spec{Kind: wallpaper.Kind(kind)}) || len(cfg.WallpaperWorkspaces) > 0 {
+		fmt.Printf("  %-12s %s\n", ui.Dim("demonio"), ui.Style{Fg: p.Warn}.Render("detenido: por eso no se ve el fondo"))
+		fmt.Printf("  %-12s %s\n", "", ui.Dim("arráncalo con: swaydesk wallpaper daemon · errores: swaydesk wallpaper logs"))
 	} else {
-		fmt.Printf("  %-12s %s\n", ui.Dim("demonio"), ui.Style{Fg: p.Warn}.Render("detenido · swaydesk wallpaper daemon"))
+		fmt.Printf("  %-12s %s\n", ui.Dim("demonio"), ui.Dim("no hace falta (imagen fija)"))
 	}
 	ds := wallpaper.DetectDisplayServer()
 	if ds.LayerShell {

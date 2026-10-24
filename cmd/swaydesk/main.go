@@ -713,6 +713,37 @@ type check struct {
 	fix      string
 }
 
+// wallpaperDaemonNeeded indica si el fondo actual lo tiene que dibujar el
+// demonio (escenas, GIF, vídeo o fondos por workspace).
+func wallpaperDaemonNeeded(cfg *config.Config) bool {
+	kind := cfg.WallpaperKind
+	if kind == "" {
+		kind = "scene"
+	}
+	switch kind {
+	case "scene", "gif", "video":
+		return true
+	}
+	return len(cfg.WallpaperWorkspaces) > 0
+}
+
+func wallpaperDaemonOK(cfg *config.Config) bool {
+	if !wallpaperDaemonNeeded(cfg) {
+		return true
+	}
+	return wallpaper.RunningPID(cfg.Cache) != 0
+}
+
+func wallpaperDaemonDetail(cfg *config.Config) string {
+	if !wallpaperDaemonNeeded(cfg) {
+		return "no hace falta con una imagen fija"
+	}
+	if pid := wallpaper.RunningPID(cfg.Cache); pid != 0 {
+		return fmt.Sprintf("activo (pid %d) · registro en ~/.cache/swaydesk/wallpaper.log", pid)
+	}
+	return "detenido: el fondo animado no se dibuja"
+}
+
 // binInPath indica si el binario se encuentra por el PATH actual.
 func binInPath(name string) bool {
 	_, err := exec.LookPath(name)
@@ -904,6 +935,9 @@ func cmdDoctor(args []string) {
 			detail: "fondos de vídeo (mp4, webm)", fix: "sudo pacman -S ffmpeg"},
 		{name: "wlr-layer-shell", required: false, ok: wallpaper.DetectDisplayServer().LayerShell,
 			detail: "fondo animado detrás de las ventanas", fix: "usa sway (incluye wlr-layer-shell)"},
+		{name: "demonio de fondo", required: false, ok: wallpaperDaemonOK(cfg),
+			detail: wallpaperDaemonDetail(cfg),
+			fix:    "swaydesk wallpaper daemon · si falla: swaydesk wallpaper logs"},
 		{name: "swaybar (propia)", required: false, ok: launcher.HasCommand("swaybar") && cfg.BarEnabled,
 			detail: "barra de estado de swaydesk", fix: "make build && make install"},
 		{name: "fuentes de consola", required: false, ok: font.Available(),
