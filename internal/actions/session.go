@@ -29,8 +29,18 @@ type Action struct {
 
 // Notification envía una notificación de escritorio si hay un daemon disponible.
 func Notification(summary, body string, urgency string) {
+	if bin := companionCommand("swaynotify"); bin != "" {
+		args := []string{"send", "--app", "swaydesk"}
+		if urgency != "" {
+			args = append(args, "--urgency", urgency)
+		}
+		args = append(args, summary, body)
+		if launcher.StartDetached(bin, args...) == nil {
+			return
+		}
+	}
 	if launcher.HasCommand("notify-send") {
-		args := []string{}
+		args := []string{"-a", "swaydesk"}
 		if urgency != "" {
 			args = append(args, "-u", urgency)
 		}
@@ -139,7 +149,10 @@ func Screenshot(mode string) error {
 		return fmt.Errorf("modo de captura desconocido: %q (usa region o full)", mode)
 	}
 
-	dir := screenshotDir()
+	dir, err := screenshotDir()
+	if err != nil {
+		return err
+	}
 	name := filepath.Join(dir, "captura-"+time.Now().Format("20060102-150405.000")+".png")
 	args = append(args, name)
 	cmd := exec.Command("grim", args...)
@@ -199,9 +212,10 @@ func screenshotNotification(path string, copied bool, copyErr error) {
 	}
 
 	if bin := companionCommand("swaynotify"); bin != "" {
-		_ = launcher.StartDetached(bin, "send", "--app", "swaydesk", "--urgency", urgency,
-			"--timeout", "3500", summary, body)
-		return
+		if launcher.StartDetached(bin, "send", "--app", "swaydesk", "--urgency", urgency,
+			"--timeout", "3500", summary, body) == nil {
+			return
+		}
 	}
 	if launcher.HasCommand("notify-send") {
 		_ = launcher.StartDetached("notify-send", "-a", "swaydesk", "-u", urgency,
@@ -227,17 +241,16 @@ func companionCommand(name string) string {
 	return ""
 }
 
-func screenshotDir() string {
-	home, _ := os.UserHomeDir()
-	for _, dir := range []string{"Imágenes", "Pictures"} {
-		p := filepath.Join(home, dir, "Capturas")
-		if err := os.MkdirAll(p, 0o755); err == nil {
-			return p
-		}
+func screenshotDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no se pudo determinar la carpeta personal: %w", err)
 	}
-	p := filepath.Join(home, "Capturas")
-	_ = os.MkdirAll(p, 0o755)
-	return p
+	dir := filepath.Join(home, "Capturas")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("creando la carpeta de capturas %s: %w", dir, err)
+	}
+	return dir, nil
 }
 
 // ToggleIdle gestiona el inhibidor de suspensión (swayidle).

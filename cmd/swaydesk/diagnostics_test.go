@@ -54,7 +54,7 @@ func TestAutostartStatusAcceptsCurrentScript(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(swayDir, "config"), []byte("exec_always ~/.config/swaydesk/autostart.sh\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	current := "#!/bin/sh\nquiet swaydesk boot\nstart_bar swaybar\nstart_bar waybar --config \"$WAYBAR_CONFIG\"\nonce swaynotify daemon\nonce swayosd watch\nquiet swaydesk wallpaper daemon --if-needed\n"
+	current := "#!/bin/sh\nquiet swaydesk boot\nstart_bar swaybar\nstart_bar waybar --config \"$WAYBAR_CONFIG\"\nonce swaynotify daemon\nonce swayosd watch\nquiet swaydesk events watch\nquiet swaydesk wallpaper daemon --if-needed\n"
 	if err := os.WriteFile(filepath.Join(startupDir, "autostart.sh"), []byte(current), 0o755); err != nil {
 		t.Fatal(err)
 	}

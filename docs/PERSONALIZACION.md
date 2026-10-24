@@ -188,9 +188,10 @@ output eDP-1 scale 1.25
 
 Recarga siempre con `Super+Shift+c` o `swaymsg reload`. Por defecto, `Print`
 captura toda la pantalla y `Super+Print` / `Super+Shift+Print` seleccionan una
-región; todas guardan el PNG, lo copian al portapapeles como `image/png` y muestran
-un aviso breve al terminar. Al ejecutar `swaydesk apply`, los atajos
-predeterminados antiguos de `grim` se migran sin reemplazar el resto de Sway.
+región; todas guardan el PNG en `~/Capturas` (fuera de `~/Imágenes`), lo copian
+al portapapeles como `image/png` y muestran una notificación textual con la ruta.
+Al ejecutar `swaydesk apply`, los atajos predeterminados antiguos de `grim` se
+migran sin reemplazar el resto de Sway.
 
 ## 4. Menús y acciones
 
@@ -970,14 +971,26 @@ swaydesk status --json | jq '.system.cpu_percent, .sway.focused'
 
 ```bash
 swaydesk notify "Título" "Cuerpo" --urgency low
+swaydesk events watch       # vigila entradas, monitores y almacenamiento USB
 swaydesk volume up          # wpctl / pactl / amixer, lo que exista
-swaydesk screenshot region  # guarda PNG, copia y muestra un aviso breve
+swaydesk screenshot region  # guarda en ~/Capturas, copia y notifica
 swaydesk lock
 swaydesk power reboot
 ```
 
 Desde un script o un bind de sway puedes usar los binarios directamente:
 `swaymenu --float`, `swayctl`, `swayclip`.
+
+El autostart inicia `swaydesk events watch` una vez por sesión. Usa el IPC de Sway
+para avisar sobre conexiones y desconexiones de entradas (teclado, ratón, etc.)
+y monitores; además, `udevadm` detecta unidades de almacenamiento USB. Si
+`swaydesk doctor` señala un autostart antiguo, actualiza únicamente ese archivo
+y recarga Sway:
+
+```bash
+swaydesk init --force --only swaydesk/autostart.sh
+swaymsg reload
+```
 
 ## 10. Fuentes
 

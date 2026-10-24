@@ -226,6 +226,17 @@ if have swayosd && swaydesk osd-enabled >/dev/null 2>&1; then
     once swayosd watch
 fi
 
+# --- Dispositivos conectados ------------------------------------------------
+# El watcher recibe entradas y monitores desde Sway, y discos USB desde udev.
+# exec_always vuelve a ejecutar este archivo en cada reload: no lo dupliques.
+if have swaydesk; then
+    if have pgrep && pgrep -f '[s]waydesk events watch' >/dev/null 2>&1; then
+        log "watcher de dispositivos ya activo"
+    else
+        quiet swaydesk events watch
+    fi
+fi
+
 # --- Bloqueo y ahorro de energía -------------------------------------------
 # 10 min: bloquear · 15 min: apagar pantalla · al suspender: bloquear
 if have swayidle; then

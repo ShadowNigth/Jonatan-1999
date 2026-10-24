@@ -35,7 +35,7 @@ func TestRenderSinMarcadores(t *testing.T) {
 			t.Fatalf("falta la plantilla %q", required)
 		}
 	}
-	for _, service := range []string{"quiet swaydesk boot", "start_bar swaybar", "start_bar waybar", `--config "$WAYBAR_CONFIG"`, "waybar_uses_generated_config", "once swaynotify daemon", "once swayosd watch", "swaydesk wallpaper daemon --if-needed", "autostart.log"} {
+	for _, service := range []string{"quiet swaydesk boot", "start_bar swaybar", "start_bar waybar", `--config "$WAYBAR_CONFIG"`, "waybar_uses_generated_config", "once swaynotify daemon", "once swayosd watch", "swaydesk events watch", "swaydesk wallpaper daemon --if-needed", "autostart.log"} {
 		if !strings.Contains(files["swaydesk/autostart.sh"], service) {
 			t.Errorf("el autostart debe diagnosticar el servicio %q", service)
 		}

@@ -135,6 +135,12 @@ terceros.
 
 ## Capturas
 
+`swaydesk screenshot` guarda los PNG en `~/Capturas` (fuera de `~/Imágenes`),
+los copia al portapapeles y muestra una notificación textual con la ruta.
+Durante la sesión, `swaydesk events watch` avisa al conectar o desconectar
+entradas, monitores y unidades de almacenamiento USB; el autostart lo inicia
+una sola vez por sesión.
+
 | Panel de control | Portapapeles |
 |---|---|
 | ![Panel](docs/screenshot-panel-estado.png) | ![Portapapeles](docs/screenshot-portapapeles.png) |
@@ -302,6 +308,7 @@ Sesión
   doctor                         Diagnóstico de dependencias y configuración
   keys [filtro] [--exec]         Atajos de sway expandidos y cuáles no funcionan
   notify <título> [cuerpo]       Notificación de escritorio
+  events watch                   Avisos de conexión de dispositivos y monitores
   volume <up|down|mute>          Volumen (con aviso en pantalla si hay swayosd)
   osd [show|preview|volume …]    Avisos en pantalla: estado, repetir, PNG
   screenshot [region|full]       Captura, copia al portapapeles y avisa al terminar
@@ -377,10 +384,10 @@ no la encuentra en su `PATH`). La chuleta completa está en `Super+i` → *Atajo
 y en [`assets/files/sway/config`](assets/files/sway/config).
 
 `Print` captura la pantalla completa; `Super+Print` y `Super+Shift+Print`
-seleccionan una región. Todas guardan el PNG, lo copian como imagen al
-portapapeles y muestran un aviso breve. `swaydesk apply`
-migra esos tres atajos si todavía usan las órdenes antiguas de `grim`, sin tocar
-los demás atajos ni los overrides personalizados.
+seleccionan una región. Todas guardan el PNG en `~/Capturas` (no dentro de
+`Imágenes`), lo copian como imagen al portapapeles y muestran una notificación
+con la ruta. `swaydesk apply` migra esos tres atajos si todavía usan las órdenes
+antiguas de `grim`, sin tocar los demás atajos ni los overrides personalizados.
 
 ### Lanzador
 

@@ -56,6 +56,8 @@ func main() {
 		cmdKeys(args)
 	case "notify":
 		cmdNotify(args)
+	case "events":
+		cmdEvents(args)
 	case "volume", "vol":
 		cmdVolume(args)
 	case "lock":
@@ -123,6 +125,7 @@ Sesión
   doctor                      Diagnóstico de dependencias y configuración
   keys [filtro] [--exec]      Atajos de sway expandidos y cuáles no funcionan
   notify <título> [cuerpo]    Envía una notificación de escritorio
+  events watch                Avisa al conectar o quitar dispositivos
   notifications [status|dnd|history|clear|preview|test]
                               Daemon de notificaciones propio (swaynotify)
   volume <up|down|mute>       Controla el volumen (con aviso en pantalla)
@@ -732,6 +735,7 @@ func autostartStatus(cfg *config.Config) (bool, string) {
 		{"animación de arranque", "swaydesk boot"},
 		{"notificaciones", "swaynotify daemon"},
 		{"OSD", "swayosd watch"},
+		{"eventos de dispositivos", "swaydesk events watch"},
 		{"fondos por workspace", "swaydesk wallpaper daemon"},
 		{"reintentos de inicio de barra", "start_bar waybar"},
 		{"reintentos de inicio de swaybar", "start_bar swaybar"},
