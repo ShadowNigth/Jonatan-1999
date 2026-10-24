@@ -36,12 +36,12 @@ window#waybar.hidden {
     opacity: 0.2;
 }
 
-/* Barra con esquinas redondeadas y separación del borde superior */
+/* Fondo y borde transparentes por defecto: el wallpaper se ve sin teñir. */
 .modules-left,
 .modules-center,
 .modules-right {
     background: alpha(@bg, {{BAR_OPACITY}});
-    border: 1px solid @border;
+    border: 1px solid alpha(@border, {{BAR_OPACITY}});
     border-radius: 12px;
     margin: 6px 8px 0 8px;
     padding: 2px 8px;
@@ -52,7 +52,7 @@ window#waybar.hidden {
 }
 
 tooltip {
-    background: alpha(@bg, {{BAR_OPACITY}});
+    background: alpha(@bg, 0.94);
     border: 1px solid alpha(@border, 0.6);
     border-radius: 10px;
 }

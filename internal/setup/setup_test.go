@@ -50,6 +50,7 @@ func TestRenderSinMarcadores(t *testing.T) {
 func TestRenderPaleta(t *testing.T) {
 	cfg := config.Default()
 	cfg.Theme = "gruvbox"
+	cfg.BarOpacity = 0.68
 	files, err := Render(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -58,8 +59,8 @@ func TestRenderPaleta(t *testing.T) {
 	if !strings.Contains(style, "#282828") || !strings.Contains(style, "#fabd2f") {
 		t.Fatalf("los colores de gruvbox no aparecen en el CSS:\n%s", style[:400])
 	}
-	if !strings.Contains(style, "background: alpha(@bg, 0.68)") {
-		t.Fatalf("Waybar debe conservar translucidez con la opacidad predeterminada:\n%s", style)
+	if !strings.Contains(style, "background: alpha(@bg, 0.68)") || !strings.Contains(style, "border: 1px solid alpha(@border, 0.68)") {
+		t.Fatalf("Waybar debe respetar la opacidad configurada en fondo y borde:\n%s", style)
 	}
 	if !strings.Contains(style, "Gruvbox Dark") {
 		t.Fatal("el nombre del tema no aparece en el CSS")
@@ -73,6 +74,23 @@ func TestRenderPaleta(t *testing.T) {
 	}
 	if !strings.Contains(swayConf, `mode "redimensionar"`) || strings.Contains(swayConf, `mode "resize"`) {
 		t.Fatal("el modo indicado en Waybar debe tener nombre en español")
+	}
+}
+
+func TestWaybarBackgroundShowsWallpaperByDefault(t *testing.T) {
+	files, err := Render(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	style := files["waybar/style.css"]
+	for _, want := range []string{
+		"background: alpha(@bg, 0.00);",
+		"border: 1px solid alpha(@border, 0.00);",
+		"tooltip {\n    background: alpha(@bg, 0.94);",
+	} {
+		if !strings.Contains(style, want) {
+			t.Errorf("la hoja de Waybar debe incluir %q para dejar ver el wallpaper y conservar tooltips legibles", want)
+		}
 	}
 }
 

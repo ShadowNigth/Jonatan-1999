@@ -323,7 +323,7 @@ Barra propia
   bar on | off               Usar swaybar o volver a waybar
   bar preview [--width N]    Vista previa en PNG
   bar modules cpu ram clock  Elige los módulos de la derecha
-  bar opacity 0.68          Ajusta la translucidez de ambas barras (0–1)
+  bar opacity 0             Ambas barras: 0 muestra el wallpaper, 1 = opaca
 ```
 
 Para volver ahora a Waybar sin reiniciar la sesión, ejecuta `swaydesk bar off`
@@ -526,7 +526,7 @@ font_scale = 0             # 0 = el doble de la barra, para leerse de reojo
 
 [effects]
 terminal_opacity = 0.94    # foot
-bar_opacity = 0.68         # waybar
+bar_opacity = 0.00        # waybar: 0 = wallpaper visible, 1 = opaco
 active_opacity = 1.00
 inactive_opacity = 0.94
 blur = false               # solo swayfx

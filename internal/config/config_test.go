@@ -126,13 +126,13 @@ func TestDefaultBarModulesDoNotIncludePower(t *testing.T) {
 	}
 }
 
-func TestBarOpacityDefaultsAreTranslucent(t *testing.T) {
+func TestWaybarOpacityDefaultsToTransparent(t *testing.T) {
 	cfg := Default()
-	if cfg.BarOpacity != 0.68 || cfg.BarBackgroundOpacity != 0.68 {
-		t.Fatalf("opacidades por defecto: waybar=%.2f swaybar=%.2f; ambas deben ser 0.68", cfg.BarOpacity, cfg.BarBackgroundOpacity)
+	if cfg.BarOpacity != 0 || cfg.BarBackgroundOpacity != 0.68 {
+		t.Fatalf("opacidades por defecto: waybar=%.2f swaybar=%.2f; Waybar debe ser transparente y swaybar conservar 0.68", cfg.BarOpacity, cfg.BarBackgroundOpacity)
 	}
 	text := DefaultFile(cfg)
-	for _, want := range []string{"opacity = 0.68", "bar_opacity = 0.68"} {
+	for _, want := range []string{"opacity = 0.68", "bar_opacity = 0.00"} {
 		if !contains(text, want) {
 			t.Errorf("la configuración generada debe incluir %q", want)
 		}
