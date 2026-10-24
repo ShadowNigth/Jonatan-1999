@@ -12,15 +12,17 @@ func TestPowerMenuUsesFloatingTerminalOutsideTTY(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		forceFloat  bool
+		noFloat     bool
 		interactive bool
 		want        bool
 	}{
 		{name: "barra sin TTY", want: true},
 		{name: "terminal directa", interactive: true, want: false},
 		{name: "forzar flotante", forceFloat: true, interactive: true, want: true},
+		{name: "hijo en terminal no vuelve a relanzarse", noFloat: true, want: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := powerMenuNeedsTerminal(tc.forceFloat, tc.interactive); got != tc.want {
+			if got := powerMenuNeedsTerminal(tc.forceFloat, tc.noFloat, tc.interactive); got != tc.want {
 				t.Fatalf("powerMenuNeedsTerminal() = %v, esperado %v", got, tc.want)
 			}
 		})

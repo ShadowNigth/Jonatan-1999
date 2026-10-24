@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ShadowNigth/swaydesk/internal/actions"
 	"github.com/ShadowNigth/swaydesk/internal/bar"
 	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/host"
@@ -151,7 +152,9 @@ func handleClick(cfg *config.Config, name string) {
 	case "power":
 		// Fuera de una terminal, swaymenu se relanza automáticamente en una
 		// terminal flotante para que el selector pueda leer el teclado.
-		_ = launcher.StartDetached(siblingExecutable("swaymenu"), "--power", "--float")
+		if err := launcher.StartDetached(siblingExecutable("swaymenu"), "--power", "--float"); err != nil {
+			actions.Notification("swaydesk", "No se pudo lanzar el menú de energía: "+err.Error(), "critical")
+		}
 	}
 }
 

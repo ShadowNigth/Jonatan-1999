@@ -58,8 +58,10 @@ func main() {
 	if *power {
 		// Waybar, swaybar y los atajos de sway no tienen TTY. En esos casos
 		// abre el menú dentro de una terminal flotante; desde una terminal
-		// interactiva conserva el comportamiento directo.
-		if powerMenuNeedsTerminal(*float, ui.IsInteractive()) {
+		// interactiva conserva el comportamiento directo. El hijo relanzado
+		// lleva --no-float para impedir que vuelva a abrir otra terminal.
+		interactive := ui.IsInteractive()
+		if powerMenuNeedsTerminal(*float, *noFloat, interactive) {
 			runFloating(cfg, 58, 14)
 			return
 		}
@@ -83,8 +85,8 @@ func main() {
 	runMenu(theme, cfg, *filter, *withCmds || cfg.Bool("launcher.commands", false))
 }
 
-func powerMenuNeedsTerminal(forceFloat, interactive bool) bool {
-	return forceFloat || !interactive
+func powerMenuNeedsTerminal(forceFloat, noFloat, interactive bool) bool {
+	return forceFloat || (!noFloat && !interactive)
 }
 
 // runFloating lanza una copia del menú dentro de una ventana de terminal
@@ -111,7 +113,8 @@ func runFloating(cfg *config.Config, width, height int) {
 		args = append(args, a)
 	}
 	if err := launcher.LaunchTerminal(cfg.Terminal, "swaydesk-menu", "swaydesk", w, h, append([]string{exe}, args...)); err != nil {
-		fmt.Fprintf(os.Stderr, "swaymenu: %v\n", err)
+		fmt.Fprintf(os.Stderr, "swaymenu: no se pudo abrir la terminal del menú: %v\n", err)
+		actions.Notification("swaydesk", "No se pudo abrir la terminal del menú: "+err.Error(), "critical")
 		os.Exit(1)
 	}
 }
@@ -471,7 +474,13 @@ func reloadSway() error {
 func runPowerMenu(theme *ui.Theme, cfg *config.Config) {
 	items := actions.PowerMenuItems(theme)
 	key, _, ok, err := actions.Pick(theme, "Energía · sesión", items, actions.SelectorOptions{})
-	if err != nil || !ok {
+	if err != nil {
+		message := "No se pudo abrir el menú de energía: " + err.Error()
+		fmt.Fprintf(os.Stderr, "swaymenu: %s\n", message)
+		actions.Notification("swaydesk", message, "critical")
+		return
+	}
+	if !ok {
 		return
 	}
 	if err := actions.RunPowerAction(key, cfg.ConfirmPower, theme); err != nil {
