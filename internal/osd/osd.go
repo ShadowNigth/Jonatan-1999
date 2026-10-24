@@ -1,5 +1,5 @@
-// Package osd dibuja los avisos en pantalla (OSD) del escritorio: el nivel de
-// volumen aparece unos instantes en una tarjeta flotante sobre las ventanas.
+// Package osd dibuja los avisos en pantalla (OSD) del escritorio: tarjetas
+// flotantes para el volumen y los metadatos de reproducción MPRIS.
 //
 // Solo se dibuja lo que hace falta, con la misma estética que la barra y las
 // notificaciones: isla redondeada, paleta activa y fuente de mapa de bits.

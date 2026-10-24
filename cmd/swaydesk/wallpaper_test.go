@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/ShadowNigth/swaydesk/internal/config"
@@ -57,5 +58,88 @@ func TestThemeWallpaperNeedsDaemon(t *testing.T) {
 	cfg.WallpaperWorkspaces = map[string]string{"2": "scene:petals"}
 	if !themeWallpaperNeedsDaemon(cfg) {
 		t.Fatal("los fondos por workspace requieren conservar el demonio")
+	}
+}
+
+func TestWallpaperDaemonNeededForStaticBaseWithWorkspaceRules(t *testing.T) {
+	cfg := config.Default()
+	cfg.WallpaperKind = "image"
+	cfg.WallpaperPath = "/tmp/fondo.png"
+	if wallpaperDaemonNeeded(cfg) {
+		t.Fatal("una imagen fija global sin reglas no necesita demonio")
+	}
+	cfg.WallpaperWorkspaces = map[string]string{"2": "image:~/anime.png"}
+	if !wallpaperDaemonNeeded(cfg) {
+		t.Fatal("un fondo fijo por workspace sí necesita daemon Wayland")
+	}
+}
+
+func TestRunWallpaperDaemonIfNeededSkipsStaticBase(t *testing.T) {
+	cfg := config.Default()
+	cfg.Cache = t.TempDir()
+	cfg.WallpaperKind = "image"
+	cfg.WallpaperPath = "/tmp/fixed-background.png"
+	if err := runWallpaperDaemon(cfg, []string{"--if-needed"}); err != nil {
+		t.Fatalf("el autostart no debería crear un demonio para una imagen fija global: %v", err)
+	}
+}
+
+func TestCurrentWallpaperSpecExpandsHomePath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfg := config.Default()
+	cfg.WallpaperKind = "image"
+	cfg.WallpaperPath = "~/base.png"
+	spec, err := currentSpec(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, "base.png"); spec.Path != want {
+		t.Fatalf("path = %q, se esperaba %q", spec.Path, want)
+	}
+}
+
+func TestWorkspacePlanUsesBaseAndRules(t *testing.T) {
+	cfg := config.Default()
+	cfg.WallpaperKind = "image"
+	cfg.WallpaperPath = "/tmp/base.png"
+	cfg.WallpaperWorkspaces = map[string]string{"web": "scene:petals"}
+	spec, err := currentSpec(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := workspacePlan(cfg, spec)
+	if got, key := plan.SourceFor(2, "2:web"); got != "scene:petals" || key != "web" {
+		t.Fatalf("workspace web: source=%q key=%q", got, key)
+	}
+	if got, key := plan.SourceFor(1, "1:term"); got != "image:/tmp/base.png" || key != "" {
+		t.Fatalf("fallback: source=%q key=%q", got, key)
+	}
+}
+
+func TestSetWallpaperTransitionPersists(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.Dir = dir
+	cfg.Path = filepath.Join(dir, "config.toml")
+	cfg.Cache = filepath.Join(dir, "cache")
+	cfg.WallpaperKind = "image"
+	cfg.WallpaperPath = filepath.Join(dir, "still.png")
+
+	if err := setWallpaperTransition(cfg, []string{"wipe", "475"}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.LoadFile(cfg.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.WallpaperTransition != "wipe" || loaded.WallpaperTransitionMS != 475 {
+		t.Fatalf("transición guardada = %q / %d", loaded.WallpaperTransition, loaded.WallpaperTransitionMS)
+	}
+	if err := setWallpaperTransition(cfg, []string{"unknown"}); err == nil {
+		t.Fatal("se aceptó un tipo de transición desconocido")
+	}
+	if err := setWallpaperTransition(cfg, []string{"fade", "5001"}); err == nil {
+		t.Fatal("se aceptó una duración superior a 5000 ms")
 	}
 }

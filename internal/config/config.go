@@ -95,18 +95,20 @@ type Config struct {
 	NotifyFontScale    int
 
 	// Avisos en pantalla (swayosd)
-	OSDEnabled   bool
-	OSDPosition  string // bottom-center, bottom-right, bottom-left, center, top-center
-	OSDWidth     int
-	OSDMargin    int
-	OSDPadding   int
-	OSDRadius    int
-	OSDOpacity   float64
-	OSDTimeout   int // milisegundos que se queda en pantalla
-	OSDFade      int // milisegundos de fundido de entrada y salida
-	OSDSegments  int // marcas de la barra de nivel
-	OSDFont      string
-	OSDFontScale int
+	OSDEnabled      bool   // OSD de volumen
+	OSDMediaEnabled bool   // tarjeta de reproducción MPRIS
+	OSDMediaTimeout int    // milisegundos que se muestra una pista
+	OSDPosition     string // bottom-center, bottom-right, bottom-left, center, top-center
+	OSDWidth        int
+	OSDMargin       int
+	OSDPadding      int
+	OSDRadius       int
+	OSDOpacity      float64
+	OSDTimeout      int // milisegundos que se queda en pantalla
+	OSDFade         int // milisegundos de fundido de entrada y salida
+	OSDSegments     int // marcas de la barra de nivel
+	OSDFont         string
+	OSDFontScale    int
 
 	// Efectos de escritorio
 	TerminalOpacity float64
@@ -214,17 +216,19 @@ func Default() *Config {
 		NotifyGroup:        true,
 		NotifyFontScale:    0,
 
-		OSDEnabled:   true,
-		OSDPosition:  "bottom-center",
-		OSDWidth:     320,
-		OSDMargin:    72,
-		OSDPadding:   16,
-		OSDRadius:    18,
-		OSDOpacity:   0.95,
-		OSDTimeout:   1400,
-		OSDFade:      140,
-		OSDSegments:  24,
-		OSDFontScale: 0,
+		OSDEnabled:      true,
+		OSDMediaEnabled: true,
+		OSDMediaTimeout: 3200,
+		OSDPosition:     "bottom-center",
+		OSDWidth:        320,
+		OSDMargin:       72,
+		OSDPadding:      16,
+		OSDRadius:       18,
+		OSDOpacity:      0.95,
+		OSDTimeout:      1400,
+		OSDFade:         140,
+		OSDSegments:     24,
+		OSDFontScale:    0,
 
 		BootEnabled:  true,
 		BootStyle:    "sakura",
@@ -400,6 +404,8 @@ func (c *Config) apply() {
 		}
 	}
 	bl("osd.enabled", &c.OSDEnabled)
+	bl("osd.media_enabled", &c.OSDMediaEnabled)
+	num("osd.media_timeout_ms", &c.OSDMediaTimeout)
 	str("osd.position", &c.OSDPosition)
 	num("osd.width", &c.OSDWidth)
 	num("osd.margin", &c.OSDMargin)
@@ -658,6 +664,10 @@ logo = %t
 [osd]
 # aviso flotante con el nivel de volumen (swayosd)
 enabled = %t
+# tarjeta de reproducción al cambiar de pista (MPRIS por D-Bus)
+media_enabled = %t
+# duración de la tarjeta multimedia en milisegundos
+media_timeout_ms = %d
 # bottom-center, bottom-right, bottom-left, top-center o center
 position = %q
 # ancho de la tarjeta en píxeles lógicos
@@ -700,7 +710,8 @@ rounding = %d
 		c.NotifyTimeout, c.NotifyCriticalTime, c.NotifyMaxVisible, c.NotifyHistory,
 		c.NotifyMaxLines, c.NotifyDND, c.NotifyGroup, c.NotifyFont, c.NotifyFontScale,
 		c.BootEnabled, c.BootStyle, c.BootDuration, c.BootLogo,
-		c.OSDEnabled, c.OSDPosition, c.OSDWidth, c.OSDMargin, c.OSDPadding,
+		c.OSDEnabled, c.OSDMediaEnabled, c.OSDMediaTimeout,
+		c.OSDPosition, c.OSDWidth, c.OSDMargin, c.OSDPadding,
 		c.OSDRadius, c.OSDOpacity, c.OSDTimeout, c.OSDFade, c.OSDSegments,
 		c.OSDFont, c.OSDFontScale,
 		c.TerminalOpacity, c.BarOpacity, c.ActiveOpacity, c.InactiveOpacity,

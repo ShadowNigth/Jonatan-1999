@@ -34,7 +34,7 @@ terceros.
 | `swaydesk` | CLI central: instala la configuración, aplica temas, diagnostica, controla la sesión |
 | `swaybar` | Barra de estado propia dibujada en píxeles sobre `wlr-layer-shell` (sustituye a waybar) |
 | `swaynotify` | Daemon de notificaciones: habla `org.freedesktop.Notifications` por D-Bus y dibuja las tarjetas en píxeles (sustituye a mako) |
-| `swayosd` | Avisos en pantalla: el nivel de volumen aparece unos instantes en una tarjeta flotante con fundido |
+| `swayosd` | OSD de volumen y reproducción: título, artista y carátula MPRIS en una tarjeta flotante con fundido |
 
 ```
 ╭── swaydesk · lanzador ─────────────────────────────────────────────╮
@@ -324,19 +324,23 @@ Barra propia
   bar modules cpu ram clock  Elige los módulos de la derecha
 ```
 
-### Avisos en pantalla (OSD de volumen)
+### Avisos en pantalla (OSD de volumen y reproducción)
 
 ```bash
-swaydesk volume up            # sube y muestra el aviso
+swaydesk volume up            # sube y muestra el aviso de volumen
 swayosd volume down           # lo mismo, sin pasar por swaydesk
 swayosd show                  # solo mostrar el volumen actual
-swayosd watch                 # vigilar y avisar de cualquier cambio
+swayosd watch                 # vigilar volumen y cambios de pista MPRIS
+swayosd media show --title "Hikari" --artist "Aimer" --art-url file:///tmp/cover.png
 swaydesk osd                  # configuración y volumen actual
 ```
 
-El aviso es una tarjeta redondeada sobre las ventanas con la etiqueta
-`VOLUMEN`, el porcentaje en grande y una barra segmentada; se va solo con un
-fundido. `swaydesk osd preview osd.png` genera la imagen sin sesión gráfica.
+El aviso de volumen es una tarjeta redondeada con el porcentaje y una barra
+segmentada. Al cambiar de pista, `swayosd watch` lee título, artista y URL de
+carátula desde MPRIS por el bus D-Bus de sesión y muestra una tarjeta multimedia;
+la carátula puede ser local (`file://`) o HTTP(S). Ambos avisos se desvanecen y
+no interceptan clics. `swaydesk osd preview osd.png` genera la vista previa de
+volumen sin sesión gráfica.
 
 ### Atajos por defecto
 
@@ -497,6 +501,8 @@ logo = true                # logotipo grande en bloques
 
 [osd]
 enabled = true             # aviso flotante con el nivel de volumen
+media_enabled = true        # tarjeta al cambiar de pista (MPRIS)
+media_timeout_ms = 3200     # duración de la tarjeta multimedia
 position = "bottom-center" # bottom-right, bottom-left, top-center, center
 width = 320                # ancho de la tarjeta
 margin = 72                # separación con el borde inferior

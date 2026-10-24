@@ -80,10 +80,10 @@ elif have mako; then
     fi
 fi
 
-# --- Avisos en pantalla (volumen) ------------------------------------------
-# swayosd vigila el volumen y muestra una tarjeta flotante con el nivel cada
-# vez que cambia (teclas multimedia, auriculares, cualquier programa).
-# Desactívalo con osd.enabled = false en config.toml.
+# --- Avisos en pantalla (volumen y reproducción) ----------------------------
+# swayosd watch vigila el volumen y las señales MPRIS; cada cambio de pista
+# muestra una tarjeta con título, artista y carátula. Se controlan por separado
+# con osd.enabled y osd.media_enabled en config.toml.
 if have swayosd && swaydesk osd-enabled >/dev/null 2>&1; then
     once swayosd watch
 fi
@@ -128,9 +128,9 @@ if have xdg-desktop-portal-wlr; then
     fi
 fi
 
-# --- Fondo animado (GIF, vídeo o escena) -----------------------------------
-# El demonio dibuja detrás de las ventanas con wlr-layer-shell. `--if-needed`
-# evita reiniciarlo en cada reload (parpadeo) y lo arranca si no estaba.
+# --- Fondo animado o fondos por workspace -------------------------------
+# El demonio dibuja con wlr-layer-shell. `--if-needed` evita reiniciarlo en
+# cada reload y solo lo arranca si hay animación o reglas por workspace.
 if have swaydesk; then
     quiet swaydesk wallpaper daemon --if-needed
 fi

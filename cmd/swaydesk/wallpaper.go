@@ -329,10 +329,10 @@ func setWallpaper(cfg *config.Config, args []string) error {
 	// Fondo estático de respaldo en sway (visible debajo y al iniciar sesión).
 	applyStaticFallback(cfg, spec)
 
-	// El demonio animado se pone al día con el fondo nuevo. Si el fondo es una
-	// escena, un GIF o un vídeo, se arranca aunque no estuviera en marcha: si no,
-	// el fondo se guardaba pero no se veía nada.
-	syncWallpaperDaemon(cfg, spec)
+	// El demonio se pone al día con el fondo nuevo. Si es una escena, GIF,
+	// vídeo o hay reglas por workspace, se arranca aunque no estuviera en marcha;
+	// de otro modo la configuración se guardaba pero el fondo no se veía.
+	syncWallpaperDaemon(cfg)
 
 	if cfg.WallpaperAdaptive && spec.Path != "" {
 		if err := adaptThemeToWallpaper(cfg, ui.NewTheme(cfg.Theme, cfg.NerdFont)); err == nil {
@@ -453,6 +453,13 @@ func currentSpec(cfg *config.Config) (wallpaper.Spec, error) {
 		Kind: wallpaper.Kind(cfg.WallpaperKind), Path: cfg.WallpaperPath,
 		Scene: cfg.WallpaperName, FPS: cfg.WallpaperFPS, Pal: pal,
 	}
+	if spec.Path != "" {
+		path, err := expandPath(spec.Path)
+		if err != nil {
+			return wallpaper.Spec{}, err
+		}
+		spec.Path = path
+	}
 	if spec.Kind == "" {
 		spec.Kind = wallpaper.KindScene
 	}
@@ -467,13 +474,23 @@ func currentSpec(cfg *config.Config) (wallpaper.Spec, error) {
 
 // runWallpaperDaemon arranca el fondo animado real (detrás de las ventanas).
 func runWallpaperDaemon(cfg *config.Config, args []string) error {
-	if wallpaper.RunningPID(cfg.Cache) != 0 {
-		// `--if-needed` se usa desde el autostart, que se ejecuta en cada
-		// `swaymsg reload`: si ya hay demonio, no se reinicia (nada de
-		// parpadeos ni de dos capas de fondo peleándose).
-		if hasFlag(args, "--if-needed") {
+	pid := wallpaper.RunningPID(cfg.Cache)
+	if hasFlag(args, "--if-needed") {
+		// El autostart se repite en cada sway reload: conserva un demonio vivo,
+		// pero solo crea uno cuando la animación o el mapa de workspaces lo usa.
+		if pid != 0 {
+			if !wallpaperDaemonNeeded(cfg) {
+				wallpaper.StopDaemon(cfg.Cache)
+			}
 			return nil
 		}
+		if _, err := currentSpec(cfg); err != nil {
+			return err
+		}
+		if !wallpaperDaemonNeeded(cfg) {
+			return nil
+		}
+	} else if pid != 0 {
 		wallpaper.StopDaemon(cfg.Cache)
 	}
 	if hasFlag(args, "--foreground") || hasFlag(args, "-f") {
@@ -605,13 +622,12 @@ func animatedSpec(spec wallpaper.Spec) bool {
 	return false
 }
 
-// syncWallpaperDaemon deja el demonio acorde al fondo nuevo. Lo (re)inicia en
-// segundo plano si el fondo es animado —aunque no estuviera corriendo, que era
-// el motivo de «pongo un fondo y no se ve»— o si ya estaba en marcha (para
-// imágenes fijas basta el `output bg` de sway, pero el demonio manda).
-// No bloquea: `runWallpaperDaemon` relanza un hijo en primer plano.
-func syncWallpaperDaemon(cfg *config.Config, spec wallpaper.Spec) {
-	if wallpaper.RunningPID(cfg.Cache) == 0 && !animatedSpec(spec) {
+// syncWallpaperDaemon deja el demonio acorde al fondo y a las reglas por
+// workspace. Solo se necesita para fondos animados o mapas por workspace;
+// para una imagen fija global basta el `output bg` de sway.
+func syncWallpaperDaemon(cfg *config.Config) {
+	if !wallpaperDaemonNeeded(cfg) {
+		wallpaper.StopDaemon(cfg.Cache)
 		return
 	}
 	if !wallpaper.WaylandReady() {
@@ -627,16 +643,15 @@ func syncWallpaperDaemon(cfg *config.Config, spec wallpaper.Spec) {
 
 // restartWallpaperDaemon aplica los cambios del plan de fondos por workspace.
 func restartWallpaperDaemon(cfg *config.Config) {
-	spec, err := currentSpec(cfg)
-	if err != nil {
+	if _, err := currentSpec(cfg); err != nil {
 		return
 	}
 	// Con fondos por workspace el demonio es imprescindible aunque el fondo
 	// base sea una imagen fija.
-	if wallpaper.RunningPID(cfg.Cache) == 0 && !animatedSpec(spec) && len(cfg.WallpaperWorkspaces) == 0 {
+	if wallpaper.RunningPID(cfg.Cache) == 0 && !wallpaperDaemonNeeded(cfg) {
 		return
 	}
-	syncWallpaperDaemon(cfg, spec)
+	syncWallpaperDaemon(cfg)
 }
 
 // wallpaperWorkspaces muestra y edita los fondos por workspace.
@@ -661,6 +676,11 @@ func wallpaperWorkspaces(cfg *config.Config, args []string) error {
 		if err != nil {
 			return err
 		}
+		engine, err := wallpaper.NewEngine(target)
+		if err != nil {
+			return fmt.Errorf("fondo para workspace %q: %w", ws, err)
+		}
+		engine.Close()
 		if err := plan.Set(ws, target.Source()); err != nil {
 			return err
 		}
@@ -845,7 +865,7 @@ func runWallpaperGallery(cfg *config.Config) error {
 		return err
 	}
 	applyStaticFallback(cfg, res.Spec)
-	syncWallpaperDaemon(cfg, res.Spec)
+	syncWallpaperDaemon(cfg)
 	if cfg.WallpaperAdaptive && res.Spec.Path != "" {
 		_ = adaptThemeToWallpaper(cfg, ui.NewTheme(cfg.Theme, cfg.NerdFont))
 	}

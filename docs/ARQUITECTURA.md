@@ -28,7 +28,8 @@ cmd/swayctl      panel de control: 5 pestañas y acciones sobre sway
 cmd/swayclip     portapapeles: lista, filtra, copia, borra
 cmd/swaybar      barra de estado: CLI, recogida de datos y bucle de dibujo
 cmd/swaynotify   daemon de notificaciones: D-Bus, capa overlay y entrada
-cmd/swayosd      avisos en pantalla (volumen) con fundido, en capa overlay
+cmd/swayosd      avisos de volumen y reproducción MPRIS, con fundido
+internal/mpris   descubrimiento de reproductores y escucha de metadatos por D-Bus
 
 internal/wayland cliente Wayland puro: conexión, registry, xdg-shell, shm y
                  wlr-layer-shell (capa background para el fondo animado)
@@ -126,22 +127,24 @@ sway IPC ──eventos──▶ cmd/swaybar/run.go ──Snapshot──▶ inter
 ## Los avisos en pantalla
 
 ```
-wpctl / pactl / amixer            swayosd
-        │  estado del altavoz         │
-        ▼                             ▼
-   internal/host ──── Audio ──── internal/osd.Renderer
-                                      │
-                                      ▼
-                             wl_surface (capa overlay)
+wpctl / pactl / amixer ──► internal/host ──► osd.Renderer ──┐
+                                                           ├─► wl_surface (overlay)
+MPRIS ──► internal/dbus ──► internal/mpris ──► MediaRenderer ┘
+                                   │
+                                   └─► LoadArtwork (file:// o HTTP[S])
 ```
 
-- **Un proceso por aviso**: `swayosd show` dibuja el aviso, espera
-  `timeout_ms` y termina; así el aviso desaparece solo aunque la sesión esté
-  cargada, sin dejar una superficie viva toda la jornada.
-- **`swayosd watch`** es el único proceso permanente: consulta el altavoz por
-  defecto cada 300 ms y, cuando cambia el valor, lanza el aviso. Cubre los
-  cambios de las teclas multimedia, de los auriculares Bluetooth y de
-  cualquier aplicación.
+- **Un proceso por aviso**: `swayosd show` o `swayosd media show` dibuja la
+  tarjeta, espera su duración configurada y termina; no deja superficies vivas
+  durante toda la sesión.
+- **`swayosd watch`** es el vigilante habitual: consulta el altavoz por defecto
+  cada 300 ms y, si está habilitado, escucha en paralelo `PropertiesChanged` y
+  `NameOwnerChanged` en el bus D-Bus para detectar pistas MPRIS. También se
+  puede ejecutar `swayosd media watch` para vigilar solo reproducción. El estado
+  inicial no dispara un aviso; las señales duplicadas se deduplican por
+  reproductor, ID y metadatos de pista.
+- **Carátulas seguras**: solo se aceptan archivos locales y HTTP(S); lectura,
+  dimensiones, tiempo de espera y bytes transferidos están limitados.
 - **Fundido sin estado**: la animación son fotogramas con alfa creciente o
   decreciente sobre la misma tarjeta; `fade_ms = 0` la desactiva.
 - **Clic pasante**: la región de entrada de la superficie está vacía, así que

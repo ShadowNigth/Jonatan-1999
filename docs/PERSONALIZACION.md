@@ -437,8 +437,10 @@ swaydesk wallpaper transition slide 450           # tipo y duración
 swaydesk wallpaper transition                     # la actual
 ```
 
-Al guardar, el demonio se reinicia solo si estaba en marcha. También se acepta
-la forma compacta `workspaces = ["1=scene:petals", "dev=scene:city"]` dentro de
+Al guardar, el demonio se inicia o reinicia automáticamente cuando las reglas
+por workspace lo necesitan, incluso si el fondo base es una imagen fija; al
+quitar la última regla, se detiene si ya no hace falta. También se acepta la
+forma compacta `workspaces = ["1=scene:petals", "dev=scene:city"]` dentro de
 `[wallpaper]`.
 
 Cómo se comporta:
@@ -796,14 +798,17 @@ con `SetDND`, `ToggleDND`, `GetStatus`, `ListHistory`, `CloseAll`,
 
 ## 8d. Avisos en pantalla (`swayosd`)
 
-El nivel de volumen aparece en una **tarjeta flotante** sobre las ventanas
-—etiqueta, porcentaje en grande y barra segmentada— que se va sola con un
-fundido de entrada y salida. No hace falta que ninguna aplicación (Spotify,
-Chromium, mpv…) haga nada: el aviso lo dibuja el escritorio.
+El nivel de volumen aparece en una **tarjeta flotante** con porcentaje y barra
+segmentada. Además, al cambiar de pista, los reproductores compatibles con
+MPRIS (por ejemplo, mpv, Spotify o Chromium) pueden mostrar una tarjeta con
+**título, artista y carátula**. Ambas se desvanecen solas y no interceptan
+clics; el aviso lo dibuja el escritorio, no cada reproductor.
 
 ```toml
 [osd]
-enabled = true             # false = sin avisos (el volumen sigue funcionando)
+enabled = true             # OSD de volumen; no desactiva el control de audio
+media_enabled = true        # tarjeta MPRIS al cambiar de pista
+media_timeout_ms = 3200     # duración del OSD de reproducción
 position = "bottom-center" # bottom-right, bottom-left, top-center, center
 width = 320                # ancho de la tarjeta en píxeles
 margin = 72                # separación con el borde de la pantalla
@@ -826,17 +831,23 @@ swaydesk volume mute
 swayosd volume up             # lo mismo, sin pasar por swaydesk
 swayosd volume mute --step 3  # pasos más finos
 swayosd show                  # solo mostrar el volumen actual
-swayosd watch                 # vigilar y avisar de cualquier cambio
+swayosd watch                 # vigilar el volumen y las pistas MPRIS
+swayosd media show --title "Hikari" --artist "Aimer" \
+  --art-url file:///tmp/cover.png --status Playing
 swaydesk osd                  # configuración y volumen actual
-swaydesk osd preview osd.png  # PNG del aviso, sin sesión gráfica
+swaydesk osd preview osd.png  # PNG del aviso de volumen, sin sesión gráfica
 ```
 
 Los atajos `XF86AudioRaiseVolume`, `XF86AudioLowerVolume` y `XF86AudioMute`
-llaman a `swaydesk volume …`, que usa `swayosd` cuando está instalado. Si
-quieres reaccionar a cambios que no vengan de esos atajos —auriculares
-Bluetooth, otro programa, `pactl` a mano— el autostart deja `swayosd watch`
-en marcha: vigila el volumen del altavoz por defecto y lanza el aviso cuando
-cambie, venga de donde venga.
+llaman a `swaydesk volume …`, que usa `swayosd` cuando está instalado. El
+autostart deja `swayosd watch` en marcha: vigila el volumen cada 300 ms y
+escucha las señales MPRIS del bus D-Bus de sesión. Al iniciar no muestra la
+pista que ya estaba sonando; después, una pista nueva dispara la tarjeta. La
+carátula acepta URI `file://` o HTTP(S); se omite si ya no está disponible.
+
+Puedes desactivar los avisos por separado: `osd.enabled = false` mantiene la
+integración multimedia, mientras `osd.media_enabled = false` deja solo el
+volumen. Para apagar ambos, establece los dos en `false`.
 
 ### Detalles que conviene saber
 

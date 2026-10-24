@@ -87,8 +87,8 @@ func main() {
 	case "osd", "avisos":
 		cmdOSD(args)
 	case "osd-enabled", "avisos-activos":
-		// Para scripts: código 0 si los avisos en pantalla están activados.
-		if cfg, err := config.Load(); err == nil && cfg.OSDEnabled {
+		// Para el autostart: basta con que esté activo el OSD de volumen o MPRIS.
+		if cfg, err := config.Load(); err == nil && (cfg.OSDEnabled || cfg.OSDMediaEnabled) {
 			return
 		}
 		os.Exit(1)
@@ -356,11 +356,7 @@ func applyTheme(cfg *config.Config, name string) error {
 }
 
 func themeWallpaperNeedsDaemon(cfg *config.Config) bool {
-	spec, err := currentSpec(cfg)
-	if err != nil {
-		return false
-	}
-	return animatedSpec(spec) || len(cfg.WallpaperWorkspaces) > 0
+	return wallpaperDaemonNeeded(cfg)
 }
 
 func printThemeList(cfg *config.Config, th *ui.Theme) {

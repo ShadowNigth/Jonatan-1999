@@ -248,8 +248,11 @@ func TestLoadBootSection(t *testing.T) {
 
 func TestOSDDefaults(t *testing.T) {
 	c := Default()
-	if !c.OSDEnabled {
-		t.Fatal("los avisos en pantalla deberían venir activados")
+	if !c.OSDEnabled || !c.OSDMediaEnabled {
+		t.Fatal("los OSD de volumen y reproducción deberían venir activados")
+	}
+	if c.OSDMediaTimeout < 1000 {
+		t.Fatalf("duración del OSD de reproducción poco razonable: %d", c.OSDMediaTimeout)
 	}
 	if c.OSDPosition != "bottom-center" {
 		t.Fatalf("posición por defecto = %q", c.OSDPosition)
@@ -262,7 +265,7 @@ func TestOSDDefaults(t *testing.T) {
 	}
 	// El archivo generado trae la sección con sus valores.
 	text := DefaultFile(c)
-	for _, want := range []string{"[osd]", "position = \"bottom-center\"", "fade_ms = "} {
+	for _, want := range []string{"[osd]", "media_enabled = true", "media_timeout_ms = 3200", "position = \"bottom-center\"", "fade_ms = "} {
 		if !contains(text, want) {
 			t.Fatalf("falta %q en la configuración generada", want)
 		}
@@ -272,9 +275,9 @@ func TestOSDDefaults(t *testing.T) {
 func TestLoadOSDSection(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
-	data := "[osd]\nenabled = false\nposition = \"bottom-right\"\nwidth = 320\n" +
-		"margin = 40\npadding = 12\nradius = 8\nopacity = 0.8\ntimeout_ms = 900\n" +
-		"fade_ms = 0\nsegments = 12\nfont_scale = 3\n"
+	data := "[osd]\nenabled = false\nmedia_enabled = false\nmedia_timeout_ms = 4500\n" +
+		"position = \"bottom-right\"\nwidth = 320\nmargin = 40\npadding = 12\n" +
+		"radius = 8\nopacity = 0.8\ntimeout_ms = 900\nfade_ms = 0\nsegments = 12\nfont_scale = 3\n"
 	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +285,8 @@ func TestLoadOSDSection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.OSDEnabled || cfg.OSDPosition != "bottom-right" || cfg.OSDWidth != 320 ||
+	if cfg.OSDEnabled || cfg.OSDMediaEnabled || cfg.OSDMediaTimeout != 4500 ||
+		cfg.OSDPosition != "bottom-right" || cfg.OSDWidth != 320 ||
 		cfg.OSDMargin != 40 || cfg.OSDPadding != 12 || cfg.OSDRadius != 8 ||
 		cfg.OSDTimeout != 900 || cfg.OSDFade != 0 || cfg.OSDSegments != 12 ||
 		cfg.OSDFontScale != 3 {

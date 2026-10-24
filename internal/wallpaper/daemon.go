@@ -133,8 +133,13 @@ func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Sig
 
 	for {
 		wait := d.eng.Interval()
+		drawFrame := d.last == nil || d.moving || (d.eng.Kind() != KindImage && d.eng.Kind() != KindNone)
 		if d.moving {
 			wait = 16 * time.Millisecond
+		} else if !drawFrame {
+			// Un fondo fijo solo se vuelve a dibujar al quedar sucio (inicio,
+			// cambio de workspace o resize); el loop sigue atendiendo Wayland.
+			wait = 250 * time.Millisecond
 		}
 		select {
 		case <-sig:
@@ -159,9 +164,13 @@ func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Sig
 				// Una transición a medias con otro tamaño se descarta.
 				d.moving = false
 				d.from = nil
+				d.last = nil
+				drawFrame = true
 			}
-			if err := d.frame(); err != nil {
-				return err
+			if drawFrame {
+				if err := d.frame(); err != nil {
+					return err
+				}
 			}
 			// Se procesan los eventos pendientes (release de búferes, configure).
 			_ = bg.Dispatch(0)
@@ -196,11 +205,30 @@ func (d *daemonState) dims(kind Kind) (int, int) {
 	return w, h
 }
 
+// expandHomePath expande el prefijo de ruta ~/ sin alterar las rutas relativas
+// ni las referencias de escena.
+func expandHomePath(path string) (string, error) {
+	if !strings.HasPrefix(path, "~/") {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path, err
+	}
+	return filepath.Join(home, path[2:]), nil
+}
+
 // install cambia el fondo activo, con transición si animate lo permite.
 func (d *daemonState) install(source string, animate bool) error {
 	spec, err := ParseSpec(source, d.opt.Palette)
 	if err != nil {
 		return err
+	}
+	if spec.Path != "" {
+		spec.Path, err = expandHomePath(spec.Path)
+		if err != nil {
+			return err
+		}
 	}
 	if spec.FPS == 0 {
 		spec.FPS = d.opt.FPS
@@ -215,6 +243,7 @@ func (d *daemonState) install(source string, animate bool) error {
 		}
 		d.eng = next
 		d.from = nil
+		d.last = nil // el siguiente ciclo debe dibujar el fondo nuevo
 		d.moving = false
 		d.source = source
 		return nil
@@ -299,6 +328,16 @@ func workspaceStream(stop <-chan struct{}) <-chan swayipc.WorkspaceEvent {
 				c.Close()
 				time.Sleep(2 * time.Second)
 				continue
+			}
+			// Una conexión tardía debe aplicar el workspace que ya está enfocado,
+			// no esperar al siguiente cambio del usuario.
+			if num, name, ok := FocusedWorkspace(); ok {
+				select {
+				case out <- swayipc.WorkspaceEvent{Change: "focus", Current: swayipc.Workspace{Num: num, Name: name, Focused: true}}:
+				case <-stop:
+					c.Close()
+					return
+				}
 			}
 			for ev := range c.Events(8) {
 				if ev.Type != swayipc.EventWorkspace {

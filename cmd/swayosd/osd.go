@@ -15,13 +15,21 @@ import (
 
 // rendererFor monta el dibujante del OSD a partir de la configuración.
 func rendererFor(cfg *config.Config, scale, width int, themeName string) *osd.Renderer {
+	return osd.New(rendererOptions(cfg, scale, width, themeName))
+}
+
+func mediaRendererFor(cfg *config.Config, scale, width int, themeName string) *osd.MediaRenderer {
+	return osd.NewMedia(rendererOptions(cfg, scale, width, themeName))
+}
+
+func rendererOptions(cfg *config.Config, scale, width int, themeName string) osd.Options {
 	if themeName == "" {
 		themeName = cfg.Theme
 	}
 	if width <= 0 {
 		width = cfg.OSDWidth
 	}
-	return osd.New(osd.Options{
+	return osd.Options{
 		Width:    width,
 		Padding:  cfg.OSDPadding,
 		Radius:   cfg.OSDRadius,
@@ -32,7 +40,7 @@ func rendererFor(cfg *config.Config, scale, width int, themeName string) *osd.Re
 		Scale:    scale,
 		Shadow:   true,
 		Segments: cfg.OSDSegments,
-	})
+	}
 }
 
 // currentVolume lee el volumen del altavoz por defecto.
