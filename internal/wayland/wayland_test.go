@@ -166,7 +166,7 @@ func TestDispatchReportsWaylandProtocolError(t *testing.T) {
 
 func TestLayerSurfaceConstructorsUseBoundObjectIDs(t *testing.T) {
 	t.Run("fondo", func(t *testing.T) {
-		testLayerSurfaceConstructor(t, func(c *Conn) (bool, error) {
+		testLayerSurfaceConstructor(t, -1, func(c *Conn) (bool, error) {
 			bg, err := NewBackground(c, 1920, 1080, "test-wallpaper")
 			if err != nil {
 				return false, err
@@ -175,7 +175,7 @@ func TestLayerSurfaceConstructorsUseBoundObjectIDs(t *testing.T) {
 		})
 	})
 	t.Run("panel", func(t *testing.T) {
-		testLayerSurfaceConstructor(t, func(c *Conn) (bool, error) {
+		testLayerSurfaceConstructor(t, 0, func(c *Conn) (bool, error) {
 			panel, err := NewPanel(c, PanelSpec{Namespace: "test-panel"})
 			if err != nil {
 				return false, err
@@ -185,7 +185,7 @@ func TestLayerSurfaceConstructorsUseBoundObjectIDs(t *testing.T) {
 	})
 }
 
-func testLayerSurfaceConstructor(t *testing.T, create func(*Conn) (bool, error)) {
+func testLayerSurfaceConstructor(t *testing.T, wantExclusiveZone int32, create func(*Conn) (bool, error)) {
 	t.Helper()
 	runtimeDir := t.TempDir()
 	socket := filepath.Join(runtimeDir, "wayland-test")
@@ -309,6 +309,21 @@ func testLayerSurfaceConstructor(t *testing.T, create func(*Conn) (bool, error))
 	}
 	if result.err != nil {
 		t.Fatal(result.err)
+	}
+
+	zoneFound := false
+	for _, req := range result.requests {
+		if req.opcode != layerSurfaceSetExclusiveZone {
+			continue
+		}
+		zoneFound = true
+		got := int32(binary.LittleEndian.Uint32(req.args))
+		if got != wantExclusiveZone {
+			t.Fatalf("set_exclusive_zone = %d, se esperaba %d", got, wantExclusiveZone)
+		}
+	}
+	if !zoneFound {
+		t.Fatal("no se envió zwlr_layer_surface_v1.set_exclusive_zone")
 	}
 
 	var registryID, compositorID, shellID, surfaceID, layerID uint32

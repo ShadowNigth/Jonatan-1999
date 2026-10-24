@@ -413,9 +413,11 @@ swaydesk wallpaper stop                  # detiene el fondo animado
 ```
 
 `--live` (o `swaydesk wallpaper daemon`) arranca el demonio que dibuja el fondo
-en una capa `wlr-layer-shell` **detrás de las ventanas**; el autostart lo lanza
-al iniciar sesión. Para GIF y vídeo, Sway mantiene un color sólido del tema como
-respaldo; así no queda un primer fotograma estático superpuesto al fondo animado.
+en una capa `wlr-layer-shell` **detrás de las ventanas**; la superficie cubre la
+salida completa, también el espacio reservado por la barra, para que el GIF siga
+visible detrás de sus zonas translúcidas. El autostart lo lanza al iniciar
+sesión. Para GIF y vídeo, Sway mantiene un color sólido del tema como respaldo;
+así no queda un primer fotograma estático superpuesto al fondo animado.
 
 Escenas disponibles: `petals`, `snow`, `stars`, `rain`, `aurora`, `wave`,
 `city`, `embers`, `grid`, `meadow`, `bubbles`. Cada una toma los colores del

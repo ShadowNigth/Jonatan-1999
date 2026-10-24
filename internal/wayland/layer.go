@@ -119,15 +119,16 @@ func NewBackground(c *Conn, w, h int, namespace string) (*Background, error) {
 		return nil, fmt.Errorf("creando zwlr_layer_surface_v1: %w", err)
 	}
 
-	// set_size(0,0) = ocupar el espacio que indique el compositor,
-	// set_anchor(todos los bordes) y zona exclusiva 0 (no reserva espacio).
+	// set_size(0,0) y set_anchor(todos los bordes) cubren la salida completa.
+	// exclusive_zone=-1 hace que Sway no acorte el fondo para evitar la zona
+	// reservada por Waybar: el wallpaper debe extenderse detrás de la barra.
 	requests := []struct {
 		name string
 		msg  []byte
 	}{
 		{"zwlr_layer_surface_v1.set_size", newEncoder(b.layer, layerSurfaceSetSize).uint32(0).uint32(0).bytes()},
 		{"zwlr_layer_surface_v1.set_anchor", newEncoder(b.layer, layerSurfaceSetAnchor).uint32(AnchorTop | AnchorBottom | AnchorLeft | AnchorRight).bytes()},
-		{"zwlr_layer_surface_v1.set_exclusive_zone", newEncoder(b.layer, layerSurfaceSetExclusiveZone).int32(0).bytes()},
+		{"zwlr_layer_surface_v1.set_exclusive_zone", newEncoder(b.layer, layerSurfaceSetExclusiveZone).int32(-1).bytes()},
 		{"zwlr_layer_surface_v1.set_keyboard_interactivity", newEncoder(b.layer, layerSurfaceSetKeyboard).uint32(0).bytes()},
 		{"wl_surface.commit", newEncoder(b.surface, surfaceCommit).bytes()},
 	}

@@ -13,7 +13,7 @@ type PanelSpec struct {
 	Width         int    // ancho en píxeles (0 = lo decide el compositor)
 	Height        int    // alto en píxeles
 	Anchors       uint32 // combinación de Anchor*
-	ExclusiveZone int    // espacio reservado al compositor (0 = ninguno)
+	ExclusiveZone int    // espacio reservado (0 evita zonas exclusivas; -1 permite solaparse)
 	MarginTop     int
 	MarginRight   int
 	MarginBottom  int
