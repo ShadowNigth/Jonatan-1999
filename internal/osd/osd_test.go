@@ -1,6 +1,7 @@
 package osd
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ShadowNigth/swaydesk/internal/bar"
@@ -99,6 +100,21 @@ func TestRenderSizeAndAlpha(t *testing.T) {
 		if h3 <= h1 {
 			t.Fatalf("la escala 3 no es más alta que la 1: %d vs %d", h3, h1)
 		}
+	}
+}
+
+func TestRenderOmitsTechnicalAudioDevice(t *testing.T) {
+	r := testRenderer(1)
+	withoutDevice := Volume(45, false, "")
+	withTechnicalDevice := Volume(45, false, "alsa_output.pci-0000_00_1f.3.analog-stereo")
+
+	w1, h1 := r.Size(withTechnicalDevice)
+	w2, h2 := r.Size(withoutDevice)
+	if w1 != w2 || h1 != h2 {
+		t.Fatalf("el identificador técnico no debe cambiar el tamaño del OSD: %dx%d != %dx%d", w1, h1, w2, h2)
+	}
+	if a, b := r.Render(withTechnicalDevice, 1), r.Render(withoutDevice, 1); !bytes.Equal(a.Pix, b.Pix) {
+		t.Fatal("el OSD no debe dibujar el identificador técnico de la salida de audio")
 	}
 }
 

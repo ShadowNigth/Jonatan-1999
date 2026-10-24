@@ -74,8 +74,8 @@ Uso: swayosd <orden> [opciones]
 
   volume up|down|mute [--step N]
                              cambia el volumen y muestra el aviso
-  show [--value N] [--muted] [--device NOMBRE] [--timeout MS]
-                             muestra el volumen actual (o el indicado)
+  show [--value N] [--muted] [--timeout MS]
+                             muestra volumen, estado y barra, sin nombre de salida
   watch [--intervalo MS]     vigila el volumen y los cambios de pista MPRIS
   media show --title T ...   muestra la tarjeta de reproducción
   media watch [opciones]     vigila MPRIS sin vigilar el volumen

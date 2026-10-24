@@ -49,7 +49,7 @@ func currentVolume() (osd.State, bool) {
 	if !ok {
 		return osd.State{}, false
 	}
-	return osd.Volume(vol, muted, host.AudioDevice()), true
+	return osd.Volume(vol, muted, ""), true
 }
 
 // runShow dibuja el aviso y termina. Se puede invocar desde un atajo:
@@ -174,7 +174,7 @@ func runPreview(args []string) {
 			value = n
 		}
 	}
-	st := osd.Volume(value, has(vals, "muted"), orDefault(last(vals, "device"), "Auriculares"))
+	st := osd.Volume(value, has(vals, "muted"), last(vals, "device"))
 	r := rendererFor(cfg, scaleFor(cfg, last(vals, "scale")), 0, last(vals, "theme"))
 	canvas := r.Render(st, 1)
 	if err := savePNG(canvas, out); err != nil {
@@ -187,11 +187,4 @@ func runPreview(args []string) {
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "swayosd: %v\n", err)
 	os.Exit(1)
-}
-
-func orDefault(v, def string) string {
-	if v == "" {
-		return def
-	}
-	return v
 }

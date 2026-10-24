@@ -95,16 +95,13 @@ func (r *Renderer) barH() int {
 	return h
 }
 
-// Size devuelve el tamaño de la tarjeta, que depende de la fuente y de si hay
-// que mostrar el nombre del dispositivo.
-func (r *Renderer) Size(s State) (int, int) {
+// Size devuelve el tamaño compacto de la tarjeta; no depende del nombre
+// técnico de la salida de audio, que no se muestra en el OSD.
+func (r *Renderer) Size(_ State) (int, int) {
 	h := 2 * r.Opt.Padding
 	h += r.lineH(r.valueScale())
 	h += 4 * r.sc
 	h += r.barH()
-	if s.Detail() != "" {
-		h += 3*r.sc + r.lineH(r.sc)
-	}
 	return r.Opt.Width, h
 }
 
@@ -189,12 +186,6 @@ func (r *Renderer) Render(s State, alpha float64) *bar.Canvas {
 	}
 	y += bh
 
-	// Dispositivo de salida, si se conoce.
-	if d := s.Detail(); d != "" {
-		y += 3 * r.sc
-		d = ui.Truncate(d, inner/((r.face.W+r.sc)*r.sc))
-		c.Text(r.face, x, y, d, r.sc, r.sc, muted)
-	}
 	return c
 }
 

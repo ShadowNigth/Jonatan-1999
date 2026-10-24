@@ -345,8 +345,9 @@ El aviso de volumen es una tarjeta redondeada con el porcentaje y una barra
 segmentada. Al cambiar de pista, `swayosd watch` lee título, artista y URL de
 carátula desde MPRIS por el bus D-Bus de sesión y muestra una tarjeta multimedia;
 la carátula puede ser local (`file://`) o HTTP(S). Ambos avisos se desvanecen y
-no interceptan clics. `swaydesk osd preview osd.png` genera la vista previa de
-volumen sin sesión gráfica.
+no interceptan clics. La tarjeta de volumen omite el identificador técnico de
+la salida de audio y muestra solo el estado, el porcentaje y la barra.
+`swaydesk osd preview osd.png` genera la vista previa sin sesión gráfica.
 
 ### Atajos por defecto
 

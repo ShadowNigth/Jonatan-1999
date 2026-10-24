@@ -451,8 +451,8 @@ func (c *Collector) audio() (int, bool) {
 // silenciado y si se pudo consultar. Lo usan el OSD y la barra.
 func Audio() (int, bool, bool) { return queryAudio() }
 
-// AudioDevice intenta dar un nombre legible del altavoz por defecto, para el
-// OSD («Auriculares», «Altavoces»…). Devuelve "" si no se puede saber.
+// AudioDevice intenta dar el nombre descriptivo del altavoz por defecto para
+// los diagnósticos de `swaydesk osd`. Devuelve "" si no se puede saber.
 func AudioDevice() string {
 	if HasCommand("wpctl") {
 		out, err := Exec(400*time.Millisecond, "wpctl", "inspect", "@DEFAULT_AUDIO_SINK@")

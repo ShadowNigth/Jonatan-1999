@@ -906,9 +906,9 @@ volumen. Para apagar ambos, establece los dos en `false`.
 - La lectura del volumen usa `wpctl` (PipeWire), luego `pactl` y luego
   `amixer`; con ninguno de los tres el aviso no puede mostrarse, pero el
   escritorio sigue funcionando.
-- El nombre del dispositivo sale de `wpctl inspect`/`pactl get-default-sink` y
-  se recorta si no cabe; si no se puede averiguar, la tarjeta ocupa una línea
-  menos.
+- El OSD de volumen omite el nombre técnico del dispositivo para mantener la
+  tarjeta limpia y compacta. `swaydesk osd` todavía permite consultar el
+  dispositivo activo en la salida de diagnóstico.
 - Por encima del 100% la barra se llena y cambia a color de aviso (volumen
   amplificado); silenciado, la barra queda vacía y una raya la cruza.
 - La superficie es una capa `overlay` con la **región de entrada vacía**: el

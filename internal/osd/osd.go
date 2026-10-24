@@ -27,7 +27,7 @@ type State struct {
 	Kind   Kind
 	Value  int    // porcentaje, puede pasar de 100
 	Muted  bool   // silenciado
-	Device string // nombre legible del dispositivo ("Auriculares", "Altavoces")
+	Device string // metadato de salida; no se muestra en la tarjeta compacta
 	Sink   string // nombre técnico (para depurar)
 	// Step es el último cambio (+5, -5, 0 si no se sabe); se usa para el matiz
 	// del color al subir o bajar.
@@ -85,7 +85,8 @@ func (s State) ValueText() string {
 	return fmt.Sprintf("%d%%", s.Value)
 }
 
-// Detail es la línea secundaria: el dispositivo, si se conoce.
+// Detail devuelve el dispositivo asociado, si se conoce; el renderizador
+// compacto no lo dibuja.
 func (s State) Detail() string {
 	d := strings.TrimSpace(s.Device)
 	if d == "" {
