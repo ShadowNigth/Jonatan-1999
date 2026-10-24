@@ -981,7 +981,8 @@ swaydesk power reboot
 Desde un script o un bind de sway puedes usar los binarios directamente:
 `swaymenu --float`, `swayctl`, `swayclip`.
 
-El autostart inicia `swaydesk events watch` una vez por sesión. Usa el IPC de Sway
+El autostart inicia `swaydesk events watch` al entrar y lo reinicia en cada
+recarga de Sway, evitando instancias duplicadas. Usa el IPC de Sway
 para avisar sobre conexiones y desconexiones de entradas (teclado, ratón, etc.)
 y monitores; además, `udevadm` detecta unidades de almacenamiento USB. Si
 `swaydesk doctor` señala un autostart antiguo, actualiza únicamente ese archivo

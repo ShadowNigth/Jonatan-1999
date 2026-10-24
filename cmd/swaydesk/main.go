@@ -733,9 +733,9 @@ func autostartStatus(cfg *config.Config) (bool, string) {
 	}
 	checks := []struct{ label, marker string }{
 		{"animación de arranque", "swaydesk boot"},
-		{"notificaciones", "swaynotify daemon"},
+		{"notificaciones", "start_swaynotify"},
 		{"OSD", "swayosd watch"},
-		{"eventos de dispositivos", "swaydesk events watch"},
+		{"eventos de dispositivos", "start_events_watcher"},
 		{"fondos por workspace", "swaydesk wallpaper daemon"},
 		{"reintentos de inicio de barra", "start_bar waybar"},
 		{"reintentos de inicio de swaybar", "start_bar swaybar"},
@@ -767,6 +767,16 @@ func notifyDaemonStatus(cfg *config.Config) (bool, string) {
 		return false, "falta swaynotify y no hay mako activo"
 	}
 	return false, "swaynotify no responde; comprueba D-Bus y el registro de autostart"
+}
+
+func eventWatcherStatus() (bool, string) {
+	if !launcher.HasCommand("pgrep") {
+		return false, "falta pgrep; no se puede comprobar el watcher"
+	}
+	if exec.Command("pgrep", "-f", "[s]waydesk events watch").Run() != nil {
+		return false, "watcher inactivo; recarga Sway para iniciarlo"
+	}
+	return true, "watcher activo (Sway y almacenamiento USB)"
 }
 
 func osdWatchStatus(cfg *config.Config) (bool, string) {
@@ -989,6 +999,7 @@ func cmdDoctor(args []string) {
 	th := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 	autostartOK, autostartDetail := autostartStatus(cfg)
 	notifyOK, notifyDetail := notifyDaemonStatus(cfg)
+	eventsOK, eventsDetail := eventWatcherStatus()
 	osdOK, osdDetail := osdWatchStatus(cfg)
 
 	checks := []check{
@@ -1040,6 +1051,9 @@ func cmdDoctor(args []string) {
 		{name: "notificaciones", required: false,
 			ok: notifyOK, detail: notifyDetail,
 			fix: "revisa D-Bus y ~/.cache/swaydesk/autostart.log"},
+		{name: "eventos automáticos", required: false,
+			ok: eventsOK, detail: eventsDetail,
+			fix: "recarga Sway y revisa ~/.cache/swaydesk/autostart.log"},
 		{name: "OSD volumen/MPRIS", required: false,
 			ok: osdOK, detail: osdDetail,
 			fix: "swaydesk osd show · revisa ~/.cache/swaydesk/autostart.log"},

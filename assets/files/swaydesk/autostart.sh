@@ -137,6 +137,72 @@ stop_exact() {
     return 0
 }
 
+# start_swaynotify arranca el proveedor propio y espera a que acepte peticiones.
+# Así el resto de la sesión no queda sin avisos si Wayland/D-Bus tarda en iniciar.
+start_swaynotify() {
+    _noti_intento=1
+    while [ "$_noti_intento" -le 3 ]; do
+        quiet swaynotify daemon
+        _noti_espera=0
+        while [ "$_noti_espera" -lt 40 ]; do
+            if swaynotify status >/dev/null 2>&1; then
+                log "swaynotify quedó activo (intento $_noti_intento/3)"
+                return 0
+            fi
+            sleep 0.1
+            _noti_espera=$((_noti_espera + 1))
+        done
+        log "swaynotify no respondió (intento $_noti_intento/3)"
+        if ! stop_exact swaynotify; then
+            log "no se pudo reiniciar swaynotify; comprueba el autostart"
+            return 1
+        fi
+        _noti_intento=$((_noti_intento + 1))
+        if [ "$_noti_intento" -le 3 ]; then sleep 0.3; fi
+    done
+    log "ERROR: swaynotify no pudo registrarse; revisa D-Bus, Wayland y el registro anterior"
+    return 1
+}
+
+# start_events_watcher asegura una sola instancia y la renueva en cada reload,
+# para que use el binario nuevo y las variables de la sesión actual.
+start_events_watcher() {
+    _events_pattern='[s]waydesk events watch'
+    if have pgrep && pgrep -f "$_events_pattern" >/dev/null 2>&1; then
+        if ! have pkill; then
+            log "watcher de dispositivos ya activo; falta pkill para reiniciarlo"
+            return 0
+        fi
+        log "reiniciando watcher de dispositivos para la sesión actual"
+        pkill -TERM -f "$_events_pattern" >/dev/null 2>&1 || true
+        _events_wait=0
+        while pgrep -f "$_events_pattern" >/dev/null 2>&1 && [ "$_events_wait" -lt 20 ]; do
+            sleep 0.1
+            _events_wait=$((_events_wait + 1))
+        done
+        if pgrep -f "$_events_pattern" >/dev/null 2>&1; then
+            log "ERROR: el watcher anterior no terminó; no se inicia otro"
+            return 1
+        fi
+    fi
+
+    quiet swaydesk events watch
+    if have pgrep; then
+        _events_wait=0
+        while [ "$_events_wait" -lt 20 ]; do
+            if pgrep -f "$_events_pattern" >/dev/null 2>&1; then
+                log "watcher de dispositivos activo"
+                return 0
+            fi
+            sleep 0.1
+            _events_wait=$((_events_wait + 1))
+        done
+        log "ERROR: el watcher no quedó activo; revisa su salida en este registro"
+        return 1
+    fi
+    return 0
+}
+
 # una_vez CLAVE — verdadero la primera vez en esta sesión de sway. SWAYSOCK
 # cambia en cada arranque del compositor, así que un reload no repite nada.
 una_vez() {
@@ -200,7 +266,23 @@ if have swaydesk && have swaynotify && swaydesk notify-enabled >/dev/null 2>&1; 
         if swaynotify status >/dev/null 2>&1; then
             log "swaynotify ya responde en D-Bus"
         elif stop_exact swaynotify; then
-            once swaynotify daemon
+            if ! start_swaynotify; then
+                if have mako; then
+                    log "swaynotify no quedó activo; se inicia mako como alternativa"
+                    if [ -f "$HOME/.config/mako/config" ]; then
+                        once mako -c "$HOME/.config/mako/config"
+                    else
+                        once mako
+                    fi
+                elif have dunst; then
+                    log "swaynotify no quedó activo; se inicia dunst como alternativa"
+                    once dunst
+                else
+                    log "ERROR: no hay un proveedor de notificaciones disponible"
+                fi
+            fi
+        else
+            log "no se pudo liberar el proveedor de notificaciones; swaynotify no se inicia"
         fi
     fi
 else
@@ -230,11 +312,7 @@ fi
 # El watcher recibe entradas y monitores desde Sway, y discos USB desde udev.
 # exec_always vuelve a ejecutar este archivo en cada reload: no lo dupliques.
 if have swaydesk; then
-    if have pgrep && pgrep -f '[s]waydesk events watch' >/dev/null 2>&1; then
-        log "watcher de dispositivos ya activo"
-    else
-        quiet swaydesk events watch
-    fi
+    start_events_watcher
 fi
 
 # --- Bloqueo y ahorro de energía -------------------------------------------

@@ -29,11 +29,15 @@ func cmdEvents(args []string) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	hasSway := strings.TrimSpace(os.Getenv("SWAYSOCK")) != "" || strings.TrimSpace(os.Getenv("I3SOCK")) != ""
+	swaySocket := swayipc.SwaySock()
+	hasSway := swaySocket != ""
+	if hasSway && strings.TrimSpace(os.Getenv("SWAYSOCK")) == "" && strings.TrimSpace(os.Getenv("I3SOCK")) == "" {
+		_ = os.Setenv("SWAYSOCK", swaySocket)
+	}
 	udevadm, udevErr := exec.LookPath("udevadm")
 	hasUdev := udevErr == nil
 	if !hasSway && !hasUdev {
-		fmt.Fprintln(os.Stderr, "swaydesk events: no se encontró SWAYSOCK ni udevadm; no hay eventos que vigilar")
+		fmt.Fprintln(os.Stderr, "swaydesk events: no se encontró una sesión de Sway ni udevadm; no hay eventos que vigilar")
 		return
 	}
 	if !hasSway {

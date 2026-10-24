@@ -139,7 +139,7 @@ terceros.
 los copia al portapapeles y muestra una notificación textual con la ruta.
 Durante la sesión, `swaydesk events watch` avisa al conectar o desconectar
 entradas, monitores y unidades de almacenamiento USB; el autostart lo inicia
-una sola vez por sesión.
+y lo renueva al recargar Sway, sin dejar instancias duplicadas.
 
 | Panel de control | Portapapeles |
 |---|---|
