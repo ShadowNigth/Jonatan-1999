@@ -22,6 +22,37 @@ func testRenderer() *Renderer {
 	})
 }
 
+func TestOpacityZeroMustBeExplicit(t *testing.T) {
+	implicit := New(Options{Theme: ui.PaletteByName("sakura"), Face: font.Builtin()})
+	if implicit.Opt.Opacity != 0.68 {
+		t.Fatalf("opacidad cero implícita = %.2f, quería el valor por defecto 0.68", implicit.Opt.Opacity)
+	}
+	explicit := New(Options{Opacity: 0, OpacitySet: true, Theme: ui.PaletteByName("sakura"), Face: font.Builtin()})
+	if explicit.Opt.Opacity != 0 {
+		t.Fatalf("no se respetó la opacidad cero explícita: %.2f", explicit.Opt.Opacity)
+	}
+}
+
+func TestPowerAndStatsModulesRemovedFromDefaultsAndLegacyConfig(t *testing.T) {
+	for _, module := range DefaultModules {
+		switch module {
+		case "power":
+			t.Fatal("el módulo de energía no debe aparecer en los valores por defecto")
+		case "cpu", "ram":
+			t.Fatalf("CPU y RAM no deben aparecer por defecto en la barra: %q", module)
+		}
+	}
+
+	r := New(Options{
+		Modules: []string{"clock", "power"},
+		Theme:   ui.PaletteByName("sakura"),
+		Face:    font.Builtin(),
+	})
+	if len(r.Opt.Modules) != 1 || r.Opt.Modules[0] != "clock" {
+		t.Fatalf("módulos después de retirar el control de energía: %v", r.Opt.Modules)
+	}
+}
+
 func sampleSnapshot() Snapshot {
 	return Snapshot{
 		Workspaces: []Workspace{
@@ -281,14 +312,22 @@ func TestNotifyRegionIsClickable(t *testing.T) {
 	r.Render(s, 1200)
 
 	regions := r.Regions()
-	if len(regions) != 1 || regions[0].Name != "notify" {
+	if len(regions) != 1 {
 		t.Fatalf("regiones = %+v", regions)
 	}
-	reg := regions[0]
-	if _, ok := r.RegionAt(reg.X+1, reg.Y+1); !ok {
-		t.Fatalf("un punto de la zona no la encuentra: %+v", reg)
+	var notify *Region
+	for i := range regions {
+		if regions[i].Name == "notify" {
+			notify = &regions[i]
+		}
 	}
-	if _, ok := r.RegionAt(reg.X-20, reg.Y+1); ok {
+	if notify == nil {
+		t.Fatalf("no hay región de notificaciones: %+v", regions)
+	}
+	if _, ok := r.RegionAt(notify.X+1, notify.Y+1); !ok {
+		t.Fatalf("un punto de la zona no la encuentra: %+v", notify)
+	}
+	if _, ok := r.RegionAt(notify.X-20, notify.Y+1); ok {
 		t.Fatalf("un punto fuera de la zona la encuentra")
 	}
 	// Un segundo Render no acumula zonas viejas.

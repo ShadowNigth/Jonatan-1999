@@ -54,7 +54,12 @@ func NewShm(c *Conn, w, h, count int) (*Shm, error) {
 	}
 
 	s := &Shm{conn: c, buffers: make([]*Buffer, 0, count), size: size, file: f}
-	s.shmID = c.Bind(g, 1, nil)
+	s.shmID, err = c.Bind(g, 1, nil)
+	if err != nil {
+		_ = syscall.Munmap(mem)
+		_ = f.Close()
+		return nil, err
+	}
 	poolID := c.allocID("wl_shm_pool", nil)
 	s.poolID = poolID
 	// wl_shm.create_pool(new_id, fd, size)

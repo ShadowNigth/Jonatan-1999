@@ -16,6 +16,10 @@ file_manager = "thunar"
 browser = "chromium"
 confirm_power = true        # pedir confirmación antes de reiniciar/apagar
 
+[gtk]
+theme = "auto"             # sigue la paleta: Adwaita o Adwaita-dark
+icon_theme = "auto"        # Papirus / Papirus-Dark, o indica otro tema instalado
+
 [ui]
 font = "JetBrainsMono Nerd Font"   # vacío = autodetección con fc-list
 font_size = 11
@@ -45,7 +49,7 @@ dir = "~/Imágenes/Fondos"   # carpeta que explora el selector
 
 [effects]
 terminal_opacity = 0.94     # alpha de foot (1 = opaco)
-bar_opacity = 0.86          # alpha de waybar
+bar_opacity = 0.68          # alpha de waybar
 active_opacity = 1.00       # ventana enfocada
 inactive_opacity = 0.94     # ventanas sin foco
 blur = false                # requiere swayfx
@@ -79,6 +83,40 @@ Las categorías son `anime`, `oscuro`, `retro`, `claro` y `adaptativo`. El atajo
 `Tab` cambia de categoría dentro de la galería y `espacio` pausa la animación de
 la vista previa.
 
+### Thunar, GTK e iconos
+
+Thunar es el gestor de archivos recomendado para Swaydesk. Al cambiar de paleta,
+`Swaydesk` genera una hoja GTK 3 con sus colores, sincroniza el modo oscuro y
+selecciona `Papirus` o `Papirus-Dark` si el tema de iconos está instalado (si no,
+usa `Adwaita`). El tema GTK base se elige entre `Adwaita` y `Adwaita-dark`; puedes
+forzar otros temas instalados en `~/.config/swaydesk/config.toml`:
+
+```toml
+[gtk]
+theme = "auto"                 # o el nombre de un tema GTK 3 instalado
+icon_theme = "Papirus-Dark"    # o "auto", "Papirus", "Adwaita", etc.
+```
+
+Instala Thunar, el juego de iconos y complementos útiles en Arch:
+
+```bash
+sudo pacman -S thunar papirus-icon-theme tumbler gvfs thunar-archive-plugin thunar-volman
+```
+
+La opacidad está preparada para Thunar nativo de Wayland (`app_id=thunar`) y
+para XWayland (`class=Thunar`), al valor de `effects.inactive_opacity`. Si ya
+habías generado Sway antes de instalar Thunar, actualiza solo ese archivo y
+recarga:
+
+```bash
+swaydesk init --force --only sway
+swaymsg reload
+```
+
+Los cambios GTK se guardan y se notifican por GSettings cuando está disponible.
+Si una ventana de Thunar abierta no actualiza su hoja de estilos, ciérrala y
+vuelve a abrirla.
+
 ### Temas adaptativos
 
 `swaydesk theme --from-wallpaper` (o `swaydesk wallpaper adaptive [archivo]`)
@@ -91,7 +129,7 @@ aplicarla como cualquier otra.
 ```bash
 swaydesk theme                  # lista con muestras de color
 swaydesk theme gruvbox          # cambia y aplica en caliente
-swaymenu --themes               # selector interactivo (Super+t)
+swaydesk theme --gallery        # selector interactivo (Super+t)
 swayctl                         # pestaña "Apariencia" (Super+i, Tab ×3)
 ```
 
@@ -103,7 +141,14 @@ swayctl                         # pestaña "Apariencia" (Super+i, Tab ×3)
 | `~/.config/foot/foot.ini` | terminal |
 | `~/.config/mako/config` | notificaciones |
 | `~/.config/swaylock/config` | pantalla de bloqueo |
+| `~/.config/gtk-3.0/settings.ini` y `gtk.css` | tema GTK, paleta e iconos de Thunar/otras apps GTK 3 |
+| sesión GTK vía GSettings (si está disponible) | tema/iconos para aplicaciones ya abiertas |
 | sesión de sway vía IPC | colores de borde y de título de las ventanas |
+
+Si el fondo es una escena, GIF, vídeo o tiene reglas por workspace, el demonio se
+reinicia desacoplado del proceso que cambia el tema para actualizar la paleta sin
+quedarse ligado al selector. Las imágenes estáticas no se tocan. Compruébalo con
+`swaydesk wallpaper status`.
 
 ### Añadir tu propia paleta
 
@@ -141,18 +186,29 @@ output eDP-1 scale 1.25
   el archivo en `assets/files/sway/config` y ejecuta
   `swaydesk init --force --only sway`.
 
-Recarga siempre con `Super+Shift+c` o `swaymsg reload`.
+Recarga siempre con `Super+Shift+c` o `swaymsg reload`. Por defecto, `Print`
+captura toda la pantalla y `Super+Print` / `Super+Shift+Print` seleccionan una
+región; todas guardan el PNG en `~/Capturas` (fuera de `~/Imágenes`), lo copian
+al portapapeles como `image/png` y muestran una notificación textual con la ruta.
+Al ejecutar `swaydesk apply`, los atajos predeterminados antiguos de `grim` se
+migran sin reemplazar el resto de Sway.
 
 ## 4. Menús y acciones
 
 ### Lanzador
 
+- Al abrirse, muestra «cargando aplicaciones…» mientras descubre las entradas
+  `.desktop` en segundo plano; puedes empezar a escribir mientras termina.
 - Los comandos del `PATH` no se listan por defecto (son cientos y ensucian).
   `Super+Shift+d` (`swaymenu --float --commands`) los incluye.
-- El historial está en `~/.cache/swaydesk/history`. Bórralo para reiniciar el
-  orden de resultados.
+- El filtrado difuso reutiliza resultados mientras navegas y recalcula solo al
+  cambiar el texto o la lista. El historial está en `~/.cache/swaydesk/history`;
+  bórralo para reiniciar el orden de resultados.
 - La calculadora se activa empezando el filtro por `=`:
   `=2^10`, `=sqrt(144)+3`, `=100*1.19` (IVA), `=round(2.5)`.
+- El lanzador no muestra acciones de energía ni de bloqueo. Usa `Super+P` para
+  abrir el menú de energía y `Super+Shift+L` para bloquear la pantalla; ambos
+  atajos se conservan en la configuración de Sway.
 
 ### Añadir una acción al menú
 
@@ -178,8 +234,141 @@ swayclip --backend clipman
 ```
 
 Para tener historial persistente, `~/.config/swaydesk/autostart.sh` arranca
-`wl-paste --type text --watch cliphist store` si `cliphist` está instalado.
-Puedes borrar la entrada seleccionada con `Ctrl+d`.
+vigilantes de texto e imágenes con `cliphist` si está instalado. `swayclip`
+identifica las entradas de imagen y `Enter` restaura su MIME (por ejemplo,
+`image/png`) al portapapeles; la vista previa se mantiene textual. Puedes borrar
+la entrada seleccionada con `Ctrl+d`.
+
+### Si no aparecen OSD, notificaciones o la animación de arranque
+
+El autostart nuevo inicia `swaynotify`, `swayosd watch` y el demonio de fondos,
+pero una instalación con `--no-config` deja intactos los archivos de inicio que
+ya existían. Comprueba primero `swaydesk doctor`; si marca `autostart swaydesk`
+como antiguo, actualiza solo ese archivo (se crea un respaldo) y recarga Sway:
+
+```bash
+swaydesk init --force --only swaydesk/autostart.sh
+swaymsg reload
+tail -n 80 "${XDG_CACHE_HOME:-$HOME/.cache}/swaydesk/autostart.log"
+```
+
+Pruebas manuales útiles: `swaydesk osd show`, `swaydesk notifications test`,
+`swaydesk wallpaper status` y `swaydesk boot`. Si el aviso o la notificación
+fallan también al lanzarlos manualmente, conserva el mensaje de error y el
+registro de autostart para localizar el problema concreto.
+
+### Si un fondo no se aplica
+
+- **Escenas, GIF y vídeo los dibuja el demonio** (`swaydesk wallpaper daemon`).
+  `set` y la galería ya lo arrancan o lo reinician solos. `swaydesk wallpaper
+  status` dice si está `activo (pid N)` o `detenido: por eso no se ve el fondo`.
+- Si el demonio **no arranca**, ahora se ve el motivo: su salida va a
+  `~/.cache/swaydesk/wallpaper.log` y `swaydesk wallpaper logs` lo muestra (con
+  `--clear` lo vacía). Al arrancarlo se comprueba que siga vivo un par de
+  segundos; si murió, se imprime el registro en lugar de un «✔» falso.
+- Si el registro dice `connection reset by peer`, actualiza el binario: una
+  versión anterior enviaba IDs Wayland incorrectos al crear superficies de
+  fondo/paneles, y el compositor cerraba el socket. Ahora también se informa
+  el `wl_display.error` concreto si aparece otro error de protocolo.
+- `swaydesk doctor` incluye el chequeo **demonio de fondo**, que solo exige el
+  demonio cuando el fondo actual lo necesita.
+- Una **imagen fija** no necesita demonio: se aplica al instante con
+  `output * bg` vía IPC y queda escrita en
+  `~/.config/sway/config.d/50-wallpaper.conf`, que se carga al recargar sway.
+- `Super+Shift+w` ejecuta `swaydesk wallpaper --gallery`. Si el atajo no hace
+  nada, prueba esa orden en la terminal: el error te dirá si falta el binario
+  (`swaydesk keys` → ✘), si es la versión antigua (`swaydesk: comando
+  desconocido "keys"`) o si no hay terminal configurada.
+- Los archivos se buscan en `wallpaper.dir` (por defecto `~/Imágenes/Fondos`) y
+  en `~/Imágenes`, `~/Pictures`, `~/Vídeos`, **incluidas las subcarpetas**.
+- Con `sway` puro (sin swayfx) las escenas también funcionan: usan
+  `wlr-layer-shell`, no efectos del compositor.
+
+### Si `swaydesk: orden no encontrada`
+
+Los binarios se instalan en `~/.local/bin`, que muchas veces no está en el
+`PATH` (`Arch` trae por defecto solo `~/bin`). Soluciones, de la más rápida a la
+más definitiva:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"          # solo esta terminal
+~/.local/bin/swaydesk keys                    # sin tocar nada, ruta completa
+```
+
+El instalador ya añade la línea a `~/.bashrc`, `~/.zshrc` y `~/.profile` (se
+puede evitar con `--no-path`), y `swaydesk doctor` lo comprueba:
+
+```
+  • PATH                   /home/shadow/.local/bin/swaydesk (falta en el PATH)
+    → añade ~/.local/bin al PATH (o reejecuta scripts/install.sh)
+```
+
+La sesión de sway es otro mundo: **no lee tus `.bashrc`**, así que la
+configuración generada escribe rutas absolutas para los binarios y
+`autostart.sh` empieza con `PATH="$HOME/.local/bin:$PATH"`. Si arrancas sway
+desde una TTY, añade la línea a `~/.profile` (lo hace el instalador).
+
+### Si un atajo no hace nada
+
+sway **falla en silencio**: si el programa de un `bindsym … exec` no existe (por
+ejemplo porque los binarios están en `~/.local/bin` y esa carpeta no está en el
+`PATH` de la sesión), la tecla simplemente no hace nada y no hay ningún error.
+
+Para eso está `swaydesk keys`, que lee la configuración **que sway tiene
+cargada** (por IPC), expande las variables y comprueba cada programa:
+
+```bash
+swaydesk keys                 # todos los atajos
+swaydesk keys swaydesk        # solo los que mencionan «swaydesk»
+swaydesk keys --exec          # solo los que lanzan programas
+```
+
+Salida de ejemplo:
+
+```
+  atajos de sway · sway (config en vivo)
+  98 atajos · 2 con problemas
+
+  ✔ Mod4+Return              foot
+  ✔ Mod4+t                   /home/shadow/.local/bin/swaydesk theme --gallery
+  ✘ Mod4+n                   swaydesk notifications center
+      → no se encuentra el programa "swaydesk"
+```
+
+Detecta tres cosas: **programas que no existen**, **teclas repetidas** (sway se
+queda con la última y se pierde la primera) y si la sesión va por detrás del
+archivo (editaste y no recargaste; avisa con `swaymsg reload`).
+
+Si los binarios viven en `~/.local/bin`, la configuración generada los usa con
+**ruta absoluta** (`swaydesk init` la resuelve al escribir), así que los atajos
+funcionan aunque sway no herede tu `PATH`. `Super+i` y `Super+c` ejecutan
+interfaces TUI; al no tener TTY, detectan la situación y se relanzan en una
+terminal flotante con el identificador de ventana adecuado.
+
+Los atajos que lanzan programas que no tienes instalados se marcan igual
+(`thunar`, `brightnessctl`…): al final del listado sale un resumen con los que
+faltan. `swaydesk init` prueba alternativas antes de escribir el archivo: si no
+tienes `thunar` usa `nautilus`, `dolphin`, `nemo`, `pcmanfm`, `xdg-open`…; para
+la terminal y el navegador hace lo mismo.
+
+> **Cuidado con los respaldos**: `swaydesk init --force` deja copias
+> `*.bak-<fecha>` junto a los archivos. Si están dentro de
+> `~/.config/sway/config.d/`, un `include …/config.d/*` las cargaría y volverían
+> a aparecer atajos viejos y teclas duplicadas. La plantilla ya usa
+> `include ~/.config/sway/config.d/*.conf`, pero si vienes de una versión
+> anterior bórralas una vez:
+>
+> ```bash
+> rm -f ~/.config/sway/config.d/*.bak-* ~/.config/sway/*.bak-*
+> ```
+
+Para regenerar solo la configuración de sway sin tocar tu `config.toml` ni el
+resto de archivos:
+
+```bash
+swaydesk init --force --only sway
+swaymsg reload
+```
 
 ### Autostart
 
@@ -191,6 +380,34 @@ si te falta algo. Añade tus programas al final:
 quiet chromium
 quiet nm-applet
 quiet blueman-applet
+```
+
+**Se puede ejecutar las veces que haga falta.** `exec_always` significa que sway
+también lo lanza en cada `swaymsg reload`; por eso el script usa dos ayudas:
+
+- `once <programa> [args…]` — arranca solo si no está ya en marcha (`pgrep -x`).
+  Así la barra, `swaynotify`, `swayosd watch`, `swayidle`, los vigilantes de
+  `wl-paste`, el agente de polkit y el portal no se duplican al recargar… y si
+  uno se cerró, el siguiente reload lo recupera.
+- `una_vez <clave>` — lo que solo debe pasar una vez por sesión: la animación de
+  arranque y el aviso de bienvenida. La marca lleva el `SWAYSOCK` de la sesión,
+  que cambia al reiniciar sway pero no al recargar.
+
+Si usas tus propios programas en el script, envuélvelos igual (`once firefox`)
+para que un reload no te abra una segunda ventana.
+
+```sh
+# Tras actualizar swaydesk: reinstala solo el script del autostart
+swaydesk init --force --only swaydesk/autostart.sh
+swaydesk reload
+```
+
+Si alguna vez te encuentras varias barras o varios demonios (por ejemplo, de
+antes de esta versión), límpialos una vez a mano:
+
+```sh
+pkill -x swaybar; pkill -x swaynotify; pkill -x swayosd; pkill -x swayidle
+~/.config/swaydesk/autostart.sh
 ```
 
 ## 5. Fondos animados
@@ -205,9 +422,11 @@ swaydesk wallpaper stop                  # detiene el fondo animado
 ```
 
 `--live` (o `swaydesk wallpaper daemon`) arranca el demonio que dibuja el fondo
-en una capa `wlr-layer-shell` **detrás de las ventanas**; el autostart lo lanza
-al iniciar sesión. Sin demonio, sway muestra un fotograma estático exportado a
-`~/.cache/swaydesk/fondo-estatico.png`.
+en una capa `wlr-layer-shell` **detrás de las ventanas**; la superficie cubre la
+salida completa, también el espacio reservado por la barra, para que el GIF siga
+visible detrás de sus zonas translúcidas. El autostart lo lanza al iniciar
+sesión. Para GIF y vídeo, Sway mantiene un color sólido del tema como respaldo;
+así no queda un primer fotograma estático superpuesto al fondo animado.
 
 Escenas disponibles: `petals`, `snow`, `stars`, `rain`, `aurora`, `wave`,
 `city`, `embers`, `grid`, `meadow`, `bubbles`. Cada una toma los colores del
@@ -217,9 +436,10 @@ También puedes usar el nombre de una paleta y swaydesk toma su escena asociada:
 `swaydesk wallpaper set scene:sakura` es lo mismo que `scene:petals`, y
 `miku` equivale a `wave`.
 
-Para que sway dibuje el respaldo estático se escribe
-`~/.config/sway/config.d/50-wallpaper.conf`; puedes sobrescribirlo con tus
-propias reglas `output * bg ...`.
+El respaldo gestionado por swaydesk se escribe en
+`~/.config/sway/config.d/50-wallpaper.conf`: imágenes fijas usan su ruta; GIF,
+vídeo y escenas usan un color sólido mientras el demonio Wayland dibuja la
+animación. Puedes sobrescribirlo con tus propias reglas `output * bg ...`.
 
 ### Un fondo por workspace
 
@@ -253,8 +473,10 @@ swaydesk wallpaper transition slide 450           # tipo y duración
 swaydesk wallpaper transition                     # la actual
 ```
 
-Al guardar, el demonio se reinicia solo si estaba en marcha. También se acepta
-la forma compacta `workspaces = ["1=scene:petals", "dev=scene:city"]` dentro de
+Al guardar, el demonio se inicia o reinicia automáticamente cuando las reglas
+por workspace lo necesitan, incluso si el fondo base es una imagen fija; al
+quitar la última regla, se detiene si ya no hace falta. También se acepta la
+forma compacta `workspaces = ["1=scene:petals", "dev=scene:city"]` dentro de
 `[wallpaper]`.
 
 Cómo se comporta:
@@ -385,24 +607,26 @@ margin = 6                 # separación con los bordes de la pantalla
 padding = 14               # relleno interior de cada isla
 gap = 10                   # hueco entre islas
 radius = 0                 # 0 = pastilla completa
-opacity = 0.88             # transparencia de las islas
+opacity = 0.68             # transparencia de las islas
 islands = true             # false = una sola barra continua
 logo = true
 font = ""                  # ruta a un .psf / .psf.gz; vacío = fuente del sistema
 font_scale = 1.0
 shadow = true              # sombra suave bajo las islas
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
+modules = ["media", "notify", "volume", "network", "battery", "clock"]
 ```
 
 Módulos disponibles: `media` (reproductor vía `playerctl`), `recording`
 (indicador de `wf-recorder`), `cpu`, `ram`, `disk`, `temp`, `uptime`,
 `volume`, `network`, `battery`, `updates`, `title` (ventana enfocada), `clock`,
-`clock24` y `date`.
+`clock24` y `date`. No hay un módulo ni botón de energía en swaybar: usa
+**Super+P**, que abre `swaymenu --power --float` en una ventana flotante.
 
 ```bash
 swaydesk bar                  # estado y módulos actuales
-swaydesk bar modules cpu ram volume network battery clock
+swaydesk bar modules media notify volume network battery clock
+swaydesk bar opacity 0.68     # opacidad común (0 = invisible, 1 = opaco)
 swaydesk bar off              # desactiva swaybar; el autostart usa waybar
 swaydesk bar preview --width 1600 --out ~/barra.png   # PNG sin sesión gráfica
 swaybar --demo --preview      # datos de ejemplo, útil para probar el diseño
@@ -421,8 +645,23 @@ caída.
 ### Todo el camino de vuelta a waybar
 
 Si prefieres waybar y sus módulos personalizados, pon `enabled = false` en
-`[bar]` (o ejecuta `swaydesk bar off`) y reinicia la sesión: la plantilla de
-waybar sigue instalada y se colorea con el tema igual que antes.
+`[bar]` (o ejecuta `swaydesk bar off`) y aplica el cambio con `swaymsg reload`.
+El autostart detiene la barra que no corresponde a la opción elegida antes de
+iniciar la otra, así no quedan Waybar y swaybar superpuestas. Si el archivo
+`~/.config/waybar/config.json` existe, Waybar se inicia con `--config` explícito:
+varias versiones ignoran `config.json` al buscar automáticamente y caen en
+`/etc/xdg/waybar/config.jsonc`. La hoja de estilos de swaydesk se mantiene en
+`~/.config/waybar/style.css` y se colorea con el tema activo. En esa plantilla
+el centro muestra hora, día de la semana y fecha, sin icono delante; el texto
+es un poco más grande, no cambia de formato al hacer clic y ya no aparece el
+título de ventana ni se repite el reloj a la derecha. Al pasar el puntero sobre
+el reloj, Waybar abre el calendario mensual en español, ampliado y con la semana
+iniciando el lunes; la rueda del mouse avanza o retrocede un mes. Los rótulos de
+volumen, red, temperatura y batería están en español; la plantilla ya no muestra
+métricas de CPU ni memoria. El modo de teclado se llama
+`redimensionar` y el indicador de grabación dice `GRABANDO`. Los nombres de apps y
+redes que vienen de la bandeja o del sistema conservan el idioma que les da cada
+aplicación.
 
 ## 8c. Notificaciones propias (`swaynotify`)
 
@@ -435,29 +674,37 @@ una capa overlay, con la fuente y los colores del tema activo.
 [notify]
 enabled = true             # false = usar mako
 position = "top-right"     # top-right, top-left, bottom-right, bottom-left
-width = 360                # ancho de cada tarjeta
+width = 300                # ancho compacto de cada tarjeta
 margin = 14                # separación con el borde de la pantalla
-padding = 14               # relleno interior
-gap = 8                    # separación entre tarjetas
-radius = 14                # esquinas redondeadas
+padding = 10               # relleno interior
+gap = 6                    # separación entre tarjetas
+radius = 12                # esquinas redondeadas
 opacity = 0.94             # transparencia de las tarjetas
 timeout_ms = 6000          # tiempo en pantalla de las normales
 critical_timeout_ms = 0    # 0 = las urgentes se quedan hasta cerrarlas
 max_visible = 4            # cuántas se apilan
 history = 50               # entradas que se guardan
-max_lines = 3              # líneas del cuerpo
+max_lines = 2              # máximo de líneas del cuerpo para reducir altura
 dnd = false                # arrancar en modo «no molestar»
 group = true               # agrupar por aplicación en pilas desplegables
 font = ""                  # fuente PSF (vacío = automática)
 font_scale = 0             # 0 = automática
 ```
 
+En instalaciones ya configuradas, edita `~/.config/swaydesk/config.toml`:
+los valores guardados prevalecen sobre estos valores predeterminados.
+
+Los rótulos y controles propios aparecen en español; algunas acciones genéricas
+que las aplicaciones envían en inglés (Open, Reply, Dismiss, etc.) se traducen.
+El título y el cuerpo del aviso son texto de la aplicación y se muestran tal como
+llegan: para traducirlos hay que cambiar el idioma de esa aplicación.
+
 ### Qué se dibuja
 
 - **Punto de color** según la urgencia: acento (normal), atenuado (baja) y
   error (crítica, que además lleva el borde marcado).
-- **Aplicación y hora** arriba, con el resumen en tamaño doble y el cuerpo
-  recortado a `max_lines` líneas con puntos suspensivos.
+- **Aplicación y hora** arriba, con el resumen compacto por defecto (destacado
+  en tarjetas anchas) y el cuerpo recortado a `max_lines` líneas.
 - **Acciones** como botones `[Etiqueta]`: se pulsan con el ratón y el cliente
   recibe `ActionInvoked`.
 - **Barra de progreso** con el hint `progress` (descargas, copias…).
@@ -603,8 +850,9 @@ con `SetDND`, `ToggleDND`, `GetStatus`, `ListHistory`, `CloseAll`,
 - Sin bus de sesión (`DBUS_SESSION_BUS_ADDRESS`) el daemon no puede arrancar.
   En una sesión de sway normal lo levanta `dbus-update-activation-environment` /
   `dbus-launch`; el autostart lo comprueba antes de lanzarlo.
-- Solo puede haber un servidor de notificaciones: si ya hay `mako` o `dunst`,
-  `swaynotify` avisa y sale. El autostart arranca uno u otro, nunca los dos.
+- Solo puede haber un servidor de notificaciones. Si `notify.enabled = true`,
+  el autostart detiene `mako`/`dunst` antes de iniciar `swaynotify`; si está
+  desactivado, conserva `dunst` si ya está activo o inicia `mako` como reserva.
 - El historial se guarda en `~/.cache/swaydesk/notificaciones.json` cada cinco
   segundos y al salir, así que sobrevive a un reinicio de la sesión.
 - Si un aviso llega con `replaces_id`, se actualiza la tarjeta en el sitio en
@@ -612,25 +860,30 @@ con `SetDND`, `ToggleDND`, `GetStatus`, `ListHistory`, `CloseAll`,
 
 ## 8d. Avisos en pantalla (`swayosd`)
 
-El nivel de volumen aparece en una **tarjeta flotante** sobre las ventanas
-—etiqueta, porcentaje en grande y barra segmentada— que se va sola con un
-fundido de entrada y salida. No hace falta que ninguna aplicación (Spotify,
-Chromium, mpv…) haga nada: el aviso lo dibuja el escritorio.
+El nivel de volumen aparece en una **tarjeta flotante** con porcentaje y barra
+segmentada. Además, al cambiar de pista, los reproductores compatibles con
+MPRIS (por ejemplo, mpv, Spotify o Chromium) pueden mostrar una tarjeta con
+**título, artista y carátula**. Ambas se desvanecen solas y no interceptan
+clics; el aviso lo dibuja el escritorio, no cada reproductor. Sus rótulos son
+`VOLUMEN` y `SILENCIADO`; los estados de reproducción también se muestran en
+español.
 
 ```toml
 [osd]
-enabled = true             # false = sin avisos (el volumen sigue funcionando)
+enabled = true             # OSD de volumen; no desactiva el control de audio
+media_enabled = true        # tarjeta MPRIS al cambiar de pista
+media_timeout_ms = 3200     # duración del OSD de reproducción
 position = "bottom-center" # bottom-right, bottom-left, top-center, center
-width = 320                # ancho de la tarjeta en píxeles
+width = 260                # ancho compacto de la tarjeta en píxeles
 margin = 72                # separación con el borde de la pantalla
-padding = 16               # relleno interior
-radius = 18                # esquinas redondeadas
+padding = 12               # relleno interior
+radius = 14                # esquinas redondeadas
 opacity = 0.95             # transparencia del fondo
 timeout_ms = 1400          # cuánto tiempo se queda en pantalla
 fade_ms = 140              # fundido de entrada y salida (0 = sin animación)
 segments = 24              # marcas de la barra de nivel
 font = ""                  # fuente PSF (vacío = automática)
-font_scale = 0             # 0 = el doble que la barra, para leerse de reojo
+font_scale = 0             # 0 = automática; OSD compacto (escala 1)
 ```
 
 ### Cómo se dispara
@@ -642,26 +895,32 @@ swaydesk volume mute
 swayosd volume up             # lo mismo, sin pasar por swaydesk
 swayosd volume mute --step 3  # pasos más finos
 swayosd show                  # solo mostrar el volumen actual
-swayosd watch                 # vigilar y avisar de cualquier cambio
+swayosd watch                 # vigilar el volumen y las pistas MPRIS
+swayosd media show --title "Hikari" --artist "Aimer" \
+  --art-url file:///tmp/cover.png --status Playing
 swaydesk osd                  # configuración y volumen actual
-swaydesk osd preview osd.png  # PNG del aviso, sin sesión gráfica
+swaydesk osd preview osd.png  # PNG del aviso de volumen, sin sesión gráfica
 ```
 
 Los atajos `XF86AudioRaiseVolume`, `XF86AudioLowerVolume` y `XF86AudioMute`
-llaman a `swaydesk volume …`, que usa `swayosd` cuando está instalado. Si
-quieres reaccionar a cambios que no vengan de esos atajos —auriculares
-Bluetooth, otro programa, `pactl` a mano— el autostart deja `swayosd watch`
-en marcha: vigila el volumen del altavoz por defecto y lanza el aviso cuando
-cambie, venga de donde venga.
+llaman a `swaydesk volume …`, que usa `swayosd` cuando está instalado. El
+autostart deja `swayosd watch` en marcha: vigila el volumen cada 300 ms y
+escucha las señales MPRIS del bus D-Bus de sesión. Al iniciar no muestra la
+pista que ya estaba sonando; después, una pista nueva dispara la tarjeta. La
+carátula acepta URI `file://` o HTTP(S); se omite si ya no está disponible.
+
+Puedes desactivar los avisos por separado: `osd.enabled = false` mantiene la
+integración multimedia, mientras `osd.media_enabled = false` deja solo el
+volumen. Para apagar ambos, establece los dos en `false`.
 
 ### Detalles que conviene saber
 
 - La lectura del volumen usa `wpctl` (PipeWire), luego `pactl` y luego
   `amixer`; con ninguno de los tres el aviso no puede mostrarse, pero el
   escritorio sigue funcionando.
-- El nombre del dispositivo sale de `wpctl inspect`/`pactl get-default-sink` y
-  se recorta si no cabe; si no se puede averiguar, la tarjeta ocupa una línea
-  menos.
+- El OSD de volumen omite el nombre técnico del dispositivo para mantener la
+  tarjeta limpia y compacta. `swaydesk osd` todavía permite consultar el
+  dispositivo activo en la salida de diagnóstico.
 - Por encima del 100% la barra se llena y cambia a color de aviso (volumen
   amplificado); silenciado, la barra queda vacía y una raya la cruza.
 - La superficie es una capa `overlay` con la **región de entrada vacía**: el
@@ -692,6 +951,16 @@ Módulos disponibles: `logo`, `recording`, `clock`, `cpu`, `ram`, `battery`,
 }
 ```
 
+La plantilla Waybar tampoco incluye un botón `custom/power`. `swaydesk apply`
+retira esa entrada obsoleta de las configuraciones JSON de Waybar sin cambiar
+los demás módulos. Reinicia la barra (`Super+Ctrl+B`) para que un proceso viejo
+cargue los cambios. El menú de energía se abre con **Super+P**
+(`swaymenu --power --float`) desde la configuración Sway; también está
+disponible como `swaydesk power`. Si ya tienes una configuración Sway que el
+instalador conservó, agrega allí un atajo equivalente: `--no-config` no modifica
+archivos existentes y `--force` los reemplaza después de crear una copia de
+respaldo.
+
 Para ver el estado completo en JSON (útil para scripts):
 
 ```bash
@@ -702,14 +971,27 @@ swaydesk status --json | jq '.system.cpu_percent, .sway.focused'
 
 ```bash
 swaydesk notify "Título" "Cuerpo" --urgency low
+swaydesk events watch       # vigila entradas, monitores y almacenamiento USB
 swaydesk volume up          # wpctl / pactl / amixer, lo que exista
-swaydesk screenshot region  # grim + slurp, guarda en ~/Capturas
+swaydesk screenshot region  # guarda en ~/Capturas, copia y notifica
 swaydesk lock
 swaydesk power reboot
 ```
 
 Desde un script o un bind de sway puedes usar los binarios directamente:
 `swaymenu --float`, `swayctl`, `swayclip`.
+
+El autostart inicia `swaydesk events watch` al entrar y lo reinicia en cada
+recarga de Sway, evitando instancias duplicadas. Usa el IPC de Sway
+para avisar sobre conexiones y desconexiones de entradas (teclado, ratón, etc.)
+y monitores; además, `udevadm` detecta unidades de almacenamiento USB. Si
+`swaydesk doctor` señala un autostart antiguo, actualiza únicamente ese archivo
+y recarga Sway:
+
+```bash
+swaydesk init --force --only swaydesk/autostart.sh
+swaymsg reload
+```
 
 ## 10. Fuentes
 

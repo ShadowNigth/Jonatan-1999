@@ -2,6 +2,7 @@ package ui
 
 import (
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -114,7 +115,9 @@ func TestFilterItems(t *testing.T) {
 
 func TestKeyReader(t *testing.T) {
 	pr, pw := io.Pipe()
+	defer pw.Close()
 	kr := NewKeyReader(pr)
+	defer kr.Close()
 	go func() {
 		for _, chunk := range []string{
 			"a", "\x1b[A", "\x1b[B", "\x1b[Z", "\x03", "\r", "\x7f", "ñ", "\x1b[1;5C", "\x1bx",
@@ -145,6 +148,96 @@ func TestKeyReader(t *testing.T) {
 	}
 }
 
+func TestKeyReaderCloseStopsBlockedPipe(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	kr := NewKeyReader(pr)
+	keys := kr.Keys()
+	kr.Close()
+
+	select {
+	case _, ok := <-keys:
+		if ok {
+			t.Fatal("el lector publicó una tecla al cerrarse sin entrada")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Close no liberó el lector bloqueado")
+	}
+}
+
+func TestFileKeyReaderClosesWithoutClosingFile(t *testing.T) {
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readEnd.Close()
+	defer writeEnd.Close()
+
+	kr := NewKeyReader(readEnd)
+	keys := kr.Keys()
+	if _, err := writeEnd.Write([]byte("q")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case key, ok := <-keys:
+		if !ok || key.Rune != 'q' {
+			t.Fatalf("tecla inesperada: %+v, abierto=%v", key, ok)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("el lector de archivos no recibió la tecla")
+	}
+
+	kr.Close()
+	select {
+	case _, ok := <-keys:
+		if ok {
+			t.Fatal("quedó una tecla tras cerrar el reader")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("el reader de archivo no se detuvo al cerrar")
+	}
+	kr2 := NewKeyReader(readEnd)
+	keys2 := kr2.Keys()
+	defer kr2.Close()
+	if _, err := writeEnd.Write([]byte("x")); err != nil {
+		t.Fatalf("Close cerró el descriptor que pertenece al llamador: %v", err)
+	}
+	select {
+	case key, ok := <-keys2:
+		if !ok || key.Rune != 'x' {
+			t.Fatalf("segundo menú recibió una tecla inesperada: %+v, abierto=%v", key, ok)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("el segundo menú no recibió entrada tras cerrar el primero")
+	}
+}
+
+func TestSelectorFilteredCacheInvalidation(t *testing.T) {
+	sel := NewSelector(NewTheme("catppuccin", false), "cache", []Item{
+		{Key: "a", Label: "Alpha"},
+		{Key: "b", Label: "Beta"},
+	})
+	sel.SetFilter("al")
+	first := sel.Filtered()
+	second := sel.Filtered()
+	if len(first) != 1 || first[0].Key != "a" || &first[0] != &second[0] {
+		t.Fatalf("el resultado filtrado no se conservó: %v / %v", first, second)
+	}
+
+	sel.SetItems([]Item{{Key: "b", Label: "Beta"}})
+	if got := sel.Filtered(); len(got) != 0 {
+		t.Fatalf("SetItems dejó una búsqueda obsoleta: %+v", got)
+	}
+	sel.SetFilter("be")
+	if got := sel.Filtered(); len(got) != 1 || got[0].Key != "b" {
+		t.Fatalf("SetFilter no invalidó el resultado: %+v", got)
+	}
+	sel.SetBypassFilter(true)
+	if got := sel.Filtered(); len(got) != 1 || got[0].Key != "b" {
+		t.Fatalf("BypassFilter no aplicó: %+v", got)
+	}
+}
+
 func TestSelectorView(t *testing.T) {
 	SetProfile(ProfileNone)
 	defer SetProfile(ProfileTrueColor)
@@ -168,7 +261,7 @@ func TestSelectorView(t *testing.T) {
 	if !strings.Contains(view, "Firefox") {
 		t.Fatal("no aparece la primera entrada")
 	}
-	sel.Filter = "term"
+	sel.SetFilter("term")
 	if got := sel.Filtered(); len(got) != 1 || got[0].Label != "Terminal" {
 		t.Fatalf("filtro inesperado: %+v", got)
 	}
@@ -246,7 +339,9 @@ func TestPalettesCompletas(t *testing.T) {
 
 func TestTimeoutDeEscape(t *testing.T) {
 	pr, pw := io.Pipe()
+	defer pw.Close()
 	kr := NewKeyReader(pr)
+	defer kr.Close()
 	done := make(chan Key, 1)
 	go func() {
 		k, _ := kr.Read()

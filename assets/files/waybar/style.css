@@ -63,8 +63,6 @@ tooltip label {
 }
 
 /* ─── Módulos genéricos ─────────────────────────────────────────────── */
-#cpu,
-#memory,
 #temperature,
 #battery,
 #pulseaudio,
@@ -72,7 +70,6 @@ tooltip label {
 #clock,
 #tray,
 #custom-logo,
-#custom-power,
 #custom-recording {
     padding: 0 10px;
     color: @fg;
@@ -80,37 +77,28 @@ tooltip label {
     border-radius: 8px;
 }
 
-#cpu:hover,
-#memory:hover,
+#clock {
+    font-size: 15px;
+    font-weight: 600;
+}
+
 #temperature:hover,
 #battery:hover,
 #pulseaudio:hover,
 #network:hover,
 #clock:hover,
-#custom-logo:hover,
-#custom-power:hover {
+#custom-logo:hover {
     background: @bg_sel;
     color: @accent;
 }
 
-/* ─── Logo y botón de energía ───────────────────────────────────────── */
+/* ─── Logo ──────────────────────────────────────────────────────────── */
 #custom-logo {
     color: @accent;
     font-weight: 700;
     font-size: {{BAR_FONT_SIZE_LOGO}}px;
     padding-left: 6px;
     padding-right: 4px;
-}
-
-#custom-power {
-    color: @err;
-    font-size: {{BAR_FONT_SIZE_LOGO}}px;
-    padding-right: 8px;
-}
-
-#custom-power:hover {
-    background: @err;
-    color: @bg;
 }
 
 #custom-recording {
@@ -170,7 +158,7 @@ window#waybar.empty #window {
     color: transparent;
 }
 
-/* ─── Modo de sway (resize) ─────────────────────────────────────────── */
+/* ─── Modo de sway (redimensionar) ──────────────────────────────────── */
 #mode {
     color: @bg;
     background: @warn;

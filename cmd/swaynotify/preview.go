@@ -146,7 +146,7 @@ func renderPreviewWith(cfg *config.Config, path string, backdrop bool) error {
 		Opacity:  cfg.NotifyOpacity,
 		Face:     font.Best(cfg.NotifyFont),
 		Theme:    ui.PaletteByName(cfg.Theme),
-		Scale:    2,
+		Scale:    scaleFor(cfg, 1),
 		MaxLines: cfg.NotifyMaxLines,
 		Shadow:   true,
 	})

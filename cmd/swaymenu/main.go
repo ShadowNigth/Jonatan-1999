@@ -56,6 +56,15 @@ func main() {
 	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 
 	if *power {
+		// Los atajos de sway y otros lanzadores no tienen TTY. En esos casos
+		// abre el menú dentro de una terminal flotante; desde una terminal
+		// interactiva conserva el comportamiento directo. El hijo relanzado
+		// lleva --no-float para impedir que vuelva a abrir otra terminal.
+		interactive := ui.IsInteractive()
+		if powerMenuNeedsTerminal(*float, *noFloat, interactive) {
+			runPowerFloating(cfg)
+			return
+		}
 		runPowerMenu(theme, cfg)
 		return
 	}
@@ -76,9 +85,23 @@ func main() {
 	runMenu(theme, cfg, *filter, *withCmds || cfg.Bool("launcher.commands", false))
 }
 
+func powerMenuNeedsTerminal(forceFloat, noFloat, interactive bool) bool {
+	return forceFloat || (!noFloat && !interactive)
+}
+
 // runFloating lanza una copia del menú dentro de una ventana de terminal
 // flotante (sway coloca la ventana según la regla app_id="swaydesk-menu").
 func runFloating(cfg *config.Config, width, height int) {
+	runFloatingWith(cfg, width, height, launcher.LaunchTerminal)
+}
+
+// runPowerFloating pide a sway que cree la terminal. Así el compositor hereda
+// el entorno gráfico de sesión, en vez de lanzar foot desde un proceso daemon.
+func runPowerFloating(cfg *config.Config) {
+	runFloatingWith(cfg, 58, 14, launchTerminalViaSway)
+}
+
+func runFloatingWith(cfg *config.Config, width, height int, launch func(string, string, string, int, int, []string) error) {
 	exe, err := os.Executable()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "swaymenu: %v\n", err)
@@ -99,10 +122,27 @@ func runFloating(cfg *config.Config, width, height int) {
 		}
 		args = append(args, a)
 	}
-	if err := launcher.LaunchTerminal(cfg.Terminal, "swaydesk-menu", "swaydesk", w, h, append([]string{exe}, args...)); err != nil {
-		fmt.Fprintf(os.Stderr, "swaymenu: %v\n", err)
+	if err := launch(cfg.Terminal, "swaydesk-menu", "swaydesk", w, h, append([]string{exe}, args...)); err != nil {
+		fmt.Fprintf(os.Stderr, "swaymenu: no se pudo abrir la terminal del menú: %v\n", err)
+		actions.Notification("swaydesk", "No se pudo abrir la terminal del menú: "+err.Error(), "critical")
 		os.Exit(1)
 	}
+}
+
+func launchTerminalViaSway(term, appID, title string, width, height int, command []string) error {
+	binary, args, err := launcher.TerminalCommand(term, appID, title, width, height, command)
+	if err != nil {
+		return err
+	}
+	argv := append([]string{binary}, args...)
+	conn, err := swayipc.Dial()
+	if err != nil {
+		// Fuera de una sesión de sway no existe un compositor que pueda
+		// lanzar la ventana; conserva el fallback para uso manual.
+		return launcher.StartDetached(binary, args...)
+	}
+	defer conn.Close()
+	return conn.CommandOK("exec --no-startup-id " + launcher.ShellQuoteArgs(argv))
 }
 
 // buildItems reúne acciones, aplicaciones y comandos ordenados por uso.
@@ -128,9 +168,6 @@ func buildItems(cfg *config.Config, theme *ui.Theme, withCommands bool) ([]ui.It
 		{"swayctl", "Panel de control", "estado, temas, atajos", theme.Icons.Layout, "swayctl"},
 		{"swayclip", "Portapapeles", "historial de wl-clipboard", theme.Icons.Scroll, "swayclip"},
 		{"screenshot", "Captura de pantalla", "grim + slurp", theme.Icons.Camera, "grim"},
-		{"lock", "Bloquear pantalla", "swaylock", theme.Icons.Lock, "swaylock"},
-		{"power", "Energía", "apagar, reiniciar, suspender", theme.Icons.Power, ""},
-		{"theme", "Cambiar tema", "paletas de color", theme.Icons.Theme, ""},
 		{"edit-sway", "Editar configuración de sway", "~/.config/sway/config", theme.Icons.Gear, cfg.Editor},
 		{"edit-swaydesk", "Editar configuración de swaydesk", cfg.Path, theme.Icons.Doc, cfg.Editor},
 	}
@@ -216,11 +253,6 @@ func firstCategory(cats string) string {
 }
 
 func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bool) {
-	items, byKey := buildItems(cfg, theme, withCommands)
-	sel := ui.NewSelector(theme, "swaydesk · lanzador", items)
-	sel.Filter = filter
-	sel.Placeholder = "escribe para buscar ·  = para calcular"
-
 	sc, err := ui.OpenScreen()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "swaymenu: %v\n", err)
@@ -228,15 +260,22 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 	}
 	defer sc.Close()
 
+	sel := ui.NewSelector(theme, "swaydesk · lanzador", nil)
+	sel.SetFilter(filter)
+	sel.Placeholder = "escribe para buscar ·  = para calcular"
+	sel.Empty = "cargando aplicaciones…"
+
 	var (
 		calcResult string
 		calcErr    error
-		base       = items
+		base       []ui.Item
+		byKey      map[string]payload
+		loaded     bool
 	)
 	refresh := func() {
 		f := strings.TrimSpace(sel.Filter)
-		sel.Items = base
-		sel.BypassFilter = false
+		sel.SetItems(base)
+		sel.SetBypassFilter(false)
 		calcResult, calcErr = "", nil
 		if strings.HasPrefix(f, "=") {
 			expr := strings.TrimSpace(strings.TrimPrefix(f, "="))
@@ -246,22 +285,73 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 					calcErr = err
 				} else {
 					calcResult = calc.Format(v)
-					sel.Items = []ui.Item{{
+					sel.SetItems([]ui.Item{{
 						Key:   "calc",
 						Label: calcResult,
 						Hint:  "copiar resultado",
 						Icon:  theme.Icons.Calc,
-					}}
-					sel.BypassFilter = true
+					}})
+					sel.SetBypassFilter(true)
 					sel.Cursor = 0
 				}
 			}
 		}
 	}
-	refresh()
+	type buildResult struct {
+		items []ui.Item
+		byKey map[string]payload
+	}
+	ready := make(chan buildResult, 1)
+	wake := make(chan time.Time, 1)
+	go func() {
+		items, payloads := buildItems(cfg, theme, withCommands)
+		ready <- buildResult{items: items, byKey: payloads}
+		wake <- time.Now()
+	}()
+	consumeReady := func() {
+		if loaded {
+			return
+		}
+		select {
+		case result := <-ready:
+			loaded = true
+			base, byKey = result.items, result.byKey
+			sel.Empty = "sin resultados"
+			refresh()
+		default:
+		}
+	}
+	editFilterWhileLoading := func(k ui.Key) bool {
+		switch {
+		case k.Is("esc"):
+			if sel.Filter != "" {
+				sel.ClearFilter()
+				return false
+			}
+			return true
+		case k.Is("enter"):
+			// Evita cerrar el lanzador si la búsqueda inicial sigue cargando.
+			return false
+		case k.Is("backspace"):
+			sel.Backspace()
+		case k.Ctrl && k.IsRune('u'):
+			sel.ClearFilter()
+		case k.Ctrl && k.IsRune('w'):
+			f := strings.TrimRight(sel.Filter, " ")
+			if i := strings.LastIndexByte(f, ' '); i >= 0 {
+				sel.SetFilter(f[:i+1])
+			} else {
+				sel.SetFilter("")
+			}
+		case k.Rune >= 32 && !k.Ctrl && !k.Alt:
+			sel.Type(k.Rune)
+		}
+		return false
+	}
 
 	_ = sc.Loop(
 		func(w, h int) string {
+			consumeReady()
 			view := sel.View(w, h)
 			if calcErr != nil && strings.HasPrefix(sel.Filter, "=") {
 				// Sustituye la línea de pistas por el error de cálculo.
@@ -279,6 +369,10 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 			return view
 		},
 		func(k ui.Key) bool {
+			consumeReady()
+			if !loaded {
+				return editFilterWhileLoading(k)
+			}
 			switch {
 			case k.Is("esc"):
 				if sel.Filter != "" {
@@ -292,7 +386,7 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 				if !ok {
 					return true
 				}
-				execute(it, byKey, theme, cfg, calcResult)
+				execute(it, byKey, cfg, calcResult)
 				return true
 			case k.Is("up") || (k.Ctrl && k.IsRune('p')):
 				sel.Move(-1)
@@ -315,22 +409,21 @@ func runMenu(theme *ui.Theme, cfg *config.Config, filter string, withCommands bo
 			case k.Ctrl && k.IsRune('w'):
 				f := strings.TrimRight(sel.Filter, " ")
 				if i := strings.LastIndexByte(f, ' '); i >= 0 {
-					sel.Filter = f[:i+1]
+					sel.SetFilter(f[:i+1])
 				} else {
-					sel.Filter = ""
+					sel.SetFilter("")
 				}
-				sel.Cursor, sel.Offset = 0, 0
 				refresh()
 			case k.Rune >= 32 && !k.Ctrl && !k.Alt:
 				sel.Type(k.Rune)
 				refresh()
 			}
 			return false
-		}, nil)
+		}, wake)
 }
 
 // execute lanza la entrada seleccionada.
-func execute(it ui.Item, byKey map[string]payload, theme *ui.Theme, cfg *config.Config, calcResult string) {
+func execute(it ui.Item, byKey map[string]payload, cfg *config.Config, calcResult string) {
 	p, ok := byKey[it.Key]
 	if !ok {
 		if it.Key == "calc" && calcResult != "" {
@@ -347,19 +440,12 @@ func execute(it ui.Item, byKey map[string]payload, theme *ui.Theme, cfg *config.
 			actions.Notification("swaymenu", fmt.Sprintf("No se pudo lanzar %s: %v", it.Label, err), "critical")
 		}
 	case "action":
-		switch p.action {
-		case "power":
-			runPowerMenu(theme, cfg)
-		case "theme":
-			runThemePicker(theme, cfg)
-		default:
-			runAction(p.action, theme, cfg)
-		}
+		runAction(p.action, cfg)
 	}
 }
 
 // runAction ejecuta una acción integrada por nombre.
-func runAction(id string, theme *ui.Theme, cfg *config.Config) {
+func runAction(id string, cfg *config.Config) {
 	fail := func(err error) {
 		if err != nil {
 			actions.Notification("swaydesk", err.Error(), "critical")
@@ -372,8 +458,6 @@ func runAction(id string, theme *ui.Theme, cfg *config.Config) {
 		fail(launcher.StartDetached(cfg.FileManager))
 	case "browser":
 		fail(launcher.StartDetached(cfg.Browser))
-	case "lock":
-		fail(actions.Lock())
 	case "screenshot":
 		fail(actions.Screenshot("region"))
 	case "reload":
@@ -407,7 +491,13 @@ func reloadSway() error {
 func runPowerMenu(theme *ui.Theme, cfg *config.Config) {
 	items := actions.PowerMenuItems(theme)
 	key, _, ok, err := actions.Pick(theme, "Energía · sesión", items, actions.SelectorOptions{})
-	if err != nil || !ok {
+	if err != nil {
+		message := "No se pudo abrir el menú de energía: " + err.Error()
+		fmt.Fprintf(os.Stderr, "swaymenu: %s\n", message)
+		actions.Notification("swaydesk", message, "critical")
+		return
+	}
+	if !ok {
 		return
 	}
 	if err := actions.RunPowerAction(key, cfg.ConfirmPower, theme); err != nil {

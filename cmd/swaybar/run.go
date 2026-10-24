@@ -22,6 +22,10 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 	if err != nil {
 		return fmt.Errorf("no se pudo conectar con el compositor: %w", err)
 	}
+	if _, err := conn.GetRegistry(); err != nil {
+		conn.Close()
+		return fmt.Errorf("no se pudieron leer los globals de Wayland: %w", err)
+	}
 
 	anchors := uint32(wayland.AnchorTop | wayland.AnchorLeft | wayland.AnchorRight)
 	margins := wayland.PanelSpec{}
@@ -46,6 +50,7 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 
 	panel, err := wayland.NewPanel(conn, margins)
 	if err != nil {
+		conn.Close()
 		return err
 	}
 	defer panel.Close()
@@ -53,8 +58,7 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		return err
 	}
 
-	// Ratón: la barra solo tiene una zona pulsable, el indicador de
-	// notificaciones, que abre el centro en una terminal flotante.
+	// Ratón: el indicador de notificaciones abre el centro en una terminal.
 	clicks := make(chan string, 4)
 	if p, err := wayland.NewPointer(conn, wayland.PointerHandler{
 		Button: func(x, y float64, button uint32, pressed bool) {
@@ -141,15 +145,18 @@ func handleClick(cfg *config.Config, name string) {
 	switch name {
 	case "notify":
 		// El centro necesita teclado: se abre en una terminal flotante.
-		exe := "swaydesk"
-		if self, err := os.Executable(); err == nil {
-			if hermano := filepath.Join(filepath.Dir(self), "swaydesk"); fileExists(hermano) {
-				exe = hermano
-			}
-		}
 		_ = launcher.LaunchTerminal(cfg.Terminal, "swaydesk-notify", "Notificaciones", 84, 24,
-			[]string{exe, "notifications", "center"})
+			[]string{siblingExecutable("swaydesk"), "notifications", "center"})
 	}
+}
+
+func siblingExecutable(name string) string {
+	if self, err := os.Executable(); err == nil {
+		if sibling := filepath.Join(filepath.Dir(self), name); fileExists(sibling) {
+			return sibling
+		}
+	}
+	return name
 }
 
 // fileExists indica si existe la ruta.

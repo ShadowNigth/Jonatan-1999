@@ -47,7 +47,8 @@ func NewPointer(c *Conn, h PointerHandler) (*Pointer, error) {
 	if ver > 7 {
 		ver = 7
 	}
-	p.seat = c.Bind(seat, ver, func(op uint16, d *decoder) {
+	var err error
+	p.seat, err = c.Bind(seat, ver, func(op uint16, d *decoder) {
 		switch op {
 		case seatCapabilities:
 			caps := d.uint32()
@@ -59,6 +60,9 @@ func NewPointer(c *Conn, h PointerHandler) (*Pointer, error) {
 			}
 		}
 	})
+	if err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -150,22 +154,29 @@ func (p *Pointer) Close() {
 // dejan pasar el ratón a lo que haya debajo. Un rectángulo vacío (w o h <= 0)
 // deja toda la superficie transparente al ratón.
 func (p *Panel) SetInputRegion(rects [][4]int) error {
-	comp, ok := p.conn.FindGlobal("wl_compositor")
-	if !ok {
-		return fmt.Errorf("el compositor no ofrece wl_compositor")
+	if p.compositorID == 0 {
+		return fmt.Errorf("el panel no tiene wl_compositor enlazado")
 	}
 	region := p.conn.allocID("wl_region", nil)
-	_ = p.conn.Send(newEncoder(comp.Name, compositorCreateRegion).newID(region).bytes())
+	if err := p.conn.Send(newEncoder(p.compositorID, compositorCreateRegion).newID(region).bytes()); err != nil {
+		return fmt.Errorf("creando la región de entrada: %w", err)
+	}
 	for _, r := range rects {
 		if r[2] <= 0 || r[3] <= 0 {
 			continue
 		}
-		_ = p.conn.Send(newEncoder(region, regionAdd).
+		if err := p.conn.Send(newEncoder(region, regionAdd).
 			int32(int32(r[0])).int32(int32(r[1])).
-			int32(int32(r[2])).int32(int32(r[3])).bytes())
+			int32(int32(r[2])).int32(int32(r[3])).bytes()); err != nil {
+			return fmt.Errorf("añadiendo un rectángulo a la región: %w", err)
+		}
 	}
-	_ = p.conn.Send(newEncoder(p.surface, surfaceSetInput).uint32(region).bytes())
-	_ = p.conn.Send(newEncoder(region, regionDestroy).bytes())
+	if err := p.conn.Send(newEncoder(p.surface, surfaceSetInput).uint32(region).bytes()); err != nil {
+		return fmt.Errorf("asignando la región al panel: %w", err)
+	}
+	if err := p.conn.Send(newEncoder(region, regionDestroy).bytes()); err != nil {
+		return fmt.Errorf("destruyendo la región temporal: %w", err)
+	}
 	return p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes())
 }
 

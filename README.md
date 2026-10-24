@@ -34,7 +34,7 @@ terceros.
 | `swaydesk` | CLI central: instala la configuración, aplica temas, diagnostica, controla la sesión |
 | `swaybar` | Barra de estado propia dibujada en píxeles sobre `wlr-layer-shell` (sustituye a waybar) |
 | `swaynotify` | Daemon de notificaciones: habla `org.freedesktop.Notifications` por D-Bus y dibuja las tarjetas en píxeles (sustituye a mako) |
-| `swayosd` | Avisos en pantalla: el nivel de volumen aparece unos instantes en una tarjeta flotante con fundido |
+| `swayosd` | OSD de volumen y reproducción: título, artista y carátula MPRIS en una tarjeta flotante con fundido |
 
 ```
 ╭── swaydesk · lanzador ─────────────────────────────────────────────╮
@@ -81,9 +81,10 @@ terceros.
 - **Barra de estado propia** (`swaybar`): islas redondeadas y translúcidas
   dibujadas píxel a píxel — sin GTK, Qt ni Cairo. Workspaces con la ventana
   enfocada, título, CPU, RAM, volumen, red, batería, reproductor y reloj;
-  tipografía de mapa de bits con fuentes PSF del sistema e iconos siempre
-  visibles; se adapta sola a la paleta activa, se refresca al instante con los
-  eventos de sway y se configura entera desde `[bar]` en `config.toml`.
+  tipografía de mapa de bits con fuentes PSF e iconos siempre visibles. Se
+  adapta a la paleta, responde a eventos de sway y se configura desde `[bar]`
+  en `config.toml`. El menú de energía se abre con **Super+P** en una ventana
+  flotante, sin un botón en la barra.
 - **Notificaciones propias** (`swaynotify`): daemon completo de
   `org.freedesktop.Notifications` sobre un cliente **D-Bus escrito desde cero**
   (SASL EXTERNAL, formato binario con firmas, llamadas, señales y errores), y
@@ -133,6 +134,12 @@ terceros.
 - **Cero dependencias**: `go build` y listo. Binarios estáticos de ~3 MB.
 
 ## Capturas
+
+`swaydesk screenshot` guarda los PNG en `~/Capturas` (fuera de `~/Imágenes`),
+los copia al portapapeles y muestra una notificación textual con la ruta.
+Durante la sesión, `swaydesk events watch` avisa al conectar o desconectar
+entradas, monitores y unidades de almacenamiento USB; el autostart lo inicia
+y lo renueva al recargar Sway, sin dejar instancias duplicadas.
 
 | Panel de control | Portapapeles |
 |---|---|
@@ -205,6 +212,7 @@ curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scrip
 | `--deps` | instala las dependencias recomendadas con `pacman` |
 | `--no-config` | no escribe la configuración del escritorio |
 | `--force` | sobrescribe la configuración existente (con copia `*.bak-<fecha>`) |
+| `--no-path` | no añade `~/.local/bin` al PATH de tus archivos de shell |
 
 Variables de entorno: `PREFIX` (destino; por defecto `~/.local`),
 `SWAYDESK_REPO` (otra URL de repositorio) y `SWAYDESK_BRANCH` (rama o etiqueta).
@@ -214,8 +222,15 @@ PREFIX=/usr/local sudo -E ./scripts/install.sh   # instalación en el sistema
 SWAYDESK_BRANCH=v1.0.0 ./scripts/install.sh      # una versión concreta
 ```
 
-Si `~/.local/bin` no está en el `PATH`, el script te dice la línea exacta que
-hay que añadir al `~/.bashrc`/`~/.zshrc`.
+Si `~/.local/bin` no está en el `PATH`, el instalador **añade la línea él
+mismo** a `~/.bashrc`, `~/.zshrc` y `~/.profile` (una sola vez, sin duplicarla)
+y te recuerda recargar la terminal. Para que no toque nada, `--no-path`.
+
+> Si abres una terminal y `swaydesk: orden no encontrada`, casi siempre es esto:
+> `export PATH="$HOME/.local/bin:$PATH"` (o abre una terminal nueva). La sesión
+> de sway no hereda tu `PATH`, así que la configuración generada usa **rutas
+> absolutas** para los binarios y `autostart.sh` añade `~/.local/bin` por su
+> cuenta.
 
 ### Opción 2: manual
 
@@ -291,10 +306,12 @@ Fondos de pantalla
 Sesión
   status [--json] [--module M]   Estado (sway, CPU, RAM, disco, batería…)
   doctor                         Diagnóstico de dependencias y configuración
+  keys [filtro] [--exec]         Atajos de sway expandidos y cuáles no funcionan
   notify <título> [cuerpo]       Notificación de escritorio
+  events watch                   Avisos de conexión de dispositivos y monitores
   volume <up|down|mute>          Volumen (con aviso en pantalla si hay swayosd)
   osd [show|preview|volume …]    Avisos en pantalla: estado, repetir, PNG
-  screenshot [region|full]       Captura con grim
+  screenshot [region|full]       Captura, copia al portapapeles y avisa al terminar
   lock | reload | power [acción] Sesión y energía
 
 Notificaciones
@@ -312,22 +329,32 @@ Barra propia
   bar                        Estado de la barra (o `bar status`)
   bar on | off               Usar swaybar o volver a waybar
   bar preview [--width N]    Vista previa en PNG
-  bar modules cpu ram clock  Elige los módulos de la derecha
+  bar modules media notify volume network battery clock  Elige módulos
+  bar opacity 0.68          Ajusta la translucidez de ambas barras (0–1)
 ```
 
-### Avisos en pantalla (OSD de volumen)
+Para volver ahora a Waybar sin reiniciar la sesión, ejecuta `swaydesk bar off`
+y después `swaymsg reload`. El autostart detiene la otra barra antes de iniciar
+la elegida, evitando que queden superpuestas.
+
+### Avisos en pantalla (OSD de volumen y reproducción)
 
 ```bash
-swaydesk volume up            # sube y muestra el aviso
+swaydesk volume up            # sube y muestra el aviso de volumen
 swayosd volume down           # lo mismo, sin pasar por swaydesk
 swayosd show                  # solo mostrar el volumen actual
-swayosd watch                 # vigilar y avisar de cualquier cambio
+swayosd watch                 # vigilar volumen y cambios de pista MPRIS
+swayosd media show --title "Hikari" --artist "Aimer" --art-url file:///tmp/cover.png
 swaydesk osd                  # configuración y volumen actual
 ```
 
-El aviso es una tarjeta redondeada sobre las ventanas con la etiqueta
-`VOLUMEN`, el porcentaje en grande y una barra segmentada; se va solo con un
-fundido. `swaydesk osd preview osd.png` genera la imagen sin sesión gráfica.
+El aviso de volumen es una tarjeta redondeada con el porcentaje y una barra
+segmentada. Al cambiar de pista, `swayosd watch` lee título, artista y URL de
+carátula desde MPRIS por el bus D-Bus de sesión y muestra una tarjeta multimedia;
+la carátula puede ser local (`file://`) o HTTP(S). Ambos avisos se desvanecen y
+no interceptan clics. La tarjeta de volumen omite el identificador técnico de
+la salida de audio y muestra solo el estado, el porcentaje y la barra.
+`swaydesk osd preview osd.png` genera la vista previa sin sesión gráfica.
 
 ### Atajos por defecto
 
@@ -336,7 +363,7 @@ fundido. `swaydesk osd preview osd.png` genera la imagen sin sesión gráfica.
 | `Super+Return` | Terminal | `Super+d` | Lanzador |
 | `Super+Shift+d` | Lanzador + comandos | `Super+b` | Navegador |
 | `Super+i` | Panel de control | `Super+c` | Portapapeles |
-| `Super+p` | Menú de energía | `Super+t` | Galería de temas |
+| `Super+P` | Menú de energía flotante | `Super+t` | Galería de temas |
 | `Super+Shift+t` | Galería de temas | `Super+Shift+w` | Selector de fondos |
 | `Super+Shift+l` | Bloquear | `Print` | Captura de pantalla |
 | `Super+q` | Cerrar ventana | `Super+f` | Pantalla completa |
@@ -348,8 +375,19 @@ fundido. `swaydesk osd preview osd.png` genera la imagen sin sesión gráfica.
 | `Super+Ctrl+n` | No molestar | `Super+Ctrl+Shift+n` | Cerrar notificaciones |
 | `Super+n` | Centro de notificaciones (o clic en la barra) | `Enter` | Responder o cerrar en el centro |
 
-La chuleta completa está en `Super+i` → *Atajos*, y en
-[`assets/files/sway/config`](assets/files/sway/config).
+El atajo ejecuta `swaymenu --power --float`; no hay botón de energía en swaybar
+ni en Waybar. `Super+i` y `Super+c` lanzan interfaces de terminal: si Sway las
+inicia sin TTY, se reabren en una ventana flotante de la terminal configurada.
+Si conservas una configuración Sway antigua que no fue regenerada, añade un
+atajo equivalente al archivo activo (usa la ruta absoluta de `swaymenu` si Sway
+no la encuentra en su `PATH`). La chuleta completa está en `Super+i` → *Atajos*,
+y en [`assets/files/sway/config`](assets/files/sway/config).
+
+`Print` captura la pantalla completa; `Super+Print` y `Super+Shift+Print`
+seleccionan una región. Todas guardan el PNG en `~/Capturas` (no dentro de
+`Imágenes`), lo copian como imagen al portapapeles y muestran una notificación
+con la ruta. `swaydesk apply` migra esos tres atajos si todavía usan las órdenes
+antiguas de `grim`, sin tocar los demás atajos ni los overrides personalizados.
 
 ### Lanzador
 
@@ -384,7 +422,7 @@ segundo para el reloj y las métricas; si no hay cambios no consume CPU apenas.
 |---|---|
 | Izquierda | Logotipo, workspaces (el enfocado resaltado, los ocupados en color), ventanas flotantes |
 | Centro | Título de la ventana enfocada y `app_id`, recortado al hueco libre |
-| Derecha | Reproductor, notificaciones, CPU, RAM, volumen, red, batería y reloj |
+| Derecha | Reproductor, notificaciones, volumen, red, batería y reloj |
 
 - `panel del tema` — los colores salen de la paleta activa; al cambiar de tema
   la barra se recolorea sola (escucha la señal `SIGUSR2`).
@@ -449,17 +487,17 @@ dir = "~/Imágenes/Fondos"  # carpeta que explora el selector
 [notify]
 enabled = true             # false = volver a mako
 position = "top-right"     # top-right · top-left · bottom-right · bottom-left
-width = 360                # ancho de las tarjetas
+width = 300                # tarjetas compactas
 margin = 14
-padding = 14
-gap = 8
-radius = 14
+padding = 10
+gap = 6
+radius = 12
 opacity = 0.94
 timeout_ms = 6000          # tiempo en pantalla (normales)
 critical_timeout_ms = 0    # 0 = las urgentes no caducan
 max_visible = 4            # cuántas se apilan
 history = 50               # entradas que se recuerdan
-max_lines = 3              # líneas del cuerpo
+max_lines = 2              # líneas del cuerpo
 dnd = false                # arrancar en «no molestar»
 group = true               # agrupar por aplicación en pilas desplegables
 font = ""                  # fuente PSF (vacío = automática)
@@ -472,13 +510,13 @@ margin = 6
 padding = 14
 gap = 10
 radius = 0                 # 0 = pastilla completa
-opacity = 0.88             # transparencia de las islas
+opacity = 0.68             # transparencia de las islas
 islands = true             # islas separadas o barra continua
 logo = true
 font = ""                  # fuente PSF (vacío = automática)
 shadow = true
 exclusive = true           # las ventanas no se solapan con la barra
-modules = ["media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"]
+modules = ["media", "notify", "volume", "network", "battery", "clock"]
 
 [boot]
 enabled = true             # animación al iniciar sesión
@@ -488,21 +526,23 @@ logo = true                # logotipo grande en bloques
 
 [osd]
 enabled = true             # aviso flotante con el nivel de volumen
+media_enabled = true        # tarjeta al cambiar de pista (MPRIS)
+media_timeout_ms = 3200     # duración de la tarjeta multimedia
 position = "bottom-center" # bottom-right, bottom-left, top-center, center
-width = 320                # ancho de la tarjeta
+width = 260                # ancho compacto de la tarjeta
 margin = 72                # separación con el borde inferior
-padding = 16
-radius = 18
+padding = 12
+radius = 14
 opacity = 0.95
 timeout_ms = 1400          # cuánto se queda en pantalla
 fade_ms = 140              # fundido de entrada y salida (0 = sin animación)
 segments = 24              # marcas de la barra de nivel
 font = ""                  # fuente PSF (vacío = automática)
-font_scale = 0             # 0 = el doble de la barra, para leerse de reojo
+font_scale = 0             # 0 = automática; OSD compacto (escala 1)
 
 [effects]
 terminal_opacity = 0.94    # foot
-bar_opacity = 0.86         # waybar
+bar_opacity = 0.68         # waybar
 active_opacity = 1.00
 inactive_opacity = 0.94
 blur = false               # solo swayfx
@@ -511,10 +551,15 @@ gaps_outer = 8
 rounding = 12              # solo swayfx
 ```
 
+Las tarjetas de notificación y el OSD de volumen usan tamaños compactos; sus
+rótulos propios están en español. El título y el cuerpo de cada notificación
+los envía la aplicación de origen y se muestran tal como llegan. Si ya tenías
+`config.toml`, sus medidas guardadas prevalecen: actualízalas en ese archivo.
+
 Cambiar de tema en caliente:
 
 ```bash
-swaydesk theme gruvbox     # o Super+t / swaymenu --themes
+swaydesk theme gruvbox     # o Super+t / swaydesk theme --gallery
 ```
 
 Esto reescribe `waybar/style.css`, `foot/foot.ini`, `mako/config`,

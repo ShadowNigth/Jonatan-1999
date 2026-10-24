@@ -4,35 +4,47 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ShadowNigth/swaydesk/internal/bar"
 	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/osd"
 	"github.com/ShadowNigth/swaydesk/internal/wayland"
 )
 
-// showOverlay abre una superficie flotante, dibuja el aviso con un fundido de
-// entrada y salida, y la cierra al terminar.
-//
-// La superficie no recibe clics (región de entrada vacía): el aviso nunca
-// estorba a lo que hay debajo.
+// showOverlay abre una superficie flotante para el aviso de volumen.
 func showOverlay(cfg *config.Config, r *osd.Renderer, st osd.State, hold time.Duration) error {
+	w, h := r.Size(st)
+	return showOverlayCanvas(cfg, "swaydesk-osd", w, h, hold, func(alpha float64) *bar.Canvas {
+		return r.Render(st, alpha)
+	})
+}
+
+// showMediaOverlay dibuja la tarjeta de reproducción en una superficie
+// independiente, con el mismo fundido y la misma geometría del OSD de volumen.
+func showMediaOverlay(cfg *config.Config, r *osd.MediaRenderer, st osd.MediaState, hold time.Duration) error {
+	w, h := r.Size(st)
+	return showOverlayCanvas(cfg, "swaydesk-media-osd", w, h, hold, func(alpha float64) *bar.Canvas {
+		return r.Render(st, alpha)
+	})
+}
+
+// showOverlayCanvas presenta cualquier lienzo OSD en una capa overlay. La
+// superficie no recibe clics: el aviso nunca estorba a lo que hay debajo.
+func showOverlayCanvas(cfg *config.Config, namespace string, w, h int, hold time.Duration, render func(float64) *bar.Canvas) error {
 	wl, err := wayland.NewConn()
 	if err != nil {
 		return fmt.Errorf("Wayland: %w", err)
 	}
+	defer wl.Close()
 	if _, err := wl.GetRegistry(); err != nil {
 		return fmt.Errorf("Wayland: %w", err)
 	}
 
-	// La tarjeta se dibuja en píxeles reales: la escala ya está aplicada en la
-	// fuente del renderizador, así que no se reescala nada aquí.
-	pw, ph := r.Size(st)
 	anchors, mt, mb, ml, mr := osdAnchors(cfg.OSDPosition, cfg.OSDMargin)
-
 	panel, err := wayland.NewPanel(wl, wayland.PanelSpec{
-		Namespace:     "swaydesk-osd",
+		Namespace:     namespace,
 		Layer:         wayland.LayerOverlay,
-		Width:         pw,
-		Height:        ph,
+		Width:         w,
+		Height:        h,
 		Anchors:       anchors,
 		ExclusiveZone: 0,
 		MarginTop:     mt,
@@ -51,10 +63,9 @@ func showOverlay(cfg *config.Config, r *osd.Renderer, st osd.State, hold time.Du
 	_ = panel.SetInputRegion(nil)
 
 	draw := func(alpha float64) error {
-		canvas := r.Render(st, alpha)
+		canvas := render(alpha)
 		return panel.Draw(canvas.Pix, canvas.W, canvas.H)
 	}
-
 	fade := cfg.OSDFade
 	if fade < 0 {
 		fade = 0

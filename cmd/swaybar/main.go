@@ -70,19 +70,20 @@ Sin opciones arranca la barra en una capa wlr-layer-shell (capa top).
 	pal := ui.PaletteByName(themeNameResolved)
 
 	opts := bar.Options{
-		Height:    cfg.BarHeight,
-		Margin:    cfg.BarMargin,
-		Padding:   cfg.BarPadding,
-		Gap:       cfg.BarGap,
-		Radius:    cfg.BarRadius,
-		Opacity:   cfg.BarBackgroundOpacity,
-		Islands:   cfg.BarIslands,
-		Modules:   cfg.BarModules,
-		ShowLogo:  cfg.BarLogo,
-		FontPath:  cfg.BarFont,
-		FontScale: cfg.BarFontScale,
-		Shadow:    cfg.BarShadow,
-		Theme:     pal,
+		Height:     cfg.BarHeight,
+		Margin:     cfg.BarMargin,
+		Padding:    cfg.BarPadding,
+		Gap:        cfg.BarGap,
+		Radius:     cfg.BarRadius,
+		Opacity:    cfg.BarBackgroundOpacity,
+		OpacitySet: true,
+		Islands:    cfg.BarIslands,
+		Modules:    cfg.BarModules,
+		ShowLogo:   cfg.BarLogo,
+		FontPath:   cfg.BarFont,
+		FontScale:  cfg.BarFontScale,
+		Shadow:     cfg.BarShadow,
+		Theme:      pal,
 	}
 	if *fontPath != "" {
 		opts.FontPath = *fontPath

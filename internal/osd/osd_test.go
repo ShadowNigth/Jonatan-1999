@@ -1,6 +1,7 @@
 package osd
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ShadowNigth/swaydesk/internal/bar"
@@ -20,6 +21,13 @@ func testRenderer(scale int) *Renderer {
 		Shadow:   true,
 		Segments: 20,
 	})
+}
+
+func TestRendererDefaultsAreCompact(t *testing.T) {
+	r := New(Options{Face: font.Builtin(), Theme: ui.PaletteByName("sakura")})
+	if r.Opt.Width != 260 || r.Opt.Padding != 12 || r.Scale() != 1 {
+		t.Fatalf("valores compactos del OSD: %+v, escala %d", r.Opt, r.Scale())
+	}
 }
 
 func TestStatePercentAndFill(t *testing.T) {
@@ -61,7 +69,7 @@ func TestStateTexts(t *testing.T) {
 		t.Fatalf("textos del aviso: %q %q %q", s.Label(), s.ValueText(), s.Detail())
 	}
 	m := Volume(45, true, "  ")
-	if m.ValueText() != "silencio" {
+	if m.ValueText() != "silenciado" {
 		t.Fatalf("silenciado = %q", m.ValueText())
 	}
 	if m.Detail() != "" {
@@ -92,6 +100,21 @@ func TestRenderSizeAndAlpha(t *testing.T) {
 		if h3 <= h1 {
 			t.Fatalf("la escala 3 no es más alta que la 1: %d vs %d", h3, h1)
 		}
+	}
+}
+
+func TestRenderOmitsTechnicalAudioDevice(t *testing.T) {
+	r := testRenderer(1)
+	withoutDevice := Volume(45, false, "")
+	withTechnicalDevice := Volume(45, false, "alsa_output.pci-0000_00_1f.3.analog-stereo")
+
+	w1, h1 := r.Size(withTechnicalDevice)
+	w2, h2 := r.Size(withoutDevice)
+	if w1 != w2 || h1 != h2 {
+		t.Fatalf("el identificador técnico no debe cambiar el tamaño del OSD: %dx%d != %dx%d", w1, h1, w2, h2)
+	}
+	if a, b := r.Render(withTechnicalDevice, 1), r.Render(withoutDevice, 1); !bytes.Equal(a.Pix, b.Pix) {
+		t.Fatal("el OSD no debe dibujar el identificador técnico de la salida de audio")
 	}
 }
 

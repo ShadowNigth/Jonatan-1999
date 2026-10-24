@@ -15,13 +15,21 @@ import (
 
 // rendererFor monta el dibujante del OSD a partir de la configuración.
 func rendererFor(cfg *config.Config, scale, width int, themeName string) *osd.Renderer {
+	return osd.New(rendererOptions(cfg, scale, width, themeName))
+}
+
+func mediaRendererFor(cfg *config.Config, scale, width int, themeName string) *osd.MediaRenderer {
+	return osd.NewMedia(rendererOptions(cfg, scale, width, themeName))
+}
+
+func rendererOptions(cfg *config.Config, scale, width int, themeName string) osd.Options {
 	if themeName == "" {
 		themeName = cfg.Theme
 	}
 	if width <= 0 {
 		width = cfg.OSDWidth
 	}
-	return osd.New(osd.Options{
+	return osd.Options{
 		Width:    width,
 		Padding:  cfg.OSDPadding,
 		Radius:   cfg.OSDRadius,
@@ -32,7 +40,7 @@ func rendererFor(cfg *config.Config, scale, width int, themeName string) *osd.Re
 		Scale:    scale,
 		Shadow:   true,
 		Segments: cfg.OSDSegments,
-	})
+	}
 }
 
 // currentVolume lee el volumen del altavoz por defecto.
@@ -41,7 +49,7 @@ func currentVolume() (osd.State, bool) {
 	if !ok {
 		return osd.State{}, false
 	}
-	return osd.Volume(vol, muted, host.AudioDevice()), true
+	return osd.Volume(vol, muted, ""), true
 }
 
 // runShow dibuja el aviso y termina. Se puede invocar desde un atajo:
@@ -166,8 +174,8 @@ func runPreview(args []string) {
 			value = n
 		}
 	}
-	st := osd.Volume(value, has(vals, "muted"), orDefault(last(vals, "device"), "Auriculares"))
-	r := rendererFor(cfg, 2, 0, last(vals, "theme"))
+	st := osd.Volume(value, has(vals, "muted"), last(vals, "device"))
+	r := rendererFor(cfg, scaleFor(cfg, last(vals, "scale")), 0, last(vals, "theme"))
 	canvas := r.Render(st, 1)
 	if err := savePNG(canvas, out); err != nil {
 		fail(err)
@@ -179,11 +187,4 @@ func runPreview(args []string) {
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "swayosd: %v\n", err)
 	os.Exit(1)
-}
-
-func orDefault(v, def string) string {
-	if v == "" {
-		return def
-	}
-	return v
 }

@@ -3,7 +3,10 @@ package ui
 import (
 	"bufio"
 	"io"
+	"os"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -47,25 +50,128 @@ func (k Key) IsRune(r rune) bool { return k.Rune == r && k.Name == "" }
 
 // KeyReader decodifica pulsaciones desde un lector de bytes.
 type KeyReader struct {
-	ch   chan byte
-	back []byte
+	ch      chan byte
+	back    []byte
+	file    *os.File
+	closer  io.Closer
+	done    chan struct{}
+	stopped chan struct{}
+	closeMu sync.Once
 }
 
-// NewKeyReader crea un lector de teclas sobre r.
+// NewKeyReader crea un lector de teclas sobre r. El lector del TTY se puede
+// detener sin cerrar stdin; para otros readers, Close cierra el reader si
+// implementa io.Closer.
 func NewKeyReader(r io.Reader) *KeyReader {
-	k := &KeyReader{ch: make(chan byte, 512)}
+	k := &KeyReader{
+		ch: make(chan byte, 512), done: make(chan struct{}), stopped: make(chan struct{}),
+	}
+	if f, ok := r.(*os.File); ok {
+		k.file = f
+		go k.readFile()
+		return k
+	}
+	if closer, ok := r.(io.Closer); ok {
+		k.closer = closer
+	}
 	br := bufio.NewReaderSize(r, 8192)
-	go func() {
-		for {
-			b, err := br.ReadByte()
-			if err != nil {
-				close(k.ch)
-				return
-			}
-			k.ch <- b
-		}
-	}()
+	go k.readReader(br)
 	return k
+}
+
+func (k *KeyReader) readReader(br *bufio.Reader) {
+	defer func() {
+		close(k.ch)
+		close(k.stopped)
+	}()
+	for {
+		b, err := br.ReadByte()
+		if err != nil {
+			return
+		}
+		select {
+		case k.ch <- b:
+		case <-k.done:
+			return
+		}
+	}
+}
+
+func (k *KeyReader) readFile() {
+	defer func() {
+		close(k.ch)
+		close(k.stopped)
+	}()
+	fd := int(k.file.Fd())
+	var buf [1]byte
+	for waitReadable(fd, k.done) {
+		select {
+		case <-k.done:
+			return
+		default:
+		}
+		n, err := syscall.Read(fd, buf[:])
+		if err == syscall.EINTR || err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
+			continue
+		}
+		if err != nil || n == 0 {
+			return
+		}
+		select {
+		case k.ch <- buf[0]:
+		case <-k.done:
+			return
+		}
+	}
+}
+
+// waitReadable polla el TTY con timeout para que Close pueda cancelar el
+// reader bloqueado sin cerrar el descriptor compartido de stdin.
+func waitReadable(fd int, done <-chan struct{}) bool {
+	if fd < 0 {
+		return false
+	}
+	const bitsPerWord = 64
+	for {
+		select {
+		case <-done:
+			return false
+		default:
+		}
+		var readSet syscall.FdSet
+		index := fd / bitsPerWord
+		if index >= len(readSet.Bits) {
+			return false
+		}
+		readSet.Bits[index] |= int64(uint64(1) << uint(fd%bitsPerWord))
+		timeout := syscall.Timeval{Usec: 100_000}
+		n, err := syscall.Select(fd+1, &readSet, nil, nil, &timeout)
+		if err == syscall.EINTR {
+			continue
+		}
+		if err != nil {
+			return false
+		}
+		if n > 0 {
+			return true
+		}
+	}
+}
+
+// Close detiene el reader y libera cualquier goroutine que estuviera esperando
+// una tecla. No cierra stdin cuando se trata de una terminal.
+func (k *KeyReader) Close() {
+	k.closeMu.Do(func() {
+		close(k.done)
+		if k.closer != nil {
+			_ = k.closer.Close()
+		}
+	})
+	// La pantalla siguiente no debe abrir otro reader sobre el mismo TTY hasta
+	// que el anterior haya dejado de consumir bytes.
+	if k.file != nil || k.closer != nil {
+		<-k.stopped
+	}
 }
 
 // next obtiene el siguiente byte, esperando como máximo timeout (0 = infinito).
@@ -317,7 +423,11 @@ func (k *KeyReader) Keys() <-chan Key {
 			if err != nil {
 				return
 			}
-			ch <- key
+			select {
+			case ch <- key:
+			case <-k.done:
+				return
+			}
 		}
 	}()
 	return ch

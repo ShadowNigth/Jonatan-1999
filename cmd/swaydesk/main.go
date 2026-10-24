@@ -52,8 +52,12 @@ func main() {
 		cmdStatus(args)
 	case "doctor", "check":
 		cmdDoctor(args)
+	case "keys", "atajos", "teclas":
+		cmdKeys(args)
 	case "notify":
 		cmdNotify(args)
+	case "events":
+		cmdEvents(args)
 	case "volume", "vol":
 		cmdVolume(args)
 	case "lock":
@@ -85,8 +89,8 @@ func main() {
 	case "osd", "avisos":
 		cmdOSD(args)
 	case "osd-enabled", "avisos-activos":
-		// Para scripts: código 0 si los avisos en pantalla están activados.
-		if cfg, err := config.Load(); err == nil && cfg.OSDEnabled {
+		// Para el autostart: basta con que esté activo el OSD de volumen o MPRIS.
+		if cfg, err := config.Load(); err == nil && (cfg.OSDEnabled || cfg.OSDMediaEnabled) {
 			return
 		}
 		os.Exit(1)
@@ -119,12 +123,14 @@ Configuración
 Sesión
   status [--json|--module M]  Estado del escritorio (sway, CPU, RAM, batería...)
   doctor                      Diagnóstico de dependencias y configuración
+  keys [filtro] [--exec]      Atajos de sway expandidos y cuáles no funcionan
   notify <título> [cuerpo]    Envía una notificación de escritorio
+  events watch                Avisa al conectar o quitar dispositivos
   notifications [status|dnd|history|clear|preview|test]
                               Daemon de notificaciones propio (swaynotify)
   volume <up|down|mute>       Controla el volumen (con aviso en pantalla)
   osd [show|preview|volume]   Avisos en pantalla (swayosd): volumen
-  screenshot [region|full]    Captura de pantalla con grim
+  screenshot [region|full]    Captura, copia al portapapeles y avisa al terminar
   wallpaper <fondo> [modo]    Fondo estático o animado (ver "swaydesk wallpaper help")
   wallpaper --gallery         Selector de fondos con vista previa animada
   wallpaper daemon | --stop   Inicia/detiene el fondo animado (live wallpaper)
@@ -132,7 +138,7 @@ Sesión
   wallpaper --scenes [--json] Escenas animadas disponibles
   boot [--style=s] [--duration=ms]  Animación de arranque de la sesión
   opacity [list|presets|add|remove|all]  Translucidez por aplicación
-  bar [status|on|off|preview|modules]     Barra de estado propia (swaybar)
+  bar [status|on|off|preview|modules|opacity] Barra propia y translucidez
   lock                        Bloquea la pantalla
   reload                      Recarga la configuración de sway
   power [acción]              Menú de energía (lock, suspend, logout, reboot, poweroff)
@@ -341,12 +347,19 @@ func applyTheme(cfg *config.Config, name string) error {
 	if _, err := setup.Apply(cfg, configDir()); err != nil {
 		return err
 	}
-	// Si el fondo es "theme" se relanza el demonio para usar la escena nueva.
-	if cfg.WallpaperKind == "scene" && wallpaper.RunningPID(cfg.Cache) != 0 {
-		wallpaper.StopDaemon(cfg.Cache)
-		_ = startWallpaperDaemon(cfg)
+	// Las escenas usan los colores de la paleta; GIF/vídeo y fondos por
+	// workspace también dependen del demonio. Reiniciarlo de forma separada
+	// conserva el fondo y evita dejarlo atado al proceso `swaydesk theme`.
+	if themeWallpaperNeedsDaemon(cfg) && wallpaper.WaylandReady() {
+		if err := runWallpaperDaemon(cfg, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "swaydesk: tema aplicado, pero no se pudo reanudar el fondo: %v\n", err)
+		}
 	}
 	return nil
+}
+
+func themeWallpaperNeedsDaemon(cfg *config.Config) bool {
+	return wallpaperDaemonNeeded(cfg)
 }
 
 func printThemeList(cfg *config.Config, th *ui.Theme) {
@@ -663,7 +676,7 @@ func moduleOutput(name string, d *statusData, cfg *config.Config) string {
 		return ic.Workspace + " swaydesk"
 	case "recording":
 		if processRunning("wf-recorder") || processRunning("wl-screenrec") {
-			return ic.Dot + " REC"
+			return ic.Dot + " GRABANDO"
 		}
 		return ""
 	case "clock":
@@ -700,6 +713,85 @@ func processRunning(name string) bool {
 	return exec.Command("pgrep", "-x", name).Run() == nil
 }
 
+func autostartStatus(cfg *config.Config) (bool, string) {
+	swayPath := filepath.Join(configDir(), "sway", "config")
+	swayConfig, err := os.ReadFile(swayPath)
+	if err != nil || !strings.Contains(string(swayConfig), "autostart.sh") {
+		return false, "la configuración Sway no invoca swaydesk/autostart.sh"
+	}
+	path := filepath.Join(configDir(), "swaydesk", "autostart.sh")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, "no se pudo leer " + path
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, "no se pudo consultar " + path
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		return false, "autostart.sh no es ejecutable"
+	}
+	checks := []struct{ label, marker string }{
+		{"animación de arranque", "swaydesk boot"},
+		{"notificaciones", "start_swaynotify"},
+		{"OSD", "swayosd watch"},
+		{"eventos de dispositivos", "start_events_watcher"},
+		{"fondos por workspace", "swaydesk wallpaper daemon"},
+		{"reintentos de inicio de barra", "start_bar waybar"},
+		{"reintentos de inicio de swaybar", "start_bar swaybar"},
+		{"configuración Waybar de swaydesk", `--config "$WAYBAR_CONFIG"`},
+	}
+	var missing []string
+	for _, check := range checks {
+		if !strings.Contains(string(data), check.marker) {
+			missing = append(missing, check.label)
+		}
+	}
+	if len(missing) > 0 {
+		return false, "autostart antiguo; faltan: " + strings.Join(missing, ", ")
+	}
+	return true, path + " · registro: " + filepath.Join(cfg.Cache, "autostart.log")
+}
+
+func notifyDaemonStatus(cfg *config.Config) (bool, string) {
+	if cfg.NotifyEnabled && launcher.HasCommand("swaynotify") && hasNotifyDaemon() {
+		return true, "swaynotify activo y registrado en D-Bus"
+	}
+	if processRunning("mako") {
+		return true, "mako activo (reserva)"
+	}
+	if !cfg.NotifyEnabled {
+		return false, "notify.enabled = false y no hay mako activo"
+	}
+	if !launcher.HasCommand("swaynotify") {
+		return false, "falta swaynotify y no hay mako activo"
+	}
+	return false, "swaynotify no responde; comprueba D-Bus y el registro de autostart"
+}
+
+func eventWatcherStatus() (bool, string) {
+	if !launcher.HasCommand("pgrep") {
+		return false, "falta pgrep; no se puede comprobar el watcher"
+	}
+	if exec.Command("pgrep", "-f", "[s]waydesk events watch").Run() != nil {
+		return false, "watcher inactivo; recarga Sway para iniciarlo"
+	}
+	return true, "watcher activo (Sway y almacenamiento USB)"
+}
+
+func osdWatchStatus(cfg *config.Config) (bool, string) {
+	if !cfg.OSDEnabled && !cfg.OSDMediaEnabled {
+		return false, "osd.enabled y osd.media_enabled están desactivados"
+	}
+	if !launcher.HasCommand("swayosd") {
+		return false, "falta el binario swayosd"
+	}
+	if !processRunning("swayosd") {
+		return false, "no está activo swayosd watch"
+	}
+	return true, fmt.Sprintf("watch activo · volumen=%v · MPRIS=%v", cfg.OSDEnabled, cfg.OSDMediaEnabled)
+}
+
 // ───────────────────────── doctor ─────────────────────────
 
 type check struct {
@@ -710,16 +802,215 @@ type check struct {
 	fix      string
 }
 
+// wallpaperDaemonNeeded indica si el fondo actual lo tiene que dibujar el
+// demonio (escenas, GIF, vídeo o fondos por workspace).
+func wallpaperDaemonNeeded(cfg *config.Config) bool {
+	kind := cfg.WallpaperKind
+	if kind == "" {
+		kind = "scene"
+	}
+	switch kind {
+	case "scene", "gif", "video":
+		return true
+	}
+	return len(cfg.WallpaperWorkspaces) > 0
+}
+
+func wallpaperDaemonOK(cfg *config.Config) bool {
+	if !wallpaperDaemonNeeded(cfg) {
+		return true
+	}
+	return wallpaper.RunningPID(cfg.Cache) != 0
+}
+
+func wallpaperDaemonDetail(cfg *config.Config) string {
+	rules := len(cfg.WallpaperWorkspaces)
+	if !wallpaperDaemonNeeded(cfg) {
+		if rules == 0 {
+			return "imagen fija global · no hay reglas por workspace"
+		}
+	}
+	if pid := wallpaper.RunningPID(cfg.Cache); pid != 0 {
+		return fmt.Sprintf("activo (pid %d) · %d regla(s) por workspace · registro: %s", pid, rules, filepath.Join(cfg.Cache, "wallpaper.log"))
+	}
+	if rules > 0 {
+		return fmt.Sprintf("detenido con %d regla(s) por workspace", rules)
+	}
+	return "detenido: el fondo animado no se dibuja"
+}
+
+// binInPath indica si el binario se encuentra por el PATH actual.
+func binInPath(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+// pathDetail describe dónde se encontraron los binarios (o dónde deberían
+// estar si no están en el PATH).
+func pathDetail() string {
+	if p, err := exec.LookPath("swaydesk"); err == nil {
+		return p
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		cand := filepath.Join(home, ".local", "bin", "swaydesk")
+		if fileExists(cand) {
+			return cand + " (falta en el PATH)"
+		}
+	}
+	return "swaydesk no está en el PATH"
+}
+
+// cmdKeys lista los atajos de sway ya expandidos y señala los que no pueden
+// funcionar (tecla repetida o programa inexistente). Es el diagnóstico rápido
+// cuando «el atajo no hace nada»: sway falla en silencio.
+func cmdKeys(args []string) {
+	cfg, err := config.Load()
+	must(err)
+	th := ui.NewTheme(cfg.Theme, cfg.NerdFont)
+	p := th.Palette
+
+	live := func() (string, error) {
+		c, err := swayipc.Dial()
+		if err != nil {
+			return "", err
+		}
+		defer c.Close()
+		return c.Config()
+	}
+	text, origin := setup.BindingSource(live)
+	if text == "" {
+		fmt.Fprintf(os.Stderr, "swaydesk: no se encontró la configuración de sway (%s)\n", origin)
+		os.Exit(1)
+	}
+	// ¿La sesión va por detrás de lo que hay en disco? (editar sin recargar)
+	if strings.Contains(origin, "vivo") {
+		if disk, err := os.ReadFile(filepath.Join(configDir(), "sway", "config")); err == nil &&
+			strings.TrimSpace(string(disk)) != strings.TrimSpace(text) {
+			fmt.Printf("\n  %s\n", ui.Style{Fg: p.Warn}.Render("• sway sigue con la configuración anterior: ejecuta  swaymsg reload"))
+		}
+	}
+	binds := setup.ParseBindings(text)
+	bad := setup.CheckBindings(binds)
+
+	filter := ""
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			filter = strings.ToLower(a)
+		}
+	}
+	execOnly := hasFlagArg(args, "exec")
+	show := make([]setup.Binding, 0, len(binds))
+	for _, b := range binds {
+		if filter != "" && !strings.Contains(strings.ToLower(b.Sym+" "+b.Command), filter) {
+			continue
+		}
+		if execOnly && b.Exec == "" {
+			continue
+		}
+		show = append(show, b)
+	}
+	if !hasFlagArg(args, "sin-ordenar") && !hasFlagArg(args, "unsorted") {
+		setup.SortBindings(show)
+	}
+
+	fmt.Println()
+	fmt.Printf("  %s %s\n", ui.Style{Fg: p.Accent, Bg: p.Bg}.B().Render("atajos de sway"), ui.Dim("· "+origin))
+	fmt.Printf("  %d atajos · %d con problemas\n\n", len(binds), bad)
+
+	ok := ui.Style{Fg: p.Ok}.Render("✔")
+	mal := ui.Style{Fg: p.Err}.Render("✘")
+	for _, b := range show {
+		mark := ok
+		if b.Error != "" {
+			mark = mal
+		}
+		etiqueta := b.Sym
+		if b.Mode != "" && b.Mode != "default" {
+			etiqueta = b.Sym + " [" + b.Mode + "]"
+		}
+		sym := ui.Style{Fg: p.Accent}.Render(padRight(etiqueta, 26))
+		cmd := b.Command
+		if b.Exec != "" {
+			cmd = ui.Dim(fmt.Sprintf("%s %s", b.Exec, strings.Join(b.Args, " ")))
+		}
+		fmt.Printf("  %s %s %s\n", mark, sym, ui.Truncate(cmd, 96))
+		if b.Error != "" {
+			fmt.Printf("      %s %s\n", ui.Style{Fg: p.Warn}.Render("→"), ui.Dim(b.Error))
+		}
+	}
+	if len(show) == 0 {
+		fmt.Printf("  %s\n", ui.Dim("ningún atajo coincide con el filtro"))
+	}
+	if bad > 0 {
+		// Programas que faltan y teclas repetidas, en dos listas cortas.
+		faltan := map[string]bool{}
+		repetidas := 0
+		for _, b := range binds {
+			if b.Missing != "" {
+				faltan[b.Missing] = true
+			} else if strings.Contains(b.Error, "repetida") {
+				repetidas++
+			}
+		}
+		if len(faltan) > 0 {
+			nombres := make([]string, 0, len(faltan))
+			for p := range faltan {
+				nombres = append(nombres, p)
+			}
+			sort.Strings(nombres)
+			fmt.Printf("\n  %s %s\n", ui.Style{Fg: p.Warn}.Render("programas que faltan:"), strings.Join(nombres, ", "))
+			fmt.Printf("  %s\n", ui.Dim("instálalos (p. ej. sudo pacman -S "+strings.Split(nombres[0], " ")[0]+") o cambia la app con: swaydesk config"))
+		}
+		if repetidas > 0 {
+			fmt.Printf("  %s %d atajos comparten tecla: deliberado en un override o sobra uno\n",
+				ui.Style{Fg: p.Warn}.Render("teclas repetidas:"), repetidas)
+		}
+		fmt.Printf("\n  %s\n", ui.Dim("regenera la configuración con: swaydesk init --force --only sway   ·   recarga: swaymsg reload"))
+	}
+	fmt.Println()
+}
+
+func padRight(s string, n int) string {
+	if len(s) >= n {
+		return s
+	}
+	return s + strings.Repeat(" ", n-len(s))
+}
+
+// footIssueDetail describe el problema del foot.ini instalado, si lo hay.
+func footIssueDetail() string {
+	if issue := setup.FootConfigIssue(); issue != "" {
+		return issue
+	}
+	return "colores y secciones al día"
+}
+
+// swayBindDetail avisa de teclas asignadas dos veces en la configuración.
+func swayBindDetail() string {
+	if tecla := setup.SwayDuplicateBinding(); tecla != "" {
+		return tecla + " está asignada dos veces"
+	}
+	return "sin teclas repetidas"
+}
+
 func cmdDoctor(args []string) {
 	cfg, err := config.Load()
 	must(err)
 	th := ui.NewTheme(cfg.Theme, cfg.NerdFont)
+	autostartOK, autostartDetail := autostartStatus(cfg)
+	notifyOK, notifyDetail := notifyDaemonStatus(cfg)
+	eventsOK, eventsDetail := eventWatcherStatus()
+	osdOK, osdDetail := osdWatchStatus(cfg)
 
 	checks := []check{
 		{name: "sway", required: true, ok: launcher.HasCommand("sway") || swayipc.SwaySock() != "",
 			detail: "compositor", fix: "sudo pacman -S sway"},
 		{name: "socket IPC de sway", required: true, ok: swayipc.SwaySock() != "",
 			detail: swayipc.SwaySock(), fix: "exporta SWAYSOCK dentro de la sesión de sway"},
+		{name: "autostart swaydesk", required: false, ok: autostartOK,
+			detail: autostartDetail, fix: "swaydesk init --force --only swaydesk/autostart.sh (crea respaldo)"},
+		{name: "animación de arranque", required: false, ok: cfg.BootEnabled,
+			detail: fmt.Sprintf("boot.enabled = %v", cfg.BootEnabled), fix: "actívala en [boot] de config.toml"},
 		{name: "waybar", required: false, ok: launcher.HasCommand("waybar"),
 			detail: "barra de estado", fix: "sudo pacman -S waybar"},
 		{name: "foot", required: false, ok: launcher.HasCommand("foot"),
@@ -747,22 +1038,35 @@ func cmdDoctor(args []string) {
 			detail: "fondos de vídeo (mp4, webm)", fix: "sudo pacman -S ffmpeg"},
 		{name: "wlr-layer-shell", required: false, ok: wallpaper.DetectDisplayServer().LayerShell,
 			detail: "fondo animado detrás de las ventanas", fix: "usa sway (incluye wlr-layer-shell)"},
+		{name: "demonio de fondo", required: false, ok: wallpaperDaemonOK(cfg),
+			detail: wallpaperDaemonDetail(cfg),
+			fix:    "swaydesk wallpaper daemon · si falla: swaydesk wallpaper logs"},
+		{name: "reglas por workspace", required: false, ok: len(cfg.WallpaperWorkspaces) > 0,
+			detail: fmt.Sprintf("%d regla(s) guardadas en config.toml", len(cfg.WallpaperWorkspaces)),
+			fix:    "swaydesk wallpaper workspaces set <workspace> <fondo>"},
 		{name: "swaybar (propia)", required: false, ok: launcher.HasCommand("swaybar") && cfg.BarEnabled,
 			detail: "barra de estado de swaydesk", fix: "make build && make install"},
 		{name: "fuentes de consola", required: false, ok: font.Available(),
 			detail: "texto de swaybar (PSF)", fix: "sudo pacman -S kbd"},
-		{name: "swaynotify (propio)", required: false,
-			ok:     launcher.HasCommand("swaynotify") && cfg.NotifyEnabled && hasNotifyDaemon(),
-			detail: "notificaciones de swaydesk (D-Bus, sin mako)",
-			fix:    "make build && make install; reinicia la sesión"},
-		{name: "swayosd (propio)", required: false,
-			ok:     launcher.HasCommand("swayosd") && cfg.OSDEnabled,
-			detail: "aviso en pantalla del volumen",
-			fix:    "make build && make install; reinicia la sesión"},
+		{name: "notificaciones", required: false,
+			ok: notifyOK, detail: notifyDetail,
+			fix: "revisa D-Bus y ~/.cache/swaydesk/autostart.log"},
+		{name: "eventos automáticos", required: false,
+			ok: eventsOK, detail: eventsDetail,
+			fix: "recarga Sway y revisa ~/.cache/swaydesk/autostart.log"},
+		{name: "OSD volumen/MPRIS", required: false,
+			ok: osdOK, detail: osdDetail,
+			fix: "swaydesk osd show · revisa ~/.cache/swaydesk/autostart.log"},
 		{name: "bus de sesión (D-Bus)", required: false, ok: dbus.SessionAvailable(),
 			detail: "necesario para las notificaciones", fix: "arranca la sesión con dbus"},
 		{name: "swayfx", required: false, ok: setup.IsSwayfx(),
 			detail: "desenfoque y esquinas redondeadas", fix: "opcional: swayfx en el AUR"},
+		{name: "PATH", required: false, ok: binInPath("swaydesk"),
+			detail: pathDetail(), fix: "añade ~/.local/bin al PATH (o reejecuta scripts/install.sh)"},
+		{name: "foot.ini", required: false, ok: setup.FootConfigIssue() == "",
+			detail: footIssueDetail(), fix: "swaydesk init --force --only foot"},
+		{name: "atajos de sway", required: false, ok: setup.SwayDuplicateBinding() == "",
+			detail: swayBindDetail(), fix: "swaydesk init --force --only sway"},
 	}
 
 	okMark := ui.Style{Fg: th.Palette.Ok}.B().Render("✔")
@@ -798,7 +1102,7 @@ func cmdDoctor(args []string) {
 		name string
 	}{
 		{filepath.Join(configDir(), "sway", "config"), "sway"},
-		{filepath.Join(configDir(), "waybar", "config"), "waybar"},
+		{filepath.Join(configDir(), "waybar", "config.json"), "waybar"},
 		{filepath.Join(configDir(), "waybar", "style.css"), "waybar (estilo)"},
 		{filepath.Join(configDir(), "foot", "foot.ini"), "foot"},
 		{filepath.Join(configDir(), "mako", "config"), "mako"},

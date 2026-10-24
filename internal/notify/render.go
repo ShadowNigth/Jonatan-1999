@@ -73,13 +73,13 @@ type Renderer struct {
 // New crea un renderizador; si no se indica fuente, usa la mejor disponible.
 func New(opt RenderOptions) *Renderer {
 	if opt.Width <= 0 {
-		opt.Width = 360
+		opt.Width = 300
 	}
 	if opt.Padding <= 0 {
-		opt.Padding = 14
+		opt.Padding = 10
 	}
 	if opt.Gap <= 0 {
-		opt.Gap = 8
+		opt.Gap = 6
 	}
 	if opt.Radius < 0 {
 		opt.Radius = 0
@@ -88,7 +88,7 @@ func New(opt RenderOptions) *Renderer {
 		opt.Opacity = 0.94
 	}
 	if opt.MaxLines <= 0 {
-		opt.MaxLines = 3
+		opt.MaxLines = 2
 	}
 	if opt.Theme.Name == "" {
 		opt.Theme = ui.PaletteByName("catppuccin")
@@ -130,6 +130,15 @@ func (r *Renderer) lead(scale int) int {
 
 // lineH es el alto de una línea de texto con su interlineado.
 func (r *Renderer) lineH(scale int) int { return r.rows(scale) + r.lead(scale) }
+
+// titleScale destaca los resúmenes solo en tarjetas anchas; con el ancho
+// compacto predeterminado evita duplicar el tamaño del título.
+func (r *Renderer) titleScale() int {
+	if r.sc == 1 && r.Opt.Width >= 360 {
+		return 2
+	}
+	return r.sc
+}
 
 // colors devuelve la paleta resuelta.
 func (r *Renderer) colors() (bg, border, fg, muted, accent, accent2, warn, err bar.RGBA) {
@@ -351,10 +360,7 @@ func (r *Renderer) cardHeight(n *Notification, now time.Time) int {
 // contentHeight es el alto del bloque de título y cuerpo, con la miniatura si
 // es más alta que el texto.
 func (r *Renderer) contentHeight(n *Notification, inner int) int {
-	titleScale := r.sc
-	if r.sc == 1 && r.Opt.Width >= 300 {
-		titleScale = 2
-	}
+	titleScale := r.titleScale()
 	_, cols := r.textCols(n, inner)
 	h := len(Wrap(Sanitize(n.Summary, 0), cols, r.advance(titleScale), 2)) * r.lineH(titleScale)
 	if body := strings.TrimSpace(StripMarkup(n.Body)); body != "" {
@@ -508,6 +514,45 @@ func (r *Renderer) drawHeader(c *bar.Canvas, e layoutEntry, rect Rect, bg, borde
 	}}
 }
 
+// localizedActionLabel traduce acciones genéricas frecuentes al español, sin
+// alterar etiquetas específicas que envíe cada aplicación.
+func localizedActionLabel(label, key string) string {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		label = key
+	}
+	switch strings.ToLower(label) {
+	case "default", "open", "open app", "view", "show":
+		return "Abrir"
+	case "reply", "respond", "answer":
+		return "Responder"
+	case "dismiss", "close":
+		return "Cerrar"
+	case "later":
+		return "Luego"
+	case "snooze":
+		return "Posponer"
+	case "mark as read":
+		return "Marcar leído"
+	case "accept":
+		return "Aceptar"
+	case "decline", "reject":
+		return "Rechazar"
+	case "delete", "remove":
+		return "Eliminar"
+	case "play":
+		return "Reproducir"
+	case "pause":
+		return "Pausar"
+	case "stop":
+		return "Detener"
+	case "cancel":
+		return "Cancelar"
+	default:
+		return label
+	}
+}
+
 // drawCard dibuja una tarjeta normal (o la que resume un grupo plegado).
 func (r *Renderer) drawCard(c *bar.Canvas, e layoutEntry, rect Rect, app string,
 	now time.Time, bg, border, fg, muted, accent, accent2, warn, err bar.RGBA) []Button {
@@ -558,10 +603,7 @@ func (r *Renderer) drawCard(c *bar.Canvas, e layoutEntry, rect Rect, app string,
 	}
 
 	// Resumen.
-	titleScale := r.sc
-	if r.sc == 1 && r.Opt.Width >= 300 {
-		titleScale = 2
-	}
+	titleScale := r.titleScale()
 	for _, line := range Wrap(Sanitize(n.Summary, 0), cols, r.advance(titleScale), 2) {
 		c.Text(r.face, tx, ty, line, titleScale, titleScale, fg)
 		ty += r.lineH(titleScale)
@@ -594,10 +636,7 @@ func (r *Renderer) drawCard(c *bar.Canvas, e layoutEntry, rect Rect, app string,
 			// Se dibuja con el resto de la fila, no dos veces.
 			continue
 		}
-		label := a.Label
-		if label == "" {
-			label = a.Key
-		}
+		label := localizedActionLabel(a.Label, a.Key)
 		botones = append(botones, boton{a.Key, label, a.Key == "default"})
 	}
 	if n.InlineReply {

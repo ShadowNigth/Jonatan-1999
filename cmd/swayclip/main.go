@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -17,11 +18,12 @@ import (
 
 // clipItem es una entrada del historial.
 type clipItem struct {
-	id      string
-	raw     string // línea original (necesaria para borrar con cliphist)
-	content string
-	label   string
-	hint    string
+	id        string
+	raw       string // línea original (necesaria para borrar con cliphist)
+	content   string
+	label     string
+	hint      string
+	imageMIME string // MIME original, si la entrada es una imagen
 }
 
 // backend abstrae el gestor de portapapeles disponible.
@@ -44,6 +46,17 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "swayclip: %v\n", err)
 	}
+	if relaunched, launchErr := launcher.RelaunchInTerminalIfNeeded(
+		ui.IsInteractive(), cfg.Terminal, "swaydesk-clip", "swaydesk · portapapeles", 0, 0, os.Args[1:],
+	); relaunched {
+		if launchErr != nil {
+			message := "no se pudo abrir el portapapeles en una terminal: " + launchErr.Error()
+			fmt.Fprintf(os.Stderr, "swayclip: %s\n", message)
+			actions.Notification("swayclip", message, "critical")
+			os.Exit(1)
+		}
+		return
+	}
 	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 
 	b := pickBackend(*backendName)
@@ -60,8 +73,9 @@ func main() {
 	}
 	if len(items) == 0 {
 		fmt.Println("swayclip: el historial está vacío.")
-		fmt.Println("Asegúrate de tener en marcha:")
+		fmt.Println("Asegúrate de tener en marcha los vigilantes de texto e imágenes:")
 		fmt.Println("  wl-paste --type text --watch cliphist store")
+		fmt.Println("  wl-paste --type image --watch cliphist store")
 		return
 	}
 
@@ -96,35 +110,131 @@ type cliphist struct{}
 func (cliphist) name() string { return "cliphist" }
 
 func (cliphist) list() ([]clipItem, error) {
-	out, err := launcher.Output("cliphist", "list")
+	// Las versiones recientes de cliphist exponen el MIME junto al preview,
+	// lo que permite distinguir imágenes sin decodificar todo el historial.
+	out, err := launcher.Output("cliphist", "list", "-fields", "id,mime,preview")
+	if err != nil {
+		// Compatibilidad con versiones anteriores, cuyo formato es id + preview.
+		out, err = launcher.Output("cliphist", "list")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("cliphist list: %w", err)
 	}
+	return parseCliphistList(out), nil
+}
+
+func parseCliphistList(out string) []clipItem {
 	var items []clipItem
 	for _, line := range strings.Split(out, "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		id := ""
-		content := line
-		if i := strings.IndexByte(line, '\t'); i >= 0 {
-			id = line[:i]
-			content = line[i+1:]
+		fields := strings.SplitN(line, "\t", 3)
+		id, preview, mimeField := "", line, ""
+		raw := line
+		switch len(fields) {
+		case 3:
+			id, mimeField, preview = fields[0], fields[1], fields[2]
+			// El comando delete acepta el formato tradicional id + preview.
+			raw = id + "\t" + preview
+		case 2:
+			id, preview = fields[0], fields[1]
 		}
-		// cliphist sustituye los saltos de línea por la secuencia "\n".
-		readable := strings.ReplaceAll(content, "\\n", "\n")
+		mime := normalizeImageMIME(mimeField)
+		if mime == "" && mimeField == "" {
+			mime = imageMIMEFromText(preview)
+		}
+		if mime != "" {
+			format := strings.ToUpper(strings.TrimPrefix(mime, "image/"))
+			content := strings.TrimSpace(preview)
+			if content == "" {
+				content = mime
+			}
+			items = append(items, clipItem{
+				id: id, raw: raw, content: content + " " + mime,
+				label: "Imagen (" + format + ")",
+				hint: format + " · imagen", imageMIME: mime,
+			})
+			continue
+		}
+
+		// cliphist sustituye los saltos de línea por la secuencia "\\n".
+		readable := strings.ReplaceAll(preview, "\\n", "\n")
 		items = append(items, clipItem{
-			id: id, raw: line, content: readable,
+			id: id, raw: raw, content: readable,
 			label: firstLine(readable),
 			hint:  fmt.Sprintf("%s · %s", linesLabel(readable), humanBytes(len(readable))),
 		})
 	}
-	return items, nil
+	return items
+}
+
+func normalizeImageMIME(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if i := strings.IndexByte(value, ';'); i >= 0 {
+		value = value[:i]
+	}
+	value = strings.Trim(value, `[](){}<>,;:"'`)
+	if !strings.HasPrefix(value, "image/") {
+		return ""
+	}
+	return value
+}
+
+func imageMIMEFromText(text string) string {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	binaryPreview := strings.Contains(lower, "binary data")
+	if !binaryPreview && !strings.HasPrefix(lower, "image/") {
+		return ""
+	}
+	for _, field := range strings.Fields(text) {
+		if mime := normalizeImageMIME(field); mime != "" {
+			return mime
+		}
+	}
+	// Versiones antiguas de cliphist muestran las imágenes como, por ejemplo,
+	// "[[ binary data 24 KiB png 1920x1080 ]]" en vez de incluir el MIME.
+	if !binaryPreview {
+		return ""
+	}
+	for _, field := range strings.Fields(text) {
+		switch strings.ToLower(strings.Trim(field, "[](){}<>,;:")) {
+		case "png":
+			return "image/png"
+		case "jpeg", "jpg":
+			return "image/jpeg"
+		case "gif":
+			return "image/gif"
+		case "webp":
+			return "image/webp"
+		case "bmp":
+			return "image/bmp"
+		case "tiff", "tif":
+			return "image/tiff"
+		}
+	}
+	return ""
 }
 
 func (cliphist) copy(it clipItem) error {
-	cmd := exec.Command("sh", "-c", "cliphist decode "+it.id+" | wl-copy")
-	return cmd.Run()
+	decoded, err := exec.Command("cliphist", "decode", it.id).Output()
+	if err != nil {
+		return fmt.Errorf("cliphist decode: %w", err)
+	}
+	args := []string{}
+	if it.imageMIME != "" {
+		args = append(args, "--type", it.imageMIME)
+	}
+	cmd := exec.Command("wl-copy", args...)
+	cmd.Stdin = bytes.NewReader(decoded)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		detail := strings.TrimSpace(string(output))
+		if detail != "" {
+			return fmt.Errorf("wl-copy: %w: %s", err, detail)
+		}
+		return fmt.Errorf("wl-copy: %w", err)
+	}
+	return nil
 }
 
 func (cliphist) remove(it clipItem) error {
@@ -224,10 +334,11 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 		}
 	)
 	rebuild := func() {
-		sel.Items = nil
+		list := make([]ui.Item, 0, len(items))
 		for _, it := range items {
-			sel.Items = append(sel.Items, ui.Item{Key: it.id, Label: it.label, Hint: it.hint})
+			list = append(list, ui.Item{Key: it.id, Label: it.label, Hint: it.hint})
 		}
+		sel.SetItems(list)
 	}
 	rebuild()
 	applyFilter := func() {

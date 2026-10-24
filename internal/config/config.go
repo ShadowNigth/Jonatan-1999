@@ -14,14 +14,16 @@ import (
 // Config agrupa todos los ajustes de swaydesk.
 type Config struct {
 	// General
-	Theme       string
-	NerdFont    bool
-	Terminal    string
-	Launcher    string // comando del menú flotante
-	Editor      string
-	FileManager string
-	Browser     string
-	Mod         string
+	Theme        string
+	NerdFont     bool
+	Terminal     string
+	Launcher     string // comando del menú flotante
+	Editor       string
+	FileManager  string
+	Browser      string
+	Mod          string
+	GTKTheme     string // auto, Adwaita-dark u otro tema GTK3 instalado
+	GTKIconTheme string // auto, Papirus-Dark u otro tema de iconos instalado
 
 	// Apariencia
 	Font           string // vacío = detección automática
@@ -93,18 +95,20 @@ type Config struct {
 	NotifyFontScale    int
 
 	// Avisos en pantalla (swayosd)
-	OSDEnabled   bool
-	OSDPosition  string // bottom-center, bottom-right, bottom-left, center, top-center
-	OSDWidth     int
-	OSDMargin    int
-	OSDPadding   int
-	OSDRadius    int
-	OSDOpacity   float64
-	OSDTimeout   int // milisegundos que se queda en pantalla
-	OSDFade      int // milisegundos de fundido de entrada y salida
-	OSDSegments  int // marcas de la barra de nivel
-	OSDFont      string
-	OSDFontScale int
+	OSDEnabled      bool   // OSD de volumen
+	OSDMediaEnabled bool   // tarjeta de reproducción MPRIS
+	OSDMediaTimeout int    // milisegundos que se muestra una pista
+	OSDPosition     string // bottom-center, bottom-right, bottom-left, center, top-center
+	OSDWidth        int
+	OSDMargin       int
+	OSDPadding      int
+	OSDRadius       int
+	OSDOpacity      float64
+	OSDTimeout      int // milisegundos que se queda en pantalla
+	OSDFade         int // milisegundos de fundido de entrada y salida
+	OSDSegments     int // marcas de la barra de nivel
+	OSDFont         string
+	OSDFontScale    int
 
 	// Efectos de escritorio
 	TerminalOpacity float64
@@ -148,6 +152,8 @@ func Default() *Config {
 		FileManager:    "thunar",
 		Browser:        "chromium",
 		Mod:            "Super",
+		GTKTheme:       "auto",
+		GTKIconTheme:   "auto",
 		FontSize:       11,
 		BarFontSize:    13,
 		KeyboardLayout: "latam",
@@ -170,7 +176,7 @@ func Default() *Config {
 		WallpaperTransition:   "fade",
 		WallpaperTransitionMS: 450,
 		TerminalOpacity:       0.94,
-		BarOpacity:            0.86,
+		BarOpacity:            0.68,
 		ActiveOpacity:         1.0,
 		InactiveOpacity:       0.94,
 		Blur:                  false,
@@ -185,42 +191,44 @@ func Default() *Config {
 		BarPadding:           14,
 		BarGap:               10,
 		BarRadius:            0,
-		BarBackgroundOpacity: 0.88,
+		BarBackgroundOpacity: 0.68,
 		BarIslands:           true,
 		BarLogo:              true,
 		BarFontScale:         0,
 		BarShadow:            true,
 		BarExclusive:         true,
-		BarModules:           []string{"media", "notify", "cpu", "ram", "volume", "network", "battery", "clock"},
+		BarModules:           []string{"media", "notify", "volume", "network", "battery", "clock"},
 
 		NotifyEnabled:      true,
 		NotifyPosition:     "top-right",
-		NotifyWidth:        360,
+		NotifyWidth:        300,
 		NotifyMargin:       14,
-		NotifyPadding:      14,
-		NotifyGap:          8,
-		NotifyRadius:       14,
+		NotifyPadding:      10,
+		NotifyGap:          6,
+		NotifyRadius:       12,
 		NotifyOpacity:      0.94,
 		NotifyTimeout:      6000,
 		NotifyCriticalTime: 0,
 		NotifyMaxVisible:   4,
 		NotifyHistory:      50,
-		NotifyMaxLines:     3,
+		NotifyMaxLines:     2,
 		NotifyDND:          false,
 		NotifyGroup:        true,
 		NotifyFontScale:    0,
 
-		OSDEnabled:   true,
-		OSDPosition:  "bottom-center",
-		OSDWidth:     320,
-		OSDMargin:    72,
-		OSDPadding:   16,
-		OSDRadius:    18,
-		OSDOpacity:   0.95,
-		OSDTimeout:   1400,
-		OSDFade:      140,
-		OSDSegments:  24,
-		OSDFontScale: 0,
+		OSDEnabled:      true,
+		OSDMediaEnabled: true,
+		OSDMediaTimeout: 3200,
+		OSDPosition:     "bottom-center",
+		OSDWidth:        260,
+		OSDMargin:       72,
+		OSDPadding:      12,
+		OSDRadius:       14,
+		OSDOpacity:      0.95,
+		OSDTimeout:      1400,
+		OSDFade:         140,
+		OSDSegments:     24,
+		OSDFontScale:    0,
 
 		BootEnabled:  true,
 		BootStyle:    "sakura",
@@ -317,6 +325,8 @@ func (c *Config) apply() {
 	str("general.file_manager", &c.FileManager)
 	str("general.browser", &c.Browser)
 	str("general.mod", &c.Mod)
+	str("gtk.theme", &c.GTKTheme)
+	str("gtk.icon_theme", &c.GTKIconTheme)
 	bl("general.nerd_font", &c.NerdFont)
 	bl("general.confirm_power", &c.ConfirmPower)
 	str("ui.font", &c.Font)
@@ -394,6 +404,8 @@ func (c *Config) apply() {
 		}
 	}
 	bl("osd.enabled", &c.OSDEnabled)
+	bl("osd.media_enabled", &c.OSDMediaEnabled)
+	num("osd.media_timeout_ms", &c.OSDMediaTimeout)
 	str("osd.position", &c.OSDPosition)
 	num("osd.width", &c.OSDWidth)
 	num("osd.margin", &c.OSDMargin)
@@ -531,6 +543,12 @@ browser = %q
 # Pedir confirmación en el menú de apagado
 confirm_power = %t
 
+[gtk]
+# auto sigue el modo claro/oscuro de la paleta; también puedes indicar un tema instalado.
+theme = %q
+# auto usa Papirus/Papirus-Dark si está instalado; si no, Adwaita.
+icon_theme = %q
+
 [ui]
 # Fuente monoespaciada; vacío = detección automática entre las instaladas.
 font = %q
@@ -547,7 +565,7 @@ show_hidden = %t
 `,
 		strings.Join(paletteNames(), ", "),
 		c.Theme, c.NerdFont, c.Terminal, c.Launcher, c.Editor,
-		c.FileManager, c.Browser, c.ConfirmPower,
+		c.FileManager, c.Browser, c.ConfirmPower, c.GTKTheme, c.GTKIconTheme,
 		c.Font, c.FontSize, c.BarFontSize,
 		c.Width, c.Height, c.Border, c.HistorySize, c.ShowHidden) + fmt.Sprintf(`
 [input]
@@ -646,6 +664,10 @@ logo = %t
 [osd]
 # aviso flotante con el nivel de volumen (swayosd)
 enabled = %t
+# tarjeta de reproducción al cambiar de pista (MPRIS por D-Bus)
+media_enabled = %t
+# duración de la tarjeta multimedia en milisegundos
+media_timeout_ms = %d
 # bottom-center, bottom-right, bottom-left, top-center o center
 position = %q
 # ancho de la tarjeta en píxeles lógicos
@@ -663,7 +685,7 @@ fade_ms = %d
 segments = %d
 # fuente PSF de consola (vacío = la mejor disponible del sistema)
 font = %q
-# escala de la fuente (0 = automática: el doble para leerse de reojo)
+# escala de la fuente (0 = automática: tamaño compacto, escala 1)
 font_scale = %d
 
 [effects]
@@ -688,7 +710,8 @@ rounding = %d
 		c.NotifyTimeout, c.NotifyCriticalTime, c.NotifyMaxVisible, c.NotifyHistory,
 		c.NotifyMaxLines, c.NotifyDND, c.NotifyGroup, c.NotifyFont, c.NotifyFontScale,
 		c.BootEnabled, c.BootStyle, c.BootDuration, c.BootLogo,
-		c.OSDEnabled, c.OSDPosition, c.OSDWidth, c.OSDMargin, c.OSDPadding,
+		c.OSDEnabled, c.OSDMediaEnabled, c.OSDMediaTimeout,
+		c.OSDPosition, c.OSDWidth, c.OSDMargin, c.OSDPadding,
 		c.OSDRadius, c.OSDOpacity, c.OSDTimeout, c.OSDFade, c.OSDSegments,
 		c.OSDFont, c.OSDFontScale,
 		c.TerminalOpacity, c.BarOpacity, c.ActiveOpacity, c.InactiveOpacity,
