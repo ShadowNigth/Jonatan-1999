@@ -183,6 +183,20 @@ func TestStripMarkup(t *testing.T) {
 	}
 }
 
+func TestNotificationTextCleansControlsAndInvalidUTF8(t *testing.T) {
+	got := Sanitize("uno\x01dos\u0085tres\u200bcuatro", 0)
+	if got != "uno dos tres cuatro" {
+		t.Fatalf("los controles deberían separar palabras sin dibujar símbolos: %q", got)
+	}
+	if got := Sanitize("cafe\u0301", 0); got != "cafe" {
+		t.Fatalf("la marca combinante no debería convertirse en un glifo extraño: %q", got)
+	}
+	malformed := string([]byte{'n', 'i', 0xff, 0xc3, 0xb1})
+	if got := StripMarkup(malformed); got != "niñ" {
+		t.Fatalf("el UTF-8 inválido dejó artefactos: %q", got)
+	}
+}
+
 func TestSanitizeAndShorten(t *testing.T) {
 	if got := Sanitize("  hola   <b>mundo</b>\n", 0); got != "hola mundo" {
 		t.Errorf("Sanitize: %q", got)
@@ -237,7 +251,7 @@ func sampleNotes() []Notification {
 			ID: 2, App: "pacman", Summary: "Actualización importante",
 			Body:    "Se han actualizado <b>12 paquetes</b> del sistema. Reinicia la sesión para aplicar los cambios.",
 			Urgency: Critical, Created: at(2), Progress: 65,
-			Actions: []Action{{Key: "default", Label: "Abrir"}, {Key: "later", Label: "Luego"}},
+			Actions: []Action{{Key: "default", Label: "Abrir"}, {Key: "later", Label: "Más tarde"}},
 		},
 		{
 			ID: 3, App: "wf-recorder", Summary: "Grabación detenida",

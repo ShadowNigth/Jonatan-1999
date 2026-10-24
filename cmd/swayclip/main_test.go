@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/ui"
 )
@@ -81,6 +82,49 @@ func TestCliphistCopyPreservesImageMIME(t *testing.T) {
 	}
 	if string(clipboard) != "png-bytes" {
 		t.Fatalf("datos copiados inesperados: %q", clipboard)
+	}
+}
+
+func TestCliphistCopyDoesNotWaitForPersistentWlCopy(t *testing.T) {
+	binDir := t.TempDir()
+	tempDir := t.TempDir()
+	releasePath := filepath.Join(tempDir, "release-wl-copy")
+	finishedPath := filepath.Join(tempDir, "wl-copy-finished")
+	t.Setenv("PATH", binDir)
+	t.Setenv("CLIPHIST_TEST_RELEASE", releasePath)
+	t.Setenv("CLIPHIST_TEST_FINISHED", finishedPath)
+
+	writeSwayclipExecutable(t, binDir, "cliphist", "#!/bin/sh\n[ \"$1\" = decode ] || exit 2\nprintf 'copied text'\n")
+	writeSwayclipExecutable(t, binDir, "wl-copy", "#!/bin/sh\n/usr/bin/cat >/dev/null\n(while [ ! -e \"$CLIPHIST_TEST_RELEASE\" ]; do /usr/bin/sleep 0.01; done; : > \"$CLIPHIST_TEST_FINISHED\") &\nexit 0\n")
+
+	copyDone := make(chan error, 1)
+	copyReturned := false
+	defer func() {
+		_ = os.WriteFile(releasePath, []byte("release"), 0o600)
+		if !copyReturned {
+			select {
+			case <-copyDone:
+			case <-time.After(2 * time.Second):
+			}
+		}
+		deadline := time.Now().Add(time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(finishedPath); err == nil {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	go func() { copyDone <- (cliphist{}).copy(clipItem{id: "7"}) }()
+	select {
+	case err := <-copyDone:
+		copyReturned = true
+		if err != nil {
+			t.Fatalf("cliphist.copy: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cliphist.copy esperó a que terminara el propietario persistente del portapapeles")
 	}
 }
 

@@ -521,25 +521,46 @@ func localizedActionLabel(label, key string) string {
 	if label == "" {
 		label = key
 	}
-	switch strings.ToLower(label) {
-	case "default", "open", "open app", "view", "show":
+	normalized := strings.ToLower(strings.TrimSpace(label))
+	normalized = strings.NewReplacer("_", " ", "-", " ").Replace(normalized)
+	normalized = strings.Join(strings.Fields(normalized), " ")
+	switch normalized {
+	case "default", "open", "open app", "open application", "open url", "open website":
 		return "Abrir"
+	case "open link":
+		return "Abrir enlace"
+	case "open in browser", "open in web browser":
+		return "Abrir en el navegador"
+	case "view", "show":
+		return "Ver"
+	case "show details", "view details":
+		return "Ver detalles"
 	case "reply", "respond", "answer":
 		return "Responder"
+	case "reply all":
+		return "Responder a todos"
 	case "dismiss", "close":
 		return "Cerrar"
 	case "later":
-		return "Luego"
+		return "Más tarde"
 	case "snooze":
 		return "Posponer"
-	case "mark as read":
-		return "Marcar leído"
-	case "accept":
+	case "mark as read", "mark read":
+		return "Marcar como leído"
+	case "mark as unread", "mark unread":
+		return "Marcar como no leído"
+	case "accept", "confirm", "ok":
 		return "Aceptar"
+	case "yes":
+		return "Sí"
 	case "decline", "reject":
 		return "Rechazar"
 	case "delete", "remove":
 		return "Eliminar"
+	case "copy":
+		return "Copiar"
+	case "download":
+		return "Descargar"
 	case "play":
 		return "Reproducir"
 	case "pause":
@@ -548,6 +569,18 @@ func localizedActionLabel(label, key string) string {
 		return "Detener"
 	case "cancel":
 		return "Cancelar"
+	case "retry", "try again":
+		return "Reintentar"
+	case "ignore":
+		return "Ignorar"
+	case "skip":
+		return "Omitir"
+	case "mute", "silence":
+		return "Silenciar"
+	case "unmute":
+		return "Activar sonido"
+	case "settings", "preferences":
+		return "Configuración"
 	default:
 		return label
 	}

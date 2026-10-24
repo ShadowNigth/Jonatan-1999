@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -505,7 +506,30 @@ func StripMarkup(s string) string {
 		"&apos;", "'", "&#39;", "'", "&#40;", "(", "&#41;", ")",
 		"&nbsp;", " ",
 	)
-	return replacer.Replace(b.String())
+	return cleanNotificationText(replacer.Replace(b.String()))
+}
+
+// cleanNotificationText elimina bytes UTF-8 inválidos y controles invisibles
+// que algunas aplicaciones insertan en los avisos y las fuentes PSF dibujarían
+// como símbolos de control.
+func cleanNotificationText(s string) string {
+	s = strings.ToValidUTF8(s, "")
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\n':
+			b.WriteRune(r)
+		case r == '\t' || r == '\u200b' || unicode.IsControl(r):
+			b.WriteByte(' ')
+		case unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r):
+			// Se descartan marcas combinantes, direccionales y joiners invisibles:
+			// el rasterizador no compone glifos ni secuencias de texto.
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // tagLen devuelve la longitud de una etiqueta reconocida (incluido '>'), o 0.

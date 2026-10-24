@@ -243,7 +243,7 @@ func notifyPreview(cfg *config.Config, args []string) {
 		{ID: 2, App: "pacman", Summary: "Actualización pendiente",
 			Body: "12 paquetes nuevos, entre ellos el kernel", Urgency: notify.Critical,
 			Created: now, Progress: 42,
-			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Luego"}}},
+			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Más tarde"}}},
 	}
 	backdrop := !hasFlagArg(args, "transparent")
 	if err := writeNotifyPNGWith(cfg, items, out, backdrop); err != nil {

@@ -29,9 +29,14 @@ func TestNotificationActionLabelsUseSpanish(t *testing.T) {
 		label, key, want string
 	}{
 		{"Open", "default", "Abrir"},
+		{"Open link", "open-link", "Abrir enlace"},
+		{"View details", "view_details", "Ver detalles"},
 		{"Reply", "reply", "Responder"},
+		{"Reply all", "reply-all", "Responder a todos"},
 		{"Dismiss", "close", "Cerrar"},
-		{"Later", "later", "Luego"},
+		{"Later", "later", "Más tarde"},
+		{"Mark as read", "mark_read", "Marcar como leído"},
+		{"Retry", "retry", "Reintentar"},
 		{"", "default", "Abrir"},
 		{"Abrir chat", "custom", "Abrir chat"},
 	} {

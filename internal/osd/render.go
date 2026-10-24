@@ -78,12 +78,26 @@ func (r *Renderer) lineH(scale int) int {
 	return r.rows(scale) + lead
 }
 
-// valueScale es la escala del número grande.
+// valueScale es la escala del valor destacado.
 func (r *Renderer) valueScale() int {
 	if r.sc < 3 {
 		return r.sc + 1
 	}
 	return r.sc
+}
+
+// valueScaleFor reduce el texto de silencio si hace falta para mostrarlo
+// completo dentro del ancho disponible, incluso con fuentes PSF grandes.
+func (r *Renderer) valueScaleFor(s State) int {
+	scale := r.valueScale()
+	if !s.Muted {
+		return scale
+	}
+	inner := r.Opt.Width - 2*r.Opt.Padding
+	for scale > 1 && bar.TextWidth(r.face, s.ValueText(), scale, scale) > inner {
+		scale--
+	}
+	return scale
 }
 
 // barH es el alto de la barra de nivel.
@@ -102,15 +116,16 @@ func (r *Renderer) textFitsInline(s State) bool {
 		return false
 	}
 	labelWidth := bar.TextWidth(r.face, strings.ToUpper(s.Label()), r.sc, r.sc)
-	valueWidth := bar.TextWidth(r.face, s.ValueText(), r.valueScale(), r.valueScale())
+	scale := r.valueScaleFor(s)
+	valueWidth := bar.TextWidth(r.face, s.ValueText(), scale, scale)
 	return labelWidth+4*r.sc+valueWidth <= inner
 }
 
 // Size devuelve el tamaño compacto de la tarjeta y reserva otra fila cuando
-// el título y el valor no caben juntos (por ejemplo, «volumen» y «silenciado»).
+// el título y el valor no caben juntos (por ejemplo, «VOLUMEN» y «Silencio»).
 func (r *Renderer) Size(s State) (int, int) {
 	h := 2 * r.Opt.Padding
-	h += r.lineH(r.valueScale())
+	h += r.lineH(r.valueScaleFor(s))
 	h += 4 * r.sc
 	h += r.barH()
 	if !r.textFitsInline(s) {
@@ -129,6 +144,7 @@ func (r *Renderer) Render(s State, alpha float64) *bar.Canvas {
 		alpha = 1
 	}
 	w, h := r.Size(s)
+	valueScale := r.valueScaleFor(s)
 	c := bar.NewCanvas(w, h)
 	if alpha <= 0 {
 		return c
@@ -146,11 +162,11 @@ func (r *Renderer) Render(s State, alpha float64) *bar.Canvas {
 	y := pad
 
 	// El título y el valor comparten fila mientras haya espacio; si no, se
-	// apilan para evitar que «VOLUMEN» y «SILENCIADO» se pisen.
+	// apilan para evitar que «VOLUMEN» y «Silencio» se pisen.
 	label := strings.ToUpper(s.Label())
 	inline := r.textFitsInline(s)
 	if inline {
-		c.Text(r.face, x, y+r.lineH(r.valueScale())-r.lineH(r.sc), label, r.sc, r.sc, muted)
+		c.Text(r.face, x, y+r.lineH(valueScale)-r.lineH(r.sc), label, r.sc, r.sc, muted)
 	} else {
 		c.Text(r.face, x, y, label, r.sc, r.sc, muted)
 		y += r.lineH(r.sc) + 2*r.sc
@@ -164,17 +180,17 @@ func (r *Renderer) Render(s State, alpha float64) *bar.Canvas {
 		col = warn
 	}
 	valor := s.ValueText()
-	vw := bar.TextWidth(r.face, valor, r.valueScale(), r.valueScale())
+	vw := bar.TextWidth(r.face, valor, valueScale, valueScale)
 	if vw > inner {
-		valor = ui.Truncate(valor, inner/((r.face.W+r.valueScale())*r.valueScale()))
-		vw = bar.TextWidth(r.face, valor, r.valueScale(), r.valueScale())
+		valor = ui.Truncate(valor, inner/((r.face.W+valueScale)*valueScale))
+		vw = bar.TextWidth(r.face, valor, valueScale, valueScale)
 	}
 	valueX := x + inner - vw
 	if !inline {
 		valueX = x + (inner-vw)/2
 	}
-	c.Text(r.face, valueX, y, valor, r.valueScale(), r.valueScale(), col)
-	y += r.lineH(r.valueScale()) + 4*r.sc
+	c.Text(r.face, valueX, y, valor, valueScale, valueScale, col)
+	y += r.lineH(valueScale) + 4*r.sc
 
 	// Barra de nivel segmentada.
 	track := border

@@ -69,8 +69,8 @@ func TestStateTexts(t *testing.T) {
 		t.Fatalf("textos del aviso: %q %q %q", s.Label(), s.ValueText(), s.Detail())
 	}
 	m := Volume(45, true, "  ")
-	if m.ValueText() != "silenciado" {
-		t.Fatalf("silenciado = %q", m.ValueText())
+	if m.ValueText() != "Silencio" {
+		t.Fatalf("estado silenciado = %q", m.ValueText())
 	}
 	if m.Detail() != "" {
 		t.Fatalf("un dispositivo en blanco no debe mostrarse: %q", m.Detail())
@@ -105,7 +105,7 @@ func TestRenderSizeAndAlpha(t *testing.T) {
 
 func TestMutedLayoutStacksTitleAndValueWhenNeeded(t *testing.T) {
 	r := New(Options{
-		Width:   180,
+		Width:   150,
 		Padding: 12,
 		Face:    font.Builtin(),
 		Theme:   ui.PaletteByName("sakura"),
@@ -117,7 +117,7 @@ func TestMutedLayoutStacksTitleAndValueWhenNeeded(t *testing.T) {
 		t.Fatal("un porcentaje corto debería compartir fila con el título")
 	}
 	if r.textFitsInline(muted) {
-		t.Fatal("«silenciado» debe pasar a otra fila si no cabe junto al título")
+		t.Fatal("«Silencio» debe pasar a otra fila si no cabe junto al título")
 	}
 	_, activeHeight := r.Size(active)
 	_, mutedHeight := r.Size(muted)
@@ -127,6 +127,30 @@ func TestMutedLayoutStacksTitleAndValueWhenNeeded(t *testing.T) {
 	}
 	if canvas := r.Render(muted, 1); canvas.H != mutedHeight {
 		t.Fatalf("el lienzo silenciado mide %d px de alto, se esperaban %d", canvas.H, mutedHeight)
+	}
+}
+
+func TestMutedValueScaleKeepsStateTextWhole(t *testing.T) {
+	r := New(Options{
+		Width:   180,
+		Padding: 12,
+		Scale:   2,
+		Face:    font.Builtin(),
+		Theme:   ui.PaletteByName("sakura"),
+	})
+	muted := Volume(50, true, "")
+	scale := r.valueScaleFor(muted)
+	if scale >= r.valueScale() {
+		t.Fatalf("el estado largo no redujo su escala: %d", scale)
+	}
+	inner := r.Opt.Width - 2*r.Opt.Padding
+	if width := bar.TextWidth(r.face, muted.ValueText(), scale, scale); width > inner {
+		t.Fatalf("«%s» mide %d px y se recortaría dentro de %d px", muted.ValueText(), width, inner)
+	}
+	canvas := r.Render(muted, 1)
+	_, wantHeight := r.Size(muted)
+	if canvas.H != wantHeight {
+		t.Fatalf("alto del lienzo %d; se esperaba %d", canvas.H, wantHeight)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/ShadowNigth/swaydesk/internal/actions"
 	"github.com/ShadowNigth/swaydesk/internal/config"
@@ -227,11 +228,13 @@ func (cliphist) copy(it clipItem) error {
 	}
 	cmd := exec.Command("wl-copy", args...)
 	cmd.Stdin = bytes.NewReader(decoded)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		detail := strings.TrimSpace(string(output))
-		if detail != "" {
-			return fmt.Errorf("wl-copy: %w: %s", err, detail)
-		}
+	// Aísla el propietario del clipboard de la terminal que aloja swayclip;
+	// al cerrar la ventana no debe recibir señales de su grupo de procesos.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	// wl-copy bifurca para mantener viva la selección de Wayland. No hay que
+	// capturar stdout/stderr: CombinedOutput espera EOF de los descriptores que
+	// hereda el proceso residente y deja bloqueado Enter indefinidamente.
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("wl-copy: %w", err)
 	}
 	return nil
