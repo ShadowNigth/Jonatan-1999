@@ -79,6 +79,11 @@ tooltip label {
     border-radius: 8px;
 }
 
+#clock {
+    font-size: 15px;
+    font-weight: 600;
+}
+
 #cpu:hover,
 #memory:hover,
 #temperature:hover,

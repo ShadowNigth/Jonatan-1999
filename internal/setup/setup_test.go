@@ -115,11 +115,17 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 	if strings.Contains(files["waybar/config.json"], "sway/window") {
 		t.Fatal("la configuración aún contiene el módulo del título de ventana")
 	}
-	if !strings.Contains(waybar.Clock.Format, "%H:%M") || !strings.Contains(waybar.Clock.Format, "%d/%m/%Y") {
-		t.Fatalf("el reloj central debe mostrar hora y fecha: %q", waybar.Clock.Format)
+	if !strings.Contains(waybar.Clock.Format, "{:L%H:%M") || !strings.Contains(waybar.Clock.Format, "%A %d/%m/%Y") {
+		t.Fatalf("el reloj debe mostrar hora y día/fecha con locale español: %q", waybar.Clock.Format)
 	}
-	if !strings.Contains(waybar.Clock.FormatAlt, "%d/%m/%Y") {
-		t.Fatalf("el formato alternativo debe mantener la fecha numérica: %q", waybar.Clock.FormatAlt)
+	if waybar.Clock.FormatAlt != "" {
+		t.Fatal("al pulsar el reloj no debe cambiar a un formato alternativo")
+	}
+	if strings.Contains(waybar.Clock.Format, "ICON_CLOCK") {
+		t.Fatal("el reloj no debe llevar un icono delante de la hora")
+	}
+	if !strings.Contains(files["waybar/style.css"], "#clock {\n    font-size: 15px;") {
+		t.Fatal("el reloj central debe tener un tamaño de texto algo mayor")
 	}
 	if !waybar.Clock.Tooltip || !strings.Contains(waybar.Clock.TooltipFormat, "{calendar}") {
 		t.Fatal("al pasar el puntero por el reloj debe mostrarse el calendario")

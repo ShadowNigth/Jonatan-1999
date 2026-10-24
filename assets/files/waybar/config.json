@@ -119,8 +119,7 @@
     "interval": 30
   },
   "clock": {
-    "format": "{{ICON_CLOCK}} {:%H:%M · %d/%m/%Y}",
-    "format-alt": "{{ICON_CALENDAR}} {:%d/%m/%Y}",
+    "format": "{:L%H:%M · %A %d/%m/%Y}",
     "tooltip": true,
     "tooltip-format": "<tt><span size='large'>{calendar}</span></tt>",
     "locale": "es_AR.UTF-8",
