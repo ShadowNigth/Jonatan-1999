@@ -22,6 +22,10 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 	if err != nil {
 		return fmt.Errorf("no se pudo conectar con el compositor: %w", err)
 	}
+	if _, err := conn.GetRegistry(); err != nil {
+		conn.Close()
+		return fmt.Errorf("no se pudieron leer los globals de Wayland: %w", err)
+	}
 
 	anchors := uint32(wayland.AnchorTop | wayland.AnchorLeft | wayland.AnchorRight)
 	margins := wayland.PanelSpec{}
@@ -46,6 +50,7 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 
 	panel, err := wayland.NewPanel(conn, margins)
 	if err != nil {
+		conn.Close()
 		return err
 	}
 	defer panel.Close()

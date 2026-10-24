@@ -9,11 +9,12 @@ import (
 // Background es una superficie de fondo en la capa "background" del
 // compositor, creada con wlr-layer-shell.
 type Background struct {
-	conn    *Conn
-	surface uint32
-	layer   uint32
-	shm     *Shm
-	W, H    int
+	conn         *Conn
+	surface      uint32
+	layer        uint32
+	damageBuffer bool
+	shm          *Shm
+	W, H         int
 
 	mu         sync.Mutex
 	configured bool
@@ -23,6 +24,17 @@ type Background struct {
 
 	// FrameDone se cierra cuando el compositor pide el siguiente fotograma.
 	frameWait chan struct{}
+}
+
+// sendSurfaceDamage usa damage_buffer solo si la versión negociada de
+// wl_surface es >= 4; en versiones anteriores damage toma coordenadas locales.
+func sendSurfaceDamage(c *Conn, surface uint32, w, h int, bufferCoords bool) error {
+	opcode := uint16(surfaceDamage)
+	if bufferCoords {
+		opcode = uint16(surfaceDamageBuf)
+	}
+	return c.Send(newEncoder(surface, opcode).
+		int32(0).int32(0).int32(int32(w)).int32(int32(h)).bytes())
 }
 
 // NewBackground crea una superficie de fondo del tamaño indicado.
@@ -42,9 +54,18 @@ func NewBackground(c *Conn, w, h int, namespace string) (*Background, error) {
 		namespace = "swaydesk-wallpaper"
 	}
 
-	b := &Background{conn: c, W: w, H: h, frameWait: make(chan struct{}, 1)}
+	compositorVer := versionAtMost(compositor, 4)
+	compositorID, err := c.Bind(compositor, compositorVer, nil)
+	if err != nil {
+		return nil, err
+	}
+	b := &Background{
+		conn: c, W: w, H: h, frameWait: make(chan struct{}, 1),
+		damageBuffer: compositorVer >= 4,
+	}
 
-	// wl_surface
+	// El nombre de un global solo sirve para wl_registry.bind; las solicitudes
+	// wl_compositor deben enviarse al id local que devuelve Bind.
 	b.surface = c.allocID("wl_surface", func(op uint16, d *decoder) {
 		switch op {
 		case surfaceEnterEvent:
@@ -53,14 +74,19 @@ func NewBackground(c *Conn, w, h int, namespace string) (*Background, error) {
 			d.uint32()
 		}
 	})
-	_ = c.Send(newEncoder(compositor.Name, compositorCreateSurface).newID(b.surface).bytes())
-
-	// zwlr_layer_shell_v1.get_layer_surface(surface, output=nil, layer=background, namespace)
-	layerVer := layerShell.Version
-	if layerVer > 4 {
-		layerVer = 4
+	if err := c.Send(newEncoder(compositorID, compositorCreateSurface).newID(b.surface).bytes()); err != nil {
+		return nil, fmt.Errorf("creando wl_surface: %w", err)
 	}
-	sheetID := c.Bind(layerShell, layerVer, func(op uint16, d *decoder) {
+
+	// zwlr_layer_shell_v1.get_layer_surface(surface, output=nil, layer=background, namespace).
+	// El objeto zwlr_layer_shell_v1 y el zwlr_layer_surface_v1 devuelto tienen
+	// ids distintos; reutilizar el primero como new_id provoca un error fatal.
+	layerVer := versionAtMost(layerShell, 4)
+	shellID, err := c.Bind(layerShell, layerVer, nil)
+	if err != nil {
+		return nil, err
+	}
+	b.layer = c.allocID("zwlr_layer_surface_v1", func(op uint16, d *decoder) {
 		switch op {
 		case layerSurfaceConfigureEvent:
 			serial := d.uint32()
@@ -82,8 +108,7 @@ func NewBackground(c *Conn, w, h int, namespace string) (*Background, error) {
 			b.mu.Unlock()
 		}
 	})
-	b.layer = sheetID
-	msg := newEncoder(sheetID, layerShellGetSurface).
+	msg := newEncoder(shellID, layerShellGetSurface).
 		newID(b.layer).
 		newID(b.surface).
 		uint32(0). // sin salida concreta: todas
@@ -91,19 +116,26 @@ func NewBackground(c *Conn, w, h int, namespace string) (*Background, error) {
 		string(namespace).
 		bytes()
 	if err := c.Send(msg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creando zwlr_layer_surface_v1: %w", err)
 	}
 
 	// set_size(0,0) = ocupar el espacio que indique el compositor,
 	// set_anchor(todos los bordes) y zona exclusiva 0 (no reserva espacio).
-	_ = c.Send(newEncoder(b.layer, layerSurfaceSetSize).uint32(0).uint32(0).bytes())
-	_ = c.Send(newEncoder(b.layer, layerSurfaceSetAnchor).
-		uint32(AnchorTop | AnchorBottom | AnchorLeft | AnchorRight).bytes())
-	_ = c.Send(newEncoder(b.layer, layerSurfaceSetExclusiveZone).int32(0).bytes())
-	_ = c.Send(newEncoder(b.layer, layerSurfaceSetKeyboard).uint32(0).bytes())
-	// Superficie opaca (sin alfa) para que el compositor pueda optimizar.
-	_ = c.Send(newEncoder(b.layer, layerSurfaceSetLayer).uint32(LayerBackground).bytes())
-	_ = c.Send(newEncoder(b.surface, surfaceCommit).bytes())
+	requests := []struct {
+		name string
+		msg  []byte
+	}{
+		{"zwlr_layer_surface_v1.set_size", newEncoder(b.layer, layerSurfaceSetSize).uint32(0).uint32(0).bytes()},
+		{"zwlr_layer_surface_v1.set_anchor", newEncoder(b.layer, layerSurfaceSetAnchor).uint32(AnchorTop | AnchorBottom | AnchorLeft | AnchorRight).bytes()},
+		{"zwlr_layer_surface_v1.set_exclusive_zone", newEncoder(b.layer, layerSurfaceSetExclusiveZone).int32(0).bytes()},
+		{"zwlr_layer_surface_v1.set_keyboard_interactivity", newEncoder(b.layer, layerSurfaceSetKeyboard).uint32(0).bytes()},
+		{"wl_surface.commit", newEncoder(b.surface, surfaceCommit).bytes()},
+	}
+	for _, req := range requests {
+		if err := c.Send(req.msg); err != nil {
+			return nil, fmt.Errorf("%s: %w", req.name, err)
+		}
+	}
 
 	// Espera el primer configure.
 	deadline := time.Now().Add(3 * time.Second)
@@ -112,8 +144,11 @@ func NewBackground(c *Conn, w, h int, namespace string) (*Background, error) {
 		ok := b.configured
 		closed := b.closed
 		b.mu.Unlock()
-		if ok || closed {
+		if ok {
 			break
+		}
+		if closed {
+			return b, fmt.Errorf("el compositor cerró la superficie de fondo antes de configurarla")
 		}
 		if time.Now().After(deadline) {
 			return b, fmt.Errorf("el compositor no envió configure para la superficie de fondo")
@@ -191,10 +226,15 @@ func (b *Background) Draw(pix []uint8, srcW, srcH int) error {
 	b.Ack()
 	buf := b.shm.Next()
 	buf.FillRGB(pix, srcW, srcH)
-	_ = b.conn.Send(newEncoder(b.surface, surfaceAttach).uint32(buf.ID).int32(0).int32(0).bytes())
-	_ = b.conn.Send(newEncoder(b.surface, surfaceDamageBuf).
-		int32(0).int32(0).int32(int32(buf.W)).int32(int32(buf.H)).bytes())
-	_ = b.conn.Send(newEncoder(b.surface, surfaceCommit).bytes())
+	if err := b.conn.Send(newEncoder(b.surface, surfaceAttach).uint32(buf.ID).int32(0).int32(0).bytes()); err != nil {
+		return fmt.Errorf("adjuntando el búfer del fondo: %w", err)
+	}
+	if err := sendSurfaceDamage(b.conn, b.surface, buf.W, buf.H, b.damageBuffer); err != nil {
+		return fmt.Errorf("marcando el área del fondo: %w", err)
+	}
+	if err := b.conn.Send(newEncoder(b.surface, surfaceCommit).bytes()); err != nil {
+		return fmt.Errorf("confirmando el fotograma del fondo: %w", err)
+	}
 	return nil
 }
 

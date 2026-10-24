@@ -27,6 +27,7 @@ type Conn struct {
 	// registryID es el objeto wl_registry.
 	registryID uint32
 	closed     bool
+	fatalErr   error
 }
 
 // object representa un objeto del protocolo con su escucha de eventos.
@@ -67,7 +68,14 @@ func NewConn() (*Conn, error) {
 		objects: map[uint32]*object{},
 		readBuf: make([]byte, 0, 64*1024),
 	}
-	c.objects[1] = &object{id: 1, iface: "wl_display"}
+	c.objects[1] = &object{id: 1, iface: "wl_display", handler: func(op uint16, d *decoder) {
+		switch op {
+		case displayErrorEvent:
+			c.fatalErr = Error{ObjectID: d.uint32(), Code: d.uint32(), Message: d.string()}
+		case displayDeleteID:
+			d.uint32() // los ids no se reutilizan, pero hay que consumir el evento
+		}
+	}}
 	return c, nil
 }
 
@@ -132,10 +140,24 @@ func (c *Conn) Dispatch(timeout time.Duration) (int, error) {
 	}
 	// Primero se procesa lo que quedó pendiente de la lectura anterior.
 	processed := c.drain()
+	if c.fatalErr != nil {
+		return processed, c.fatalErr
+	}
 
 	buf := make([]byte, 64*1024)
 	oob := make([]byte, syscall.CmsgSpace(4*8))
 	n, oobn, _, _, err := c.nc.ReadMsgUnix(buf, oob)
+	// Un Read puede devolver bytes y también un error (por ejemplo, EOF tras
+	// recibir el último evento); procesa siempre los bytes antes de propagarlo.
+	if n > 0 {
+		fds := parseFDs(oob[:oobn])
+		c.readBuf = append(c.readBuf, buf[:n]...)
+		c.pendingFds = append(c.pendingFds, fds...)
+		processed += c.drain()
+	}
+	if c.fatalErr != nil {
+		return processed, c.fatalErr
+	}
 	if err != nil {
 		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 			return processed, nil
@@ -148,10 +170,6 @@ func (c *Conn) Dispatch(timeout time.Duration) (int, error) {
 	if n == 0 {
 		return processed, fmt.Errorf("el compositor cerró la conexión")
 	}
-	fds := parseFDs(oob[:oobn])
-	c.readBuf = append(c.readBuf, buf[:n]...)
-	c.pendingFds = append(c.pendingFds, fds...)
-	processed += c.drain()
 	return processed, nil
 }
 
@@ -299,14 +317,31 @@ func (c *Conn) GetRegistry() ([]Global, error) {
 	return c.globals, nil
 }
 
-// Bind crea un objeto local a partir de un global.
-func (c *Conn) Bind(g Global, version uint32, handler func(uint16, *decoder)) uint32 {
+// Bind enlaza un global anunciado por wl_registry y devuelve el id del objeto
+// cliente creado. El nombre del global no es un id de objeto y no debe usarse
+// para enviar solicitudes de interfaz.
+func (c *Conn) Bind(g Global, version uint32, handler func(uint16, *decoder)) (uint32, error) {
+	if version == 0 || version > g.Version {
+		return 0, fmt.Errorf("versión inválida de %s: %d (máxima anunciada: %d)", g.Interface, version, g.Version)
+	}
+	if c.registryID == 0 {
+		return 0, fmt.Errorf("no se puede enlazar %s antes de obtener wl_registry", g.Interface)
+	}
 	id := c.allocID(g.Interface, handler)
-	regID := c.registryID
-	msg := newEncoder(regID, registryBind).
+	msg := newEncoder(c.registryID, registryBind).
 		uint32(g.Name).string(g.Interface).uint32(version).newID(id).bytes()
-	_ = c.Send(msg)
-	return id
+	if err := c.Send(msg); err != nil {
+		delete(c.objects, id)
+		return 0, fmt.Errorf("enlazando %s: %w", g.Interface, err)
+	}
+	return id, nil
+}
+
+func versionAtMost(g Global, max uint32) uint32 {
+	if max > 0 && g.Version > max {
+		return max
+	}
+	return g.Version
 }
 
 // Error del compositor, recibido en wl_display.
@@ -317,7 +352,7 @@ type Error struct {
 }
 
 func (e Error) Error() string {
-	return fmt.Sprintf("error del compositor Wayland (objeto %d, código %d): %s", e.ObjectID, e.Code, e.Message)
+	return fmt.Sprintf("error de protocolo Wayland (objeto %d, código %d): %s", e.ObjectID, e.Code, e.Message)
 }
 
 // RegistryID devuelve el id del objeto registro.

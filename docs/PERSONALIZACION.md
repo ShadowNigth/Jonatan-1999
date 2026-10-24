@@ -190,6 +190,10 @@ Puedes borrar la entrada seleccionada con `Ctrl+d`.
   `~/.cache/swaydesk/wallpaper.log` y `swaydesk wallpaper logs` lo muestra (con
   `--clear` lo vacía). Al arrancarlo se comprueba que siga vivo un par de
   segundos; si murió, se imprime el registro en lugar de un «✔» falso.
+- Si el registro dice `connection reset by peer`, actualiza el binario: una
+  versión anterior enviaba IDs Wayland incorrectos al crear superficies de
+  fondo/paneles, y el compositor cerraba el socket. Ahora también se informa
+  el `wl_display.error` concreto si aparece otro error de protocolo.
 - `swaydesk doctor` incluye el chequeo **demonio de fondo**, que solo exige el
   demonio cuando el fondo actual lo necesita.
 - Una **imagen fija** no necesita demonio: se aplica al instante con
