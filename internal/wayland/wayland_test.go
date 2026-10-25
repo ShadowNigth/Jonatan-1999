@@ -457,3 +457,80 @@ func testLayerSurfaceConstructor(t *testing.T, wantExclusiveZone int32, create f
 		}
 	}
 }
+
+func TestPanelRequestSizeCoalescesDuplicateCommits(t *testing.T) {
+	socket := filepath.Join(t.TempDir(), "wayland-test")
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: socket, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	client, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: socket, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	server, err := listener.AcceptUnix()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+
+	panel := &Panel{
+		conn:       &Conn{nc: client},
+		layer:      7,
+		surface:    8,
+		configured: true,
+		cfgW:       300,
+		cfgH:       1,
+		W:          300,
+		H:          1,
+	}
+	if err := panel.RequestSize(300, 48); err != nil {
+		t.Fatal(err)
+	}
+	if err := panel.RequestSize(300, 48); err != nil {
+		t.Fatal(err)
+	}
+	// Un cambio de contenido mientras hay un configure pendiente reemplaza el
+	// destino, pero el mismo destino no genera commits repetidos.
+	if err := panel.RequestSize(300, 72); err != nil {
+		t.Fatal(err)
+	}
+	if err := panel.RequestSize(300, 72); err != nil {
+		t.Fatal(err)
+	}
+
+	for i, want := range []struct {
+		id     uint32
+		opcode uint16
+		height uint32
+	}{
+		{7, layerSurfaceSetSize, 48},
+		{8, surfaceCommit, 0},
+		{7, layerSurfaceSetSize, 72},
+		{8, surfaceCommit, 0},
+	} {
+		msg, err := readTestWaylandMessage(server)
+		if err != nil {
+			t.Fatalf("request %d: %v", i, err)
+		}
+		if msg.id != want.id || msg.opcode != want.opcode {
+			t.Fatalf("request %d = %d/%d; se esperaba %d/%d", i, msg.id, msg.opcode, want.id, want.opcode)
+		}
+		if want.opcode == layerSurfaceSetSize {
+			d := decoder{buf: msg.args.buf}
+			if width, height := d.uint32(), d.uint32(); width != 300 || height != want.height {
+				t.Fatalf("tamaño solicitado = %dx%d; se esperaba 300x%d", width, height, want.height)
+			}
+		}
+	}
+
+	_ = server.SetReadDeadline(time.Now().Add(30 * time.Millisecond))
+	if msg, err := readTestWaylandMessage(server); err == nil {
+		t.Fatalf("se envió un commit redundante: %d/%d", msg.id, msg.opcode)
+	} else if timeout, ok := err.(net.Error); !ok || !timeout.Timeout() {
+		t.Fatalf("error esperando que no hubiera más commits: %v", err)
+	}
+}

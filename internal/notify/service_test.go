@@ -142,6 +142,13 @@ func TestServiceEndToEnd(t *testing.T) {
 	if !strings.Contains(st, `"dnd": true`) {
 		t.Errorf("estado: %s", st)
 	}
+	if c.Available() {
+		t.Error("un daemon que aún no dibujó no debe anunciarse como listo")
+	}
+	svc.MarkReady()
+	if !c.Available() {
+		t.Error("un daemon con su primer fotograma debe anunciarse como listo")
+	}
 }
 
 func TestApplyHints(t *testing.T) {
@@ -199,6 +206,13 @@ func TestStatusAndExpiry(t *testing.T) {
 	st := string(svc.StatusJSON())
 	if !strings.Contains(st, `"pending": 2`) {
 		t.Errorf("estado sin pendientes: %s", st)
+	}
+	if !strings.Contains(st, `"ready": false`) {
+		t.Errorf("un servicio sin primer fotograma debe informar que aún no está listo: %s", st)
+	}
+	svc.MarkReady()
+	if st = string(svc.StatusJSON()); !strings.Contains(st, `"ready": true`) {
+		t.Errorf("el servicio listo no se informó correctamente: %s", st)
 	}
 
 	now = at(0.6)

@@ -28,9 +28,10 @@ type daemon struct {
 
 	panel   *wayland.Panel
 	pointer *wayland.Pointer
-	scale   int
-	cards   []notify.Card
-	lastKey string
+	scale      int
+	cards      []notify.Card
+	lastKey    string
+	pendingKey string
 	// Se conservan para evitar repetir mensajes idénticos en el registro.
 	lastDrawErr string
 	lastResize  string
@@ -188,9 +189,9 @@ func runDaemon(args []string) {
 
 var errStop = errors.New("fin")
 
-// notificationPollInterval limita la espera para despachar eventos Wayland
-// cuando no llega una nueva notificación D-Bus.
-const notificationPollInterval = 50 * time.Millisecond
+// notificationPollInterval limita la espera por eventos Wayland (configure,
+// liberación de búfer o entrada) sin retrasar las notificaciones D-Bus.
+const notificationPollInterval = 16 * time.Millisecond
 
 // anchorsFor traduce la posición configurada en anclas y márgenes.
 func anchorsFor(pos string) (anchors uint32, mx, my int) {
@@ -216,8 +217,9 @@ func scaleFor(cfg *config.Config, scale int) int {
 
 // loop dibuja y atiende eventos.
 func (d *daemon) loop() error {
-	// Dispatch no bloqueante sondea el socket de Wayland con el intervalo
-	// corto anterior, evitando dejar una tarjeta esperando el tick viejo de 200 ms.
+	// Dispatch no bloqueante sondea el socket de Wayland. El intervalo de un
+	// fotograma permite reaccionar a configure sin dejar la superficie esperando
+	// dos sondeos consecutivos.
 	tick := time.NewTicker(notificationPollInterval)
 	defer tick.Stop()
 	// Un primer dibujo para fijar el tamaño de la superficie.
@@ -225,24 +227,42 @@ func (d *daemon) loop() error {
 	for {
 		select {
 		case <-d.svc.Dirty():
-			d.drawLogged()
 		case <-tick.C:
 			d.svc.Expire()
-			if d.panel.NeedsResize() {
-				if err := d.panel.Resize(2); err != nil {
-					return err
-				}
-				d.lastKey = "" // fuerza el repintado con el tamaño nuevo
-			}
-			d.drawLogged()
 		}
-		// Eventos del compositor (configure, entrada del ratón). Dispatch(0)
-		// sondea sin bloquear, así las nuevas notificaciones siguen llegando.
+
+		// Primero procesa configure; si se comprueba NeedsResize antes de esto,
+		// una confirmación recién llegada queda pospuesta hasta otro tick.
 		if err := d.panel.Dispatch(0); err != nil {
 			if d.panel.Closed() {
 				return errStop
 			}
 			return err
+		}
+		if d.panel.NeedsResize() {
+			if err := d.panel.Resize(2); err != nil {
+				return err
+			}
+			d.lastKey = "" // fuerza el repintado con el tamaño nuevo
+			d.pendingKey = ""
+		}
+		d.drawLogged()
+
+		// Una notificación nueva puede pedir otro tamaño. Vuelve a sondear en
+		// el mismo ciclo para aprovechar una respuesta inmediata del compositor.
+		if err := d.panel.Dispatch(0); err != nil {
+			if d.panel.Closed() {
+				return errStop
+			}
+			return err
+		}
+		if d.panel.NeedsResize() {
+			if err := d.panel.Resize(2); err != nil {
+				return err
+			}
+			d.lastKey = "" // fuerza el repintado con el tamaño nuevo
+			d.pendingKey = ""
+			d.drawLogged()
 		}
 	}
 }
@@ -252,15 +272,22 @@ func (d *daemon) loop() error {
 func (d *daemon) drawLogged() {
 	if err := d.draw(); err != nil {
 		if err.Error() != d.lastDrawErr {
-			fmt.Fprintf(os.Stderr, "swaynotify: error al dibujar las notificaciones: %v\n", err)
+			logNotifyf("error al dibujar las notificaciones: %v", err)
 		}
 		d.lastDrawErr = err.Error()
 		return
 	}
 	if d.lastDrawErr != "" {
-		fmt.Fprintf(os.Stderr, "swaynotify: se recuperó el dibujo de notificaciones\n")
+		logNotifyf("se recuperó el dibujo de notificaciones")
 		d.lastDrawErr = ""
 	}
+}
+
+// logNotifyf añade hora al registro para distinguir el tiempo de espera del
+// compositor del tiempo que tarda el emisor en entregar la petición.
+func logNotifyf(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "swaynotify: %s %s\n",
+		time.Now().Format("15:04:05.000"), fmt.Sprintf(format, args...))
 }
 
 // draw redibuja si el contenido cambió.
@@ -268,7 +295,7 @@ func (d *daemon) draw() error {
 	now := time.Now()
 	items := d.store.Visible()
 	key := itemsKey(items, now) + "|" + strings.Join(d.stack.OpenKeys(), ",")
-	if key == d.lastKey {
+	if key == d.lastKey || key == d.pendingKey {
 		return nil
 	}
 	var views []notify.GroupView
@@ -300,22 +327,25 @@ func (d *daemon) draw() error {
 	if w != canvas.W || h != canvas.H {
 		request := fmt.Sprintf("%dx%d (actual %dx%d)", canvas.W, canvas.H, w, h)
 		if request != d.lastResize {
-			fmt.Fprintf(os.Stderr, "swaynotify: solicitando tamaño de panel %s\n", request)
+			logNotifyf("solicitando tamaño de panel %s", request)
 			d.lastResize = request
 		}
 		if err := d.panel.RequestSize(canvas.W, canvas.H); err != nil {
 			return fmt.Errorf("solicitando tamaño de panel %s: %w", request, err)
 		}
+		d.pendingKey = key
 		return nil
 	}
 	d.lastResize = ""
 	if err := d.panel.Draw(canvas.Pix, canvas.W, canvas.H); err != nil {
 		return fmt.Errorf("subiendo el fotograma %dx%d: %w", canvas.W, canvas.H, err)
 	}
+	d.svc.MarkReady()
+	d.pendingKey = ""
 	d.lastKey = key
 	frame := fmt.Sprintf("%d/%d/%dx%d", len(items), len(cards), canvas.W, canvas.H)
 	if frame != d.lastFrame {
-		fmt.Fprintf(os.Stderr, "swaynotify: fotograma enviado: %d notificaciones, %d tarjetas, superficie %dx%d\n",
+		logNotifyf("fotograma enviado: %d notificaciones, %d tarjetas, superficie %dx%d",
 			len(items), len(cards), canvas.W, canvas.H)
 		d.lastFrame = frame
 	}
@@ -346,10 +376,14 @@ func (d *daemon) openReply(n notify.Notification) {
 func itemsKey(items []notify.Notification, now time.Time) string {
 	var b strings.Builder
 	for _, n := range items {
-		fmt.Fprintf(&b, "%d:%d:%d:%d:%q:%q:%q:%q:%q:%q:%q:%v:%t:%q:%t:%d;",
+		imageW, imageH := 0, 0
+		if n.Image != nil {
+			imageW, imageH = n.Image.W, n.Image.H
+		}
+		fmt.Fprintf(&b, "%d:%d:%d:%d:%q:%q:%q:%q:%q:%q:%q:%v:%t:%q:%t:%d:%dx%d;",
 			n.ID, n.Timeout, n.Progress, n.Urgency, n.App, n.Summary, n.Body,
 			n.Icon, n.GroupID, n.ImagePath, n.Category, n.Actions, n.InlineReply,
-			n.ReplyPlaceholder, n.Resident, n.Created.UnixNano())
+			n.ReplyPlaceholder, n.Resident, n.Created.UnixNano(), imageW, imageH)
 	}
 	// La barra de tiempo avanza; se repinta una vez por segundo. Los cambios
 	// reales (incluido un replace con el mismo resumen) se detectan enseguida.

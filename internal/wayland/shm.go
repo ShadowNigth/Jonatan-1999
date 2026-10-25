@@ -27,6 +27,7 @@ type Shm struct {
 	shmID   uint32
 	poolID  uint32
 	buffers []*Buffer
+	mem     []byte
 	size    int
 	file    *os.File
 	mu      sync.Mutex
@@ -53,12 +54,16 @@ func NewShm(c *Conn, w, h, count int) (*Shm, error) {
 		return nil, fmt.Errorf("mapeando la memoria compartida: %w", err)
 	}
 
-	s := &Shm{conn: c, buffers: make([]*Buffer, 0, count), size: size, file: f}
-	s.shmID, err = c.Bind(g, 1, nil)
-	if err != nil {
-		_ = syscall.Munmap(mem)
-		_ = f.Close()
-		return nil, err
+	s := &Shm{conn: c, buffers: make([]*Buffer, 0, count), mem: mem, size: size, file: f}
+	s.shmID = c.shmID
+	if s.shmID == 0 {
+		s.shmID, err = c.Bind(g, 1, nil)
+		if err != nil {
+			_ = syscall.Munmap(mem)
+			_ = f.Close()
+			return nil, err
+		}
+		c.shmID = s.shmID
 	}
 	poolID := c.allocID("wl_shm_pool", nil)
 	s.poolID = poolID
@@ -170,10 +175,17 @@ func (s *Shm) Close() {
 	defer s.mu.Unlock()
 	for _, b := range s.buffers {
 		_ = s.conn.Send(newEncoder(b.ID, bufferDestroy).bytes())
+		delete(s.conn.objects, b.ID)
 	}
 	_ = s.conn.Send(newEncoder(s.poolID, poolDestroy).bytes())
+	delete(s.conn.objects, s.poolID)
+	if len(s.mem) > 0 {
+		_ = syscall.Munmap(s.mem)
+		s.mem = nil
+	}
 	if s.file != nil {
-		s.file.Close()
+		_ = s.file.Close()
+		s.file = nil
 	}
 }
 

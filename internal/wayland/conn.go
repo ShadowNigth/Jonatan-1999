@@ -25,8 +25,11 @@ type Conn struct {
 	readBuf []byte
 	// pendingFds son descriptores recibidos pendientes de asignar.
 	pendingFds []int
-	// registryID es el objeto wl_registry.
+	// registryID es el objeto wl_registry. shmID conserva un único enlace a
+	// wl_shm durante la conexión; los paneles pueden reconstruir sus pools sin
+	// crear un objeto global nuevo por cada redimensionado.
 	registryID uint32
+	shmID      uint32
 	closed     bool
 	fatalErr   error
 }

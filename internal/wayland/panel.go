@@ -41,6 +41,11 @@ type Panel struct {
 	closed     bool
 	ackSerial  uint32
 	cfgW, cfgH int
+	// requestedW/H recuerdan el último set_size enviado hasta que el
+	// compositor contesta con configure. Evita mandar otro commit en cada
+	// sondeo del bucle de notificaciones.
+	requestedW, requestedH int
+	requestPending         bool
 }
 
 // NewPanel crea y configura una superficie de panel.
@@ -102,6 +107,8 @@ func NewPanel(c *Conn, spec PanelSpec) (*Panel, error) {
 			p.mu.Lock()
 			p.configured = true
 			p.ackSerial = serial
+			p.requestPending = false
+			p.requestedW, p.requestedH = 0, 0
 			if w > 0 {
 				p.cfgW = int(w)
 			}
@@ -268,16 +275,34 @@ func (p *Panel) RequestSize(w, h int) error {
 		h = 1
 	}
 	p.mu.Lock()
-	pending := p.cfgW == w && p.cfgH == h
-	p.mu.Unlock()
-	if pending {
+	if (!p.requestPending && p.cfgW == w && p.cfgH == h) ||
+		(p.requestPending && p.requestedW == w && p.requestedH == h) {
+		p.mu.Unlock()
 		return nil
 	}
+	p.requestPending = true
+	p.requestedW, p.requestedH = w, h
+	p.mu.Unlock()
 	if err := p.conn.Send(newEncoder(p.layer, layerSurfaceSetSize).
 		uint32(uint32(w)).uint32(uint32(h)).bytes()); err != nil {
+		p.clearSizeRequest(w, h)
 		return err
 	}
-	return p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes())
+	if err := p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes()); err != nil {
+		p.clearSizeRequest(w, h)
+		return err
+	}
+	return nil
+}
+
+// clearSizeRequest desmarca una solicitud que no pudo enviarse completa.
+func (p *Panel) clearSizeRequest(w, h int) {
+	p.mu.Lock()
+	if p.requestPending && p.requestedW == w && p.requestedH == h {
+		p.requestPending = false
+		p.requestedW, p.requestedH = 0, 0
+	}
+	p.mu.Unlock()
 }
 
 // NeedsResize indica si el tamaño cambió.

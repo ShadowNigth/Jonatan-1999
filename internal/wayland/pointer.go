@@ -177,6 +177,7 @@ func (p *Panel) SetInputRegion(rects [][4]int) error {
 	if err := p.conn.Send(newEncoder(region, regionDestroy).bytes()); err != nil {
 		return fmt.Errorf("destruyendo la región temporal: %w", err)
 	}
+	delete(p.conn.objects, region)
 	return p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes())
 }
 

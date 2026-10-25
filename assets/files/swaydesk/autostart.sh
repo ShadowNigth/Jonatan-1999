@@ -137,14 +137,16 @@ stop_exact() {
     return 0
 }
 
-# start_swaynotify arranca el proveedor propio y espera a que acepte peticiones.
-# Así el resto de la sesión no queda sin avisos si Wayland/D-Bus tarda en iniciar.
+# start_swaynotify arranca el proveedor propio y espera a que D-Bus y el primer
+# fotograma Wayland estén listos. Así no se anuncia como disponible antes de
+# poder mostrar los avisos.
 start_swaynotify() {
     _noti_intento=1
     while [ "$_noti_intento" -le 3 ]; do
         quiet swaynotify daemon
         _noti_espera=0
-        while [ "$_noti_espera" -lt 40 ]; do
+        # La superficie y los búferes Wayland tienen roundtrips con límite de 3 s.
+        while [ "$_noti_espera" -lt 80 ]; do
             if swaynotify status >/dev/null 2>&1; then
                 log "swaynotify quedó activo (intento $_noti_intento/3)"
                 return 0

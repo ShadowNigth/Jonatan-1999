@@ -82,4 +82,9 @@ func TestItemsKeyIgnoresNothing(t *testing.T) {
 	if len(a) > 0 && itemsKey(nil, now) == itemsKey(a, now) {
 		t.Error("sin tarjetas la clave debe ser distinta")
 	}
+	withImage := []notify.Notification{{ID: 1, Summary: "uno", Progress: -1,
+		Image: &notify.Image{W: 24, H: 24}}}
+	if itemsKey(a, now) == itemsKey(withImage, now) {
+		t.Error("la llegada asíncrona de una imagen debe forzar el repintado")
+	}
 }

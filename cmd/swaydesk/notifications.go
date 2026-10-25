@@ -92,7 +92,11 @@ func notifyStatus(cfg *config.Config, args []string) {
 				_ = json.Unmarshal([]byte(s), &st)
 			}
 			fmt.Printf("\n  notificaciones · swaydesk\n")
-			fmt.Printf("  daemon       %s (D-Bus %s)\n", mark(running), notify.Iface)
+			daemonState := mark(running)
+			if !st.Ready {
+				daemonState = "iniciando"
+			}
+			fmt.Printf("  daemon       %s (D-Bus %s)\n", daemonState, notify.Iface)
 			fmt.Printf("  en pantalla  %d · pendientes %d\n", len(st.Visible), st.Pending)
 			dnd := "desactivado"
 			if st.DND {

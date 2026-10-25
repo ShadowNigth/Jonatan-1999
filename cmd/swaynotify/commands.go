@@ -177,6 +177,12 @@ func runStatus(args []string) {
 	}
 	st, _ := r.Body[0].(string)
 	fmt.Println(st)
+	var status notify.Status
+	if err := json.Unmarshal([]byte(st), &status); err != nil || !status.Ready {
+		// El nombre D-Bus ya puede estar registrado mientras se prepara la
+		// superficie. El autostart espera hasta que el primer fotograma se ve.
+		os.Exit(1)
+	}
 }
 
 // runHistory imprime el historial guardado por el daemon.

@@ -139,6 +139,31 @@ func TestClearReturnsIDs(t *testing.T) {
 	}
 }
 
+func TestSetImageOnlyUpdatesMatchingNotificationRevision(t *testing.T) {
+	s := newTestStore()
+	first := s.Add(Notification{Summary: "primera"})
+	image := &Image{W: 1, H: 1, Pix: []uint8{1, 2, 3, 255}}
+	if !s.SetImage(first.ID, first.revision, image) {
+		t.Fatal("no se pudo adjuntar la imagen a la notificación vigente")
+	}
+	got, ok := s.Get(first.ID)
+	if !ok || got.Image != image {
+		t.Fatal("la imagen no quedó asociada a la notificación")
+	}
+
+	replacement := s.Add(Notification{Summary: "reemplazo", ReplacesID: first.ID})
+	if replacement.ID != first.ID {
+		t.Fatalf("el reemplazo recibió id %d; se esperaba %d", replacement.ID, first.ID)
+	}
+	if s.SetImage(first.ID, first.revision, image) {
+		t.Fatal("una imagen atrasada modificó una notificación reemplazada")
+	}
+	got, ok = s.Get(replacement.ID)
+	if !ok || got.Image != nil {
+		t.Fatal("el reemplazo heredó una imagen obsoleta")
+	}
+}
+
 func TestSaveAndLoadHistory(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "notifications.json")

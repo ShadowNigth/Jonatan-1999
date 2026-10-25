@@ -41,6 +41,7 @@ type Service struct {
 
 	mu    sync.Mutex
 	dirty chan struct{}
+	ready bool // la superficie Wayland ya mostró su primer fotograma
 	// OnAction se llama cuando el usuario activa una acción (para abrir URLs).
 	OnAction func(n Notification, key string)
 	// OnClosed se llama al cerrar por petición del servidor.
@@ -63,6 +64,15 @@ func (s *Service) Touch() {
 	case s.dirty <- struct{}{}:
 	default:
 	}
+}
+
+// MarkReady indica que la superficie ya dibujó un fotograma y puede aceptar
+// avisos sin que los clientes confundan el registro D-Bus con la disponibilidad
+// visual del daemon.
+func (s *Service) MarkReady() {
+	s.mu.Lock()
+	s.ready = true
+	s.mu.Unlock()
 }
 
 // Attach instala los manejadores de la conexión D-Bus.
@@ -195,7 +205,6 @@ func (s *Service) handleNotify(m *dbus.Message) {
 			if hints, ok := m.Body[6].(dbus.Dict); ok {
 				applyHints(&n, hints)
 			}
-			resolveImage(&n)
 		}
 		if n.Summary == "" {
 			n.Summary = n.Body
@@ -205,8 +214,14 @@ func (s *Service) handleNotify(m *dbus.Message) {
 				"la notificación necesita un resumen")
 			return
 		}
+		loadImage := n.imageRaw != nil || n.imagePathForSend() != ""
 		saved := s.Store.Add(n)
 		s.Touch()
+		if loadImage {
+			// El texto aparece de inmediato; leer o decodificar una carátula o
+			// imagen grande no debe bloquear la respuesta D-Bus ni el primer dibujo.
+			go s.loadImage(saved, n)
+		}
 		_ = s.conn.Reply(m, "u", saved.ID)
 	case "CloseNotification":
 		id := argUint(m, 0)
@@ -214,6 +229,15 @@ func (s *Service) handleNotify(m *dbus.Message) {
 	default:
 		_ = s.conn.ReplyError(m, "org.freedesktop.DBus.Error.UnknownMethod",
 			"método desconocido: "+m.Member)
+	}
+}
+
+// loadImage resuelve la imagen fuera del camino D-Bus y la adjunta solo si la
+// notificación no fue reemplazada ni cerrada mientras se decodificaba.
+func (s *Service) loadImage(saved, source Notification) {
+	resolveImage(&source)
+	if source.Image != nil && s.Store.SetImage(saved.ID, saved.revision, source.Image) {
+		s.Touch()
 	}
 }
 
@@ -529,6 +553,7 @@ func (s *Service) handleOwn(m *dbus.Message) {
 // Status es el estado del daemon tal como lo devuelve GetStatus.
 type Status struct {
 	Running bool     `json:"running"`
+	Ready   bool     `json:"ready"`
 	DND     bool     `json:"dnd"`
 	Pending int      `json:"pending"`
 	Visible []uint32 `json:"visible"`
@@ -542,6 +567,9 @@ type Status struct {
 
 // StatusJSON devuelve el estado serializado.
 func (s *Service) StatusJSON() []byte {
+	s.mu.Lock()
+	ready := s.ready
+	s.mu.Unlock()
 	vis := s.Store.Visible()
 	ids := make([]uint32, 0, len(vis))
 	for _, n := range vis {
@@ -554,7 +582,7 @@ func (s *Service) StatusJSON() []byte {
 		}
 	}
 	st := Status{
-		Running: true, DND: s.Store.DND(), Pending: s.Store.Pending(),
+		Running: true, Ready: ready, DND: s.Store.DND(), Pending: s.Store.Pending(),
 		Visible: ids, History: len(s.Store.History()), Replies: replies,
 		Owner: ServerName, Version: ServerVersion, BusName: Iface,
 	}
@@ -757,8 +785,8 @@ func (n *Notification) imagePathForSend() string {
 	return ""
 }
 
-// Available indica si hay un servidor de notificaciones atendiendo.
+// Available indica si el servidor ya dibujó su primer fotograma y puede mostrar avisos.
 func (c *Client) Available() bool {
-	_, err := c.Call("GetStatus", "")
-	return err == nil
+	status, err := c.Status()
+	return err == nil && status.Running && status.Ready
 }
