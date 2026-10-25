@@ -61,9 +61,13 @@ rounding = 12               # requiere swayfx
 Después de editar:
 
 ```bash
-swaydesk apply     # regenera waybar/foot/mako/swaylock y recarga
-swaymsg reload     # solo si cambiaste la plantilla de sway
+swaydesk apply     # regenera Waybar/foot/mako/swaylock y migra el foco del puntero
+swaymsg reload     # para otros cambios manuales en la configuración de Sway
 ```
+
+La plantilla activa `focus_follows_mouse yes`: al pasar el puntero sobre otra
+ventana, esa ventana recibe el foco. `swaydesk apply` migra esa opción en una
+configuración existente y recarga Sway sin reemplazar el resto del archivo.
 
 ## 2. Temas
 

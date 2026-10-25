@@ -61,7 +61,7 @@ smart_borders on
 font pango:{{FONT}} {{FONT_SIZE}}
 titlebar_border_thickness 1
 titlebar_padding 4 2
-focus_follows_mouse no
+focus_follows_mouse yes
 mouse_warping output
 focus_wrapping yes
 

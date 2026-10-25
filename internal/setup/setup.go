@@ -718,8 +718,8 @@ func sortStrings(s []string) {
 	}
 }
 
-// Apply regenera los archivos dependientes del tema que ya estén instalados y
-// avisa a waybar y a sway para que recarguen.
+// Apply regenera los archivos dependientes del tema instalados, migra opciones
+// heredadas de Sway/Waybar y solicita que ambos recarguen si hubo cambios.
 func Apply(cfg *config.Config, dest string) ([]Result, error) {
 	files, err := Render(cfg)
 	if err != nil {
@@ -773,7 +773,14 @@ func Apply(cfg *config.Config, dest string) ([]Result, error) {
 	for _, path := range volumeFiles {
 		results = append(results, Result{Path: path, Action: "atajos de volumen actualizados", Modified: true})
 	}
-	if (len(screenshotFiles) > 0 || len(volumeFiles) > 0) && filepath.Clean(dest) == filepath.Clean(configDir()) {
+	focusFiles, err := migrateFocusFollowsMouse(dest)
+	if err != nil {
+		return results, err
+	}
+	for _, path := range focusFiles {
+		results = append(results, Result{Path: path, Action: "enfoque al pasar el puntero activado", Modified: true})
+	}
+	if (len(screenshotFiles) > 0 || len(volumeFiles) > 0 || len(focusFiles) > 0) && filepath.Clean(dest) == filepath.Clean(configDir()) {
 		reloadSwayConfig()
 	}
 	applyGTKSettings(cfg)
@@ -855,7 +862,67 @@ func migrateVolumeBindings(dest string) ([]string, error) {
 	return []string{path}, nil
 }
 
-// reloadSwayConfig recarga Sway después de una migración automática de atajos.
+// migrateFocusFollowsMouse activa el enfoque de ventanas al pasar el puntero
+// por encima, conservando el resto de la configuración Sway existente.
+func migrateFocusFollowsMouse(dest string) ([]string, error) {
+	path := filepath.Join(dest, "sway", "config")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("leyendo %s: %w", path, err)
+	}
+
+	text := string(data)
+	lines := strings.Split(text, "\n")
+	found, modified := false, false
+	for i, line := range lines {
+		trimmed := strings.TrimLeft(line, " \t")
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) == 0 || fields[0] != "focus_follows_mouse" {
+			continue
+		}
+		found = true
+		if len(fields) > 1 && fields[1] == "yes" {
+			continue
+		}
+
+		comment := ""
+		if index := strings.Index(trimmed, "#"); index >= 0 {
+			comment = " " + strings.TrimSpace(trimmed[index:])
+		}
+		indent := line[:len(line)-len(trimmed)]
+		lines[i] = indent + "focus_follows_mouse yes" + comment
+		modified = true
+	}
+
+	updated := strings.Join(lines, "\n")
+	if !found {
+		updated = text
+		if updated != "" && !strings.HasSuffix(updated, "\n") {
+			updated += "\n"
+		}
+		updated += "focus_follows_mouse yes\n"
+		modified = true
+	}
+	if !modified {
+		return nil, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("consultando %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, []byte(updated), info.Mode().Perm()); err != nil {
+		return nil, fmt.Errorf("actualizando %s: %w", path, err)
+	}
+	return []string{path}, nil
+}
+
+// reloadSwayConfig recarga Sway después de una migración automática de su config.
 func reloadSwayConfig() {
 	c, err := dialSway()
 	if err != nil {

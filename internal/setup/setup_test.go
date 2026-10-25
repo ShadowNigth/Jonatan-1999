@@ -68,6 +68,9 @@ func TestRenderPaleta(t *testing.T) {
 	if !strings.Contains(swayConf, "bindsym $mod+Return exec") {
 		t.Fatal("faltan atajos en la configuración de sway")
 	}
+	if !strings.Contains(swayConf, "\nfocus_follows_mouse yes\n") {
+		t.Fatal("Sway debe enfocar la ventana que está bajo el puntero")
+	}
 	for _, binding := range []string{
 		"bindsym $mod+c exec --no-startup-id $swayclip",
 		"bindsym $mod+i exec --no-startup-id $swayctl",
@@ -394,6 +397,52 @@ func TestInstallYRespaldo(t *testing.T) {
 	}
 	if backups == 0 {
 		t.Fatal("no se creó ningún respaldo")
+	}
+}
+
+func TestApplyMigratesFocusFollowsMouse(t *testing.T) {
+	dest := t.TempDir()
+	swayDir := filepath.Join(dest, "sway")
+	if err := os.MkdirAll(swayDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(swayDir, "config")
+	original := "# configuración personalizada\nfocus_follows_mouse no # antes estaba desactivado\nmouse_warping output\n"
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := Apply(config.Default(), dest)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(updated)
+	if !strings.Contains(text, "focus_follows_mouse yes # antes estaba desactivado") ||
+		strings.Contains(text, "focus_follows_mouse no") {
+		t.Fatalf("Apply no activó el foco bajo el puntero conservando el comentario:\n%s", text)
+	}
+	if !strings.Contains(text, "mouse_warping output") || !strings.Contains(text, "# configuración personalizada") {
+		t.Fatalf("la migración alteró otras opciones de Sway:\n%s", text)
+	}
+	found := false
+	for _, result := range results {
+		if result.Path == path && result.Action == "enfoque al pasar el puntero activado" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Apply no reportó la migración del foco del puntero: %+v", results)
+	}
+	changed, err := migrateFocusFollowsMouse(dest)
+	if err != nil {
+		t.Fatalf("segunda migración: %v", err)
+	}
+	if len(changed) != 0 {
+		t.Fatalf("la migración no es idempotente: %v", changed)
 	}
 }
 
