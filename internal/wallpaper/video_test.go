@@ -24,19 +24,29 @@ func TestScaledVideoHeightUsesSourceAspectRatio(t *testing.T) {
 }
 
 func TestVideoFilterDropsExcessFramesBeforeScaling(t *testing.T) {
-	filter := videoFilter(1920, 1080, 30, false)
+	filter := videoFilter(1920, 1080, 30, false, false)
 	if !strings.HasPrefix(filter, "fps=30,scale=") {
 		t.Fatalf("el filtro debe limitar FPS antes del escalado: %s", filter)
 	}
 }
 
-func TestVAAPIVideoFilterDownloadsFramesBeforeCPUProcessing(t *testing.T) {
-	filter := videoFilter(1920, 1080, 30, true)
+func TestVAAPIFilterScalesBeforeDownloading(t *testing.T) {
+	filter := videoFilter(1360, 768, 30, true, true)
+	if !strings.HasPrefix(filter, "scale_vaapi=w=1360:h=768:format=nv12:") {
+		t.Fatalf("el filtro debe escalar en VAAPI: %s", filter)
+	}
+	if !strings.Contains(filter, ",hwdownload,format=nv12,fps=30,crop=1360:768,format=bgra") {
+		t.Fatalf("el filtro VAAPI debe descargar el frame ya escalado: %s", filter)
+	}
+}
+
+func TestVAAPIFilterFallsBackToSoftwareScaling(t *testing.T) {
+	filter := videoFilter(1920, 1080, 30, true, false)
 	if !strings.HasPrefix(filter, "hwdownload,format=nv12,fps=30,scale=") {
-		t.Fatalf("filtro VAAPI inesperado: %s", filter)
+		t.Fatalf("filtro de respaldo VAAPI inesperado: %s", filter)
 	}
 	if !strings.HasSuffix(filter, ",format=bgra") {
-		t.Fatalf("el filtro VAAPI no termina en BGRA: %s", filter)
+		t.Fatalf("el filtro VAAPI de respaldo no termina en BGRA: %s", filter)
 	}
 }
 

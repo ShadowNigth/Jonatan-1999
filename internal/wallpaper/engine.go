@@ -272,16 +272,18 @@ func (e *Engine) Close() {
 
 // ─── Vídeo (opcional con ffmpeg) ───────────────────────────────────────────
 
-// videoSource decodifica vídeo en tiempo real, probando VAAPI si hay un nodo
-// DRM accesible y volviendo a software si falla. La salida usa un canal de un
-// solo fotograma para no acumular latencia ni memoria.
+// videoSource decodifica vídeo en tiempo real: prueba VAAPI para decodificación
+// y escalado, y conserva fallback a escalado o decodificación por software. La
+// salida usa un canal de un fotograma para no acumular latencia ni memoria.
 type videoSource struct {
-	path          string
-	fps           int
-	duration      time.Duration
-	vaapiDevice   string
-	usingVAAPI    bool
-	forceSoftware bool
+	path            string
+	fps             int
+	duration        time.Duration
+	vaapiDevice     string
+	usingVAAPI      bool
+	scaleWithVAAPI  bool
+	vaapiLogged     bool
+	forceSoftware   bool
 
 	width  int
 	height int
@@ -316,7 +318,8 @@ func NewVideoSource(path string, fps int) (*videoSource, error) {
 	}
 	return &videoSource{
 		path: path, fps: fps, duration: info.duration,
-		vaapiDevice: findVAAPIDevice(),
+		vaapiDevice:    findVAAPIDevice(),
+		scaleWithVAAPI: true,
 	}, nil
 }
 
@@ -334,10 +337,14 @@ func findVAAPIDevice() string {
 	return ""
 }
 
-// videoFilter crea el filtro de salida. Se limita FPS antes de escalar para no
-// gastar CPU en fotogramas que se descartarían; VAAPI descarga solo los frames
-// necesarios para convertirlos al formato de wl_shm.
-func videoFilter(width, height, fps int, useVAAPI bool) string {
+// videoFilter crea el filtro de salida. En la ruta por software limita FPS
+// antes de escalar; con VAAPI escala en la GPU antes de descargar los frames al
+// formato NV12 y convertirlos a BGRA.
+func videoFilter(width, height, fps int, useVAAPI, scaleWithVAAPI bool) string {
+	if useVAAPI && scaleWithVAAPI {
+		return fmt.Sprintf("scale_vaapi=w=%d:h=%d:format=nv12:mode=hq:force_original_aspect_ratio=increase:force_divisible_by=2,hwdownload,format=nv12,fps=%d,crop=%d:%d,format=bgra",
+			width, height, fps, width, height)
+	}
 	if useVAAPI {
 		return fmt.Sprintf("hwdownload,format=nv12,fps=%d,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=bgra",
 			fps, width, height, width, height)
@@ -365,7 +372,7 @@ func (v *videoSource) FrameBGRA(width, height int) []uint8 {
 		select {
 		case frame, ok := <-v.frames:
 			if !ok {
-				if v.fallbackToSoftware(width, height) {
+				if v.retryDecoder(width, height) {
 					return nil
 				}
 				v.reportError(v.decodeErr)
@@ -388,7 +395,7 @@ func (v *videoSource) FrameBGRA(width, height int) []uint8 {
 				default:
 				}
 			} else {
-				if v.fallbackToSoftware(width, height) {
+				if v.retryDecoder(width, height) {
 					return nil
 				}
 				v.reportError(v.decodeErr)
@@ -400,11 +407,19 @@ func (v *videoSource) FrameBGRA(width, height int) []uint8 {
 	if len(v.current) != width*height*4 {
 		return nil
 	}
+	if v.usingVAAPI && !v.vaapiLogged {
+		stage := "decodificación"
+		if v.scaleWithVAAPI {
+			stage += " y escalado"
+		}
+		log.Printf("swaydesk: VAAPI activa (%s) para %q", stage, filepath.Base(v.path))
+		v.vaapiLogged = true
+	}
 	return v.current
 }
 
-func (v *videoSource) fallbackToSoftware(width, height int) bool {
-	if !v.usingVAAPI || v.forceSoftware {
+func (v *videoSource) retryDecoder(width, height int) bool {
+	if !v.usingVAAPI {
 		return false
 	}
 	cause := v.decodeErr
@@ -412,8 +427,15 @@ func (v *videoSource) fallbackToSoftware(width, height int) bool {
 		cause = fmt.Errorf("FFmpeg terminó antes de entregar el siguiente fotograma")
 	}
 	v.stopDecoder()
-	v.forceSoftware = true
-	log.Printf("swaydesk: VAAPI no pudo decodificar %q (%v); se prueba con software", filepath.Base(v.path), cause)
+	if v.scaleWithVAAPI {
+		v.scaleWithVAAPI = false
+		log.Printf("swaydesk: escalado VAAPI no disponible para %q (%v); se reintenta con escalado por software", filepath.Base(v.path), cause)
+	} else if !v.forceSoftware {
+		v.forceSoftware = true
+		log.Printf("swaydesk: VAAPI no pudo decodificar %q (%v); se prueba con software", filepath.Base(v.path), cause)
+	} else {
+		return false
+	}
 	if err := v.startDecoder(width, height); err != nil {
 		v.reportError(err)
 		return false
@@ -453,7 +475,8 @@ func (v *videoSource) startDecoder(width, height int) error {
 	v.stderr.Reset()
 
 	useVAAPI := v.vaapiDevice != "" && !v.forceSoftware
-	filter := videoFilter(width, height, v.fps, useVAAPI)
+	useVAAPIScale := useVAAPI && v.scaleWithVAAPI
+	filter := videoFilter(width, height, v.fps, useVAAPI, useVAAPIScale)
 	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error"}
 	if useVAAPI {
 		args = append(args,
@@ -477,10 +500,15 @@ func (v *videoSource) startDecoder(width, height int) error {
 		return fmt.Errorf("iniciando ffmpeg: %w", err)
 	}
 	v.errorLogged = false
+	v.vaapiLogged = false
 	v.cmd, v.stdout = cmd, stdout
 	v.usingVAAPI = useVAAPI
 	if useVAAPI {
-		log.Printf("swaydesk: probando decodificación VAAPI para %q en %s", filepath.Base(v.path), v.vaapiDevice)
+		stage := "decodificación"
+		if useVAAPIScale {
+			stage += " y escalado"
+		}
+		log.Printf("swaydesk: probando VAAPI (%s) para %q en %s", stage, filepath.Base(v.path), v.vaapiDevice)
 	}
 	v.width, v.height = width, height
 	v.frames = make(chan []uint8, 1)
