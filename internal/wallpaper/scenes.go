@@ -87,10 +87,6 @@ var scenes = map[string]SceneInfo{
 		Key: "bubbles", Name: "Burbujas", Description: "Burbujas subiendo con borde de luz",
 		Intensity: 0.50, Animation: "ascenso", Tags: []string{"agua", "suave", "kawaii"}, Cost: "image",
 	},
-	"blackhole": {
-		Key: "blackhole", Name: "Agujero negro", Description: "Sombra gravitacional, anillo fotónico y disco de acreción",
-		Intensity: 0.42, Animation: "turbulencia y rotación sutil", Tags: []string{"espacio", "astronomía", "cosmos", "relatividad", "singularidad"}, Cost: "image",
-	},
 }
 
 // ─── Contexto del lienzo ────────────────────────────────────────────────────
@@ -291,21 +287,13 @@ func (r *Renderer) Resize(w, h int) {
 	r.spawn()
 }
 
-// Frame dibuja el siguiente fotograma y devuelve el lienzo. En la capa Wayland
-// cada fila del lienzo se amplía al doble al llegar a pantalla.
+// Frame dibuja el siguiente fotograma y devuelve el lienzo.
 func (r *Renderer) Frame(w, h int) *Canvas {
-	return r.frameWithPixelAspect(w, h, 2)
-}
-
-func (r *Renderer) frameWithPixelAspect(w, h int, pixelAspectY float64) *Canvas {
 	r.Resize(w, h)
 	r.frame++
 	c := r.canvas
-	// El agujero negro pinta su propio cielo de espacio profundo.
-	if r.scene != "blackhole" {
-		// Fondo base con un degradado vertical sutil del tema.
-		r.paintBackdrop()
-	}
+	// Fondo base con un degradado vertical sutil del tema.
+	r.paintBackdrop()
 
 	switch r.scene {
 	case "petals":
@@ -330,8 +318,6 @@ func (r *Renderer) frameWithPixelAspect(w, h int, pixelAspectY float64) *Canvas 
 		r.drawMeadow(c)
 	case "bubbles":
 		r.drawBubbles(c)
-	case "blackhole":
-		r.drawBlackHole(c, pixelAspectY)
 	}
 	return c
 }
@@ -385,10 +371,8 @@ func (r *Renderer) spawn() {
 		n = c.W * c.H / 400
 	case "city":
 		n = c.W * 4
-	case "blackhole":
-		n = 0 // La escena se calcula en el lienzo; no mantiene partículas.
 	}
-	if n < 8 && r.scene != "blackhole" {
+	if n < 8 {
 		n = 8
 	}
 	if n > 900 {

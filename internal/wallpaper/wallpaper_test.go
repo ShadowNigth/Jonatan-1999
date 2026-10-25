@@ -1,7 +1,6 @@
 package wallpaper
 
 import (
-	"bytes"
 	"image"
 	"image/color"
 	"image/gif"
@@ -19,8 +18,8 @@ var testPal = ui.PaletteByName("catppuccin")
 
 func TestAvailableScenesCoversCatalogue(t *testing.T) {
 	scenes := AvailableScenes()
-	if len(scenes) < 12 {
-		t.Fatalf("se esperaban al menos 12 escenas, hay %d", len(scenes))
+	if len(scenes) < 10 {
+		t.Fatalf("se esperaban al menos 10 escenas, hay %d", len(scenes))
 	}
 	seen := map[string]bool{}
 	for _, s := range scenes {
@@ -63,53 +62,6 @@ func TestRendererFramesHavePixels(t *testing.T) {
 		if len(c2.Pix) != len(c.Pix) {
 			t.Fatalf("%s: el tamaño cambió entre fotogramas", s.Key)
 		}
-	}
-}
-
-func TestBlackHoleSceneCatalogAndRenderer(t *testing.T) {
-	info, ok := SceneByKey("blackhole")
-	if !ok || info.Name != "Agujero negro" {
-		t.Fatalf("la escena no está disponible en el catálogo: %+v", info)
-	}
-
-	spec, err := ParseSpec("scene:blackhole", testPal)
-	if err != nil || spec.Kind != KindScene || spec.Scene != "blackhole" {
-		t.Fatalf("no se pudo seleccionar la escena: spec=%+v err=%v", spec, err)
-	}
-
-	r := NewRenderer("blackhole", testPal)
-	c := r.Frame(120, 68)
-	center := ((c.H/2)*c.W + c.W/2) * 3
-	if c.Pix[center] > 8 || c.Pix[center+1] > 8 || c.Pix[center+2] > 8 {
-		t.Fatalf("la sombra central no es oscura: RGB(%d,%d,%d)", c.Pix[center], c.Pix[center+1], c.Pix[center+2])
-	}
-
-	hotPixels := 0
-	for i := 0; i < len(c.Pix); i += 3 {
-		red, green, blue := int(c.Pix[i]), int(c.Pix[i+1]), int(c.Pix[i+2])
-		if red > 25 && red*100 > green*135 && red*100 > blue*135 {
-			hotPixels++
-		}
-	}
-	if hotPixels == 0 {
-		t.Fatal("no se renderizó el disco de acreción brillante")
-	}
-
-	first := append([]uint8(nil), c.Pix...)
-	if next := r.Frame(120, 68); bytes.Equal(first, next.Pix) {
-		t.Fatal("el disco y el firmamento no presentan movimiento entre fotogramas")
-	}
-
-	eng, err := NewEngine(spec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer eng.Close()
-	if frame := eng.Frame(80, 40); frame == nil || frame.W != 80 || frame.H != 40 {
-		t.Fatal("el motor no renderizó la escena de agujero negro")
-	}
-	if lines := PreviewBlock(eng, 32, 12); len(lines) != 12 {
-		t.Fatalf("la vista previa devolvió %d líneas; se esperaban 12", len(lines))
 	}
 }
 

@@ -435,10 +435,8 @@ sesión. Para GIF y vídeo, Sway mantiene un color sólido del tema como respald
 así no queda un primer fotograma estático superpuesto al fondo animado.
 
 Escenas disponibles: `petals`, `snow`, `stars`, `rain`, `aurora`, `wave`,
-`city`, `embers`, `grid`, `meadow`, `bubbles`, `blackhole`. Las escenas toman
-los colores del tema activo cuando corresponde; `blackhole` mantiene una paleta
-astronómica oscura con disco de acreción cálido. Puedes elegirla con
-`swaydesk wallpaper set scene:blackhole`.
+`city`, `embers`, `grid`, `meadow`, `bubbles`. Cada una toma los colores del
+tema activo, así que cambiar de paleta cambia el fondo.
 
 También puedes usar el nombre de una paleta y swaydesk toma su escena asociada:
 `swaydesk wallpaper set scene:sakura` es lo mismo que `scene:petals`, y
