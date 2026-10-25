@@ -88,8 +88,8 @@ var scenes = map[string]SceneInfo{
 		Intensity: 0.50, Animation: "ascenso", Tags: []string{"agua", "suave", "kawaii"}, Cost: "image",
 	},
 	"nebula": {
-		Key: "nebula", Name: "Nebulosa", Description: "Nubes de gas y polvo que adoptan los colores del tema",
-		Intensity: 0.32, Animation: "deriva lenta y titileo", Tags: []string{"espacio", "cosmos", "galaxia", "nubes", "suave", "color"}, Cost: "image",
+		Key: "nebula", Name: "Nebulosa", Description: "Nubes de gas, filamentos y polvo luminoso con los colores del tema",
+		Intensity: 0.38, Animation: "deriva, pulsos y motas flotantes", Tags: []string{"espacio", "cosmos", "galaxia", "nubes", "suave", "color"}, Cost: "image",
 	},
 }
 

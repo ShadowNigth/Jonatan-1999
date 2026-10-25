@@ -17,7 +17,7 @@ func (r *Renderer) drawNebula(c *Canvas) {
 	gridW := (c.W+cellSize-1)/cellSize + 1
 	gridH := (c.H+cellSize-1)/cellSize + 1
 	noise := make([]float64, gridW*gridH)
-	phase := float64(r.frame) * 0.012
+	phase := float64(r.frame) * 0.018
 
 	// El campo de ruido se desplaza lentamente para que el gas parezca fluir,
 	// sin tener que calcular ruido fractal a resolución completa en cada frame.
@@ -25,8 +25,8 @@ func (r *Renderer) drawNebula(c *Canvas) {
 		v := float64(gy*cellSize) / math.Max(1, float64(c.H-1))
 		for gx := 0; gx < gridW; gx++ {
 			u := float64(gx*cellSize) / math.Max(1, float64(c.W-1))
-			nx := u*3.8 + phase*0.14
-			ny := v*2.7 - phase*0.10
+			nx := u*3.8 + phase*0.22
+			ny := v*2.7 - phase*0.16
 			coarse := nebulaValueNoise(nx, ny, 17)
 			medium := nebulaValueNoise(nx*2.03+2.4, ny*2.03-1.7, 53)
 			fine := nebulaValueNoise(nx*4.07-3.1, ny*4.07+5.2, 97)
@@ -42,11 +42,13 @@ func (r *Renderer) drawNebula(c *Canvas) {
 	if r.light {
 		strength = 0.28
 	}
-	breath := 0.94 + 0.06*math.Sin(phase*1.7)
-	centerAX := 0.32 + 0.035*math.Sin(phase*0.8)
-	centerAY := 0.46 + 0.028*math.Cos(phase*0.7)
-	centerBX := 0.72 + 0.040*math.Sin(phase*0.53+1.1)
-	centerBY := 0.58 + 0.035*math.Cos(phase*0.61+0.4)
+	breath := 0.90 + 0.10*math.Sin(phase*2.2)
+	centerAX := 0.32 + 0.050*math.Sin(phase*0.8)
+	centerAY := 0.46 + 0.040*math.Cos(phase*0.7)
+	centerBX := 0.72 + 0.055*math.Sin(phase*0.53+1.1)
+	centerBY := 0.58 + 0.045*math.Cos(phase*0.61+0.4)
+	filamentPulse := 0.82 + 0.18*math.Sin(phase*2.7)
+	filamentShift := 0.022 * math.Sin(phase*1.4)
 
 	for y := 0; y < c.H; y++ {
 		v := float64(y) / math.Max(1, float64(c.H-1))
@@ -62,7 +64,7 @@ func (r *Renderer) drawNebula(c *Canvas) {
 			n0 := lerp(noise[i], noise[i+1], tx)
 			n1 := lerp(noise[i+gridW], noise[i+gridW+1], tx)
 			cloudNoise := lerp(n0, n1, ty)
-			warp := (cloudNoise - 0.5) * 0.15
+			warp := (cloudNoise - 0.5) * 0.19
 
 			// Dos masas elongadas y rotadas forman la nube principal y su cola.
 			dxA, dyA := u-centerAX, v-centerAY+warp
@@ -78,13 +80,16 @@ func (r *Renderer) drawNebula(c *Canvas) {
 			lobeB *= lobeB * (0.52 + 0.48*(1-cloudNoise))
 
 			// Un filamento curvo rompe los bordes redondos y añade estructura.
-			filamentY := 0.76 - 0.72*u + 0.22*u*u + (cloudNoise-0.5)*0.12
+			filamentY := 0.76 - 0.72*u + 0.22*u*u + (cloudNoise-0.5)*0.12 + filamentShift
 			filament := math.Max(0, 1-math.Abs(v-filamentY)/0.085)
 			filament *= filament * math.Max(0, 1-math.Abs(u-0.48)/0.55)
+			filamentY2 := 0.22 + 0.55*u - 0.20*u*u - (cloudNoise-0.5)*0.10 - filamentShift*0.7
+			filament2 := math.Max(0, 1-math.Abs(v-filamentY2)/0.07)
+			filament2 *= filament2 * math.Max(0, 1-math.Abs(u-0.52)/0.58)
 
 			alphaA := lobeA * strength * breath
 			alphaB := lobeB * strength * 0.82 * breath
-			alphaFilament := filament * (0.18 + 0.42*lobeA) * strength * 0.40 * breath
+			alphaFilament := (filament*(0.18+0.42*lobeA) + filament2*(0.10+0.30*lobeB)) * strength * 0.40 * breath * filamentPulse
 			if alphaA > 0.004 {
 				c.blend(x, y, accentR, accentG, accentB, alphaA)
 			}
@@ -102,6 +107,7 @@ func (r *Renderer) drawNebula(c *Canvas) {
 	}
 
 	r.drawNebulaStars(c, accent2R, accent2G, accent2B)
+	r.drawNebulaDust(c, mixR, mixG, mixB, accent2R, accent2G, accent2B)
 }
 
 func (r *Renderer) drawNebulaStars(c *Canvas, starR, starG, starB float64) {
@@ -115,9 +121,17 @@ func (r *Renderer) drawNebulaStars(c *Canvas, starR, starG, starB float64) {
 	rng := rand.New(rand.NewSource(0x4E454255))
 	frame := float64(r.frame)
 	for i := 0; i < count; i++ {
-		x := rng.Intn(c.W)
-		y := rng.Intn(c.H)
-		brightness := 0.48 + 0.52*(0.5+0.5*math.Sin(frame*0.045+float64(i)*1.83))
+		baseX, baseY := float64(rng.Intn(c.W)), float64(rng.Intn(c.H))
+		xPos := math.Mod(baseX+math.Sin(frame*0.007+float64(i)*1.5)*1.6, float64(c.W))
+		yPos := math.Mod(baseY+math.Cos(frame*0.005+float64(i)*1.2), float64(c.H))
+		if xPos < 0 {
+			xPos += float64(c.W)
+		}
+		if yPos < 0 {
+			yPos += float64(c.H)
+		}
+		x, y := int(xPos), int(yPos)
+		brightness := 0.45 + 0.55*(0.5+0.5*math.Sin(frame*0.06+float64(i)*1.83))
 		alpha := brightness * (0.30 + rng.Float64()*0.38)
 		c.blend(x, y, starR, starG, starB, alpha)
 		if i%13 == 0 {
@@ -126,6 +140,52 @@ func (r *Renderer) drawNebulaStars(c *Canvas, starR, starG, starB float64) {
 			c.blend(x, y-1, starR, starG, starB, alpha*0.18)
 			c.blend(x, y+1, starR, starG, starB, alpha*0.18)
 		}
+	}
+}
+
+// drawNebulaDust añade motas cálidas y frías que atraviesan las nubes con una
+// estela corta. Sus trayectorias lentas aportan parallax sin tapar el fondo.
+func (r *Renderer) drawNebulaDust(c *Canvas, colorA, colorB, colorC, altR, altG, altB float64) {
+	count := c.W * c.H / 14000
+	if count < 16 {
+		count = 16
+	}
+	if count > 120 {
+		count = 120
+	}
+	rng := rand.New(rand.NewSource(0x44555354))
+	frame := float64(r.frame)
+	w, h := float64(c.W), float64(c.H)
+	for i := 0; i < count; i++ {
+		baseX, baseY := rng.Float64()*w, rng.Float64()*h
+		speedX := 0.08 + rng.Float64()*0.19
+		if rng.Intn(2) == 0 {
+			speedX = -speedX
+		}
+		speedY := (rng.Float64() - 0.5) * 0.025
+		phase := rng.Float64() * 2 * math.Pi
+		x := math.Mod(baseX+frame*speedX, w)
+		y := math.Mod(baseY+frame*speedY+math.Sin(frame*0.025+phase)*1.4, h)
+		if x < 0 {
+			x += w
+		}
+		if y < 0 {
+			y += h
+		}
+
+		pulse := 0.45 + 0.55*(0.5+0.5*math.Sin(frame*0.075+phase))
+		alpha := pulse * (0.15 + rng.Float64()*0.17)
+		red, green, blue := colorA, colorB, colorC
+		if i%3 == 0 {
+			red, green, blue = altR, altG, altB
+		}
+		if i%6 == 0 {
+			tailY := y - 1.1*math.Cos(frame*0.025+phase)
+			c.cline(x-speedX*5, tailY, x, y, red, green, blue, alpha*0.42)
+			c.glow(x, y, 2.8, red, green, blue, pulse*0.07)
+		}
+		c.blend(int(x), int(y), red, green, blue, alpha)
+		c.blend(int(x-speedX*2), int(y), red, green, blue, alpha*0.16)
 	}
 }
 
