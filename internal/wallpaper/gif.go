@@ -3,6 +3,8 @@ package wallpaper
 import (
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/gif"
 	"os"
 	"path/filepath"
@@ -66,34 +68,28 @@ func LoadGIF(path string) (*GIF, error) {
 	frames := make([]*image.RGBA, 0, len(g.Image))
 	delays := make([]time.Duration, 0, len(g.Image))
 
-	var prev *image.RGBA
+	var previousFrame *image.Paletted
+	var canvasBeforePrevious *image.RGBA
 	for i, frame := range g.Image {
-		if i > 0 && prev != nil {
+		if i > 0 && previousFrame != nil {
 			disposal := byte(0)
 			if i-1 < len(g.Disposal) {
 				disposal = g.Disposal[i-1]
 			}
 			switch disposal {
 			case gif.DisposalBackground:
-				// Rellenar con el color de fondo del fotograma anterior.
-				b := g.Image[i-1].Bounds()
-				var fillImage = image.NewUniform(g.Image[i-1].Palette[0])
-				if len(g.Image[i-1].Palette) > 0 {
-					for y := b.Min.Y; y < b.Max.Y; y++ {
-						for x := b.Min.X; x < b.Max.X; x++ {
-							canvas.Set(x, y, fillImage)
-						}
-					}
-				}
+				clearGIFFrame(canvas, previousFrame, g)
 			case gif.DisposalPrevious:
-				copy(canvas.Pix, prev.Pix)
+				if canvasBeforePrevious != nil {
+					copy(canvas.Pix, canvasBeforePrevious.Pix)
+				}
 			}
 		}
+		before := cloneRGBA(canvas)
 		drawOver(canvas, frame)
-		snapshot := image.NewRGBA(canvas.Bounds())
-		copy(snapshot.Pix, canvas.Pix)
-		frames = append(frames, snapshot)
-		prev = snapshot
+		frames = append(frames, cloneRGBA(canvas))
+		previousFrame = frame
+		canvasBeforePrevious = before
 
 		d := time.Duration(0)
 		if i < len(g.Delay) {
@@ -109,6 +105,27 @@ func LoadGIF(path string) (*GIF, error) {
 		total += d
 	}
 	return &GIF{Path: path, frames: frames, delays: delays, W: width, H: height, total: total, Loop: true}, nil
+}
+
+func cloneRGBA(src *image.RGBA) *image.RGBA {
+	copyImage := image.NewRGBA(src.Bounds())
+	copy(copyImage.Pix, src.Pix)
+	return copyImage
+}
+
+func clearGIFFrame(canvas *image.RGBA, frame *image.Paletted, animation *gif.GIF) {
+	bounds := frame.Bounds().Intersect(canvas.Bounds())
+	if bounds.Empty() {
+		return
+	}
+	background := color.Color(color.Transparent)
+	if transparencyIndex(frame) < 0 {
+		if palette, ok := animation.Config.ColorModel.(color.Palette); ok &&
+			int(animation.BackgroundIndex) < len(palette) {
+			background = palette[animation.BackgroundIndex]
+		}
+	}
+	draw.Draw(canvas, bounds, image.NewUniform(background), image.Point{}, draw.Src)
 }
 
 // drawOver compone un fotograma parcial sobre el lienzo respetando su paleta y

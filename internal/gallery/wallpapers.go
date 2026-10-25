@@ -1,6 +1,7 @@
 package gallery
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,15 +33,26 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 
 	pane := &listPane{}
 	var (
-		filter string
-		live   = true
-		engine *wallpaper.Engine
-		result WallpaperResult
-		tabs   = []string{"todas", "escenas", "archivos"}
-		tabIdx = 0
+		filter    string
+		live      = true
+		engine    *wallpaper.Engine
+		engineErr error
+		result    WallpaperResult
+		tabs      = []string{"todas", "escenas", "archivos"}
+		tabIdx    = 0
 	)
 
 	files := scanWallpapers(dirs)
+	outputW, outputH := wallpaper.OutputSize()
+	if outputW <= 0 || outputH <= 0 {
+		outputW, outputH = 1920, 1080
+	}
+	// Una fila de terminal mide aproximadamente dos píxeles de alto porque la
+	// vista usa medios bloques; el preview sigue la proporción del monitor.
+	cellAspect := 2 * float64(outputW) / float64(outputH)
+	if cellAspect <= 0 {
+		cellAspect = 32.0 / 9.0
+	}
 
 	rebuild := func() {
 		pane.entries = pane.entries[:0]
@@ -93,6 +105,7 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 			engine.Close()
 			engine = nil
 		}
+		engineErr = nil
 		if e, ok := pane.current(); ok {
 			spec := e.Spec
 			spec.Pal = pal
@@ -108,7 +121,12 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 			spec.FPS = fps
 			eng, err := wallpaper.NewEngine(spec)
 			if err == nil {
+				if !live {
+					eng.Pause()
+				}
 				engine = eng
+			} else {
+				engineErr = err
 			}
 		}
 	}
@@ -134,25 +152,55 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 			rightW = 20
 		}
 		var right []string
-		// Se mantiene la proporción 16:9 del fondo: cada celda dibuja dos
-		// píxeles verticales, así que el ancho debe ser ~3,56 veces el alto.
 		wallH := clampInt(bodyH-9, 6, 20)
-		wallW := wallH * 32 / 9
+		wallW := int(math.Round(float64(wallH) * cellAspect))
 		if wallW > rightW {
 			wallW = rightW
-			wallH = wallW * 9 / 32
+			wallH = max(2, int(math.Round(float64(wallW)/cellAspect)))
+		}
+		if wallH < 2 {
+			wallH = 2
+			wallW = min(rightW, max(2, int(math.Round(float64(wallH)*cellAspect))))
+		}
+		if wallW < 2 {
+			wallW = 2
 		}
 		padLeft := (rightW - wallW) / 2
 		padRight := rightW - wallW - padLeft
 		bgPad := ui.Style{Bg: pal.Bg}.Render(strings.Repeat(" ", padLeft))
 		bgTail := ui.Style{Bg: pal.Bg}.Render(strings.Repeat(" ", padRight))
+		var preview []string
 		if engine != nil && live {
-			for _, line := range wallpaper.PreviewBlock(engine, wallW, wallH) {
+			preview = wallpaper.PreviewBlock(engine, wallW, wallH)
+		}
+		if len(preview) > 0 {
+			for _, line := range preview {
 				right = append(right, bgPad+line+bgTail)
 			}
 		} else {
+			message := "vista previa no disponible"
+			switch {
+			case engineErr != nil:
+				message = "error: " + engineErr.Error()
+			case !live:
+				message = "vista previa pausada"
+			case engine != nil && engine.PreviewError() != nil:
+				message = "error de vídeo: " + engine.PreviewError().Error()
+			case engine != nil && engine.Spec().Kind == wallpaper.KindVideo:
+				message = "cargando fotograma de vídeo…"
+			}
+			message = ui.Truncate(message, rightW-2)
+			left := max(0, (rightW-ui.Width(message))/2)
 			for i := 0; i < wallH; i++ {
-				right = append(right, ui.Style{Bg: pal.BgAlt}.Render(strings.Repeat(" ", rightW)))
+				blank := strings.Repeat(" ", rightW)
+				if i == wallH/2 {
+					line := ui.Style{Bg: pal.BgAlt}.Render(strings.Repeat(" ", left)) +
+						ui.Style{Fg: pal.Muted, Bg: pal.BgAlt}.Render(message)
+					line += ui.Style{Bg: pal.BgAlt}.Render(strings.Repeat(" ", max(0, rightW-left-ui.Width(message))))
+					right = append(right, line)
+				} else {
+					right = append(right, ui.Style{Bg: pal.BgAlt}.Render(blank))
+				}
 			}
 		}
 		right = append(right, "")
@@ -171,7 +219,7 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 				desc = "GIF animado · se reproduce en bucle"
 				anim = "bucle"
 			case wallpaper.KindVideo:
-				desc = "Vídeo (ffmpeg) · decodificado en memoria"
+				desc = "Vídeo · reproducción en bucle con FFmpeg"
 				anim = "bucle"
 			case wallpaper.KindImage:
 				desc = "Imagen fija · paleta adaptativa disponible"
@@ -282,6 +330,13 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 			rebuild()
 		case k.IsRune(' '):
 			live = !live
+			if engine != nil {
+				if live {
+					engine.Resume()
+				} else {
+					engine.Pause()
+				}
+			}
 		case k.Is("backspace"):
 			if len(filter) > 0 {
 				filter = filter[:len(filter)-1]

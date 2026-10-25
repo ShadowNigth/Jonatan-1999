@@ -193,12 +193,12 @@ func (e *Engine) Frame(w, h int) *Canvas {
 		return c
 	case KindImage:
 		if e.last == nil || e.last.W != w || e.last.H != h {
-			e.last = ImageToCanvas(e.still.Img, w/1, h/2)
+			e.last = imageToCanvasWithBackground(e.still.Img, w, h/2, e.spec.Pal.Bg, false)
 		}
 		return e.last
 	case KindGIF:
 		img, _ := e.gif.FrameAt(time.Since(e.start))
-		e.last = ImageToCanvas(img, w, h/2)
+		e.last = imageToCanvasWithBackground(img, w, h/2, e.spec.Pal.Bg, false)
 		return e.last
 	case KindVideo:
 		frame := e.video.Frame(w, h)
@@ -227,6 +227,14 @@ func (e *Engine) videoSnapshot() *Canvas {
 		return nil
 	}
 	return e.video.SnapshotVideo()
+}
+
+// PreviewError devuelve el último error de decodificación de vídeo, si existe.
+func (e *Engine) PreviewError() error {
+	if e == nil || e.video == nil || !e.video.errorLogged {
+		return nil
+	}
+	return e.video.decodeErr
 }
 
 // Duration devuelve la duración del bucle (0 si es infinito o procedural).
@@ -617,6 +625,7 @@ func (v *videoSource) reportError(err error) {
 	if err == nil {
 		err = fmt.Errorf("ffmpeg no entregó fotogramas")
 	}
+	v.decodeErr = err
 	log.Printf("swaydesk: fondo de vídeo %q: %v", filepath.Base(v.path), err)
 }
 
