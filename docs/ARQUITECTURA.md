@@ -34,7 +34,7 @@ internal/mpris   descubrimiento de reproductores y escucha de metadatos por D-Bu
 internal/wayland cliente Wayland puro: conexión, registry, xdg-shell, shm y
                  wlr-layer-shell (capa background para el fondo animado)
 internal/wallpaper motor de fondos de pantalla
-  scenes.go      11 escenas procedurales sobre un Canvas RGB
+  scenes.go      catálogo y 12 escenas procedurales sobre un Canvas RGB
   gif.go         carga de GIF animado (fotogramas ya compuestos)
   video.go       decodificación con ffmpeg → tramas RGB24 en memoria
   render.go      protocolos kitty y sixel, PNG, escalado y recorte
@@ -379,7 +379,7 @@ Cobertura destacada:
   y recortado, `PATH`.
 - `wayland`: cabeceras de mensaje, alineación a 4 bytes de strings, decodificación
   de eventos, descriptores y detección de compositor sin servidor.
-- `wallpaper`: las 11 escenas (tamaño, búfer y no-negro), `ParseSpec` con sus
+- `wallpaper`: las 12 escenas (tamaño, búfer y no-negro), `ParseSpec` con sus
   formatos y errores, ciclo de vida del motor para escena e imagen, GIF animado
   de dos fotogramas, protocolos kitty (troceado) y sixel, vista previa y escalado;
   y —nuevo— las reglas por workspace (precedencia nombre → sufijo → número,

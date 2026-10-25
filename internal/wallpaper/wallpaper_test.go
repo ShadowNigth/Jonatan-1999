@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"image/gif"
@@ -18,8 +19,8 @@ var testPal = ui.PaletteByName("catppuccin")
 
 func TestAvailableScenesCoversCatalogue(t *testing.T) {
 	scenes := AvailableScenes()
-	if len(scenes) < 10 {
-		t.Fatalf("se esperaban al menos 10 escenas, hay %d", len(scenes))
+	if len(scenes) < 12 {
+		t.Fatalf("se esperaban al menos 12 escenas, hay %d", len(scenes))
 	}
 	seen := map[string]bool{}
 	for _, s := range scenes {
@@ -65,6 +66,28 @@ func TestRendererFramesHavePixels(t *testing.T) {
 	}
 }
 
+func TestNebulaUsesThemePaletteAndMoves(t *testing.T) {
+	if _, ok := SceneByKey("nebula"); !ok {
+		t.Fatal("la escena nebulosa no está en el catálogo")
+	}
+	spec, err := ParseSpec("scene:nebula", testPal)
+	if err != nil || spec.Kind != KindScene || spec.Scene != "nebula" {
+		t.Fatalf("no se pudo seleccionar la nebulosa: spec=%+v err=%v", spec, err)
+	}
+
+	renderer := NewRenderer("nebula", testPal)
+	firstFrame := renderer.Frame(80, 40)
+	first := append([]uint8(nil), firstFrame.Pix...)
+	if next := renderer.Frame(80, 40); bytes.Equal(first, next.Pix) {
+		t.Fatal("las nubes de la nebulosa no se animan")
+	}
+
+	nord := NewRenderer("nebula", ui.PaletteByName("nord")).Frame(80, 40)
+	if bytes.Equal(first, nord.Pix) {
+		t.Fatal("la nebulosa no cambia sus colores con la paleta activa")
+	}
+}
+
 func TestCanvasOps(t *testing.T) {
 	c := NewCanvas(8, 8, ui.Color("#101010"))
 	if c.W != 8 || c.H != 8 || len(c.Pix) != 8*8*3 {
@@ -99,6 +122,7 @@ func TestParseSpec(t *testing.T) {
 		err  bool
 	}{
 		{"scene:petals", KindScene, "petals", "", false},
+		{"scene:nebula", KindScene, "nebula", "", false},
 		{"stars", KindScene, "stars", "", false},
 		// Un nombre de paleta se resuelve a su escena asociada.
 		{"scene:sakura", KindScene, "petals", "", false},

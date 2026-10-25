@@ -87,6 +87,10 @@ var scenes = map[string]SceneInfo{
 		Key: "bubbles", Name: "Burbujas", Description: "Burbujas subiendo con borde de luz",
 		Intensity: 0.50, Animation: "ascenso", Tags: []string{"agua", "suave", "kawaii"}, Cost: "image",
 	},
+	"nebula": {
+		Key: "nebula", Name: "Nebulosa", Description: "Nubes de gas y polvo que adoptan los colores del tema",
+		Intensity: 0.32, Animation: "deriva lenta y titileo", Tags: []string{"espacio", "cosmos", "galaxia", "nubes", "suave", "color"}, Cost: "image",
+	},
 }
 
 // ─── Contexto del lienzo ────────────────────────────────────────────────────
@@ -318,6 +322,8 @@ func (r *Renderer) Frame(w, h int) *Canvas {
 		r.drawMeadow(c)
 	case "bubbles":
 		r.drawBubbles(c)
+	case "nebula":
+		r.drawNebula(c)
 	}
 	return c
 }
@@ -371,8 +377,10 @@ func (r *Renderer) spawn() {
 		n = c.W * c.H / 400
 	case "city":
 		n = c.W * 4
+	case "nebula":
+		n = 0 // El campo de gas se calcula directamente sobre el lienzo.
 	}
-	if n < 8 {
+	if n < 8 && r.scene != "nebula" {
 		n = 8
 	}
 	if n > 900 {

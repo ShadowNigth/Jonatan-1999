@@ -69,11 +69,11 @@ terceros.
 - **Temas adaptativos**: `swaydesk theme --from-wallpaper` extrae los colores
   dominantes de tu fondo (cuantización + HSL + contraste WCAG) y genera una
   paleta completa que se guarda en `~/.config/swaydesk/themes/`.
-- **Fondos animados de verdad**: 11 escenas procedurales (pétalos de sakura,
+- **Fondos animados de verdad**: 12 escenas procedurales (pétalos de sakura,
   nieve, estrellas, lluvia de neón, aurora, olas, ciudad cyberpunk, brasas,
-  rejilla synthwave, pradera, burbujas) y reproducción de **GIF animados**,
-  **imágenes** y **vídeos** (`mp4`, `webm`, `mkv` — incluidos los de Wallpaper
-  Engine) con un demonio propio que dibuja en una capa
+  rejilla synthwave, pradera, burbujas y nebulosa adaptativa) y reproducción
+  de **GIF animados**, **imágenes** y **vídeos** (`mp4`, `webm`, `mkv` —
+  incluidos los de Wallpaper Engine) con un demonio propio que dibuja en una capa
   `wlr-layer-shell` detrás de las ventanas. Pausa las animaciones solo cuando
   todas las salidas activas están cubiertas por ventanas visibles a pantalla
   completa; si el fondo sigue visible en otra salida, continúa reproduciéndose.
@@ -636,7 +636,7 @@ make dist      # binarios estáticos para amd64 y arm64
 El proyecto no tiene dependencias: `go.mod` solo declara el módulo. Las pruebas
 cubren el protocolo IPC con un servidor de sway simulado, el **protocolo
 Wayland** (codificación de mensajes, alineación, secuencias kitty y sixel), el
-**motor de fondos** (las 11 escenas, GIF animados, imágenes y vídeos), las
+**motor de fondos** (las 12 escenas, GIF animados, imágenes y vídeos), las
 **paletas adaptativas**, el parser TOML, la búsqueda difusa, el cálculo, las
 plantillas y el sistema de layout del toolkit.
 
