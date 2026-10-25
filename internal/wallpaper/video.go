@@ -12,8 +12,8 @@ import (
 
 // VideoSource video: decodificación con ffmpeg.
 //
-// El demonio reproduce vídeo mediante una tubería acotada de fotogramas BGRA;
-// así conserva la resolución de salida sin cargar el clip entero en memoria.
+// El demonio intenta decodificar mediante VAAPI y cae a software si falla;
+// entrega una tubería acotada de fotogramas BGRA sin cargar el clip entero.
 
 type videoMetadata struct {
 	duration time.Duration

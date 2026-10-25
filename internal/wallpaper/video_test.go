@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -22,6 +23,23 @@ func TestScaledVideoHeightUsesSourceAspectRatio(t *testing.T) {
 	}
 }
 
+func TestVideoFilterDropsExcessFramesBeforeScaling(t *testing.T) {
+	filter := videoFilter(1920, 1080, 30, false)
+	if !strings.HasPrefix(filter, "fps=30,scale=") {
+		t.Fatalf("el filtro debe limitar FPS antes del escalado: %s", filter)
+	}
+}
+
+func TestVAAPIVideoFilterDownloadsFramesBeforeCPUProcessing(t *testing.T) {
+	filter := videoFilter(1920, 1080, 30, true)
+	if !strings.HasPrefix(filter, "hwdownload,format=nv12,fps=30,scale=") {
+		t.Fatalf("filtro VAAPI inesperado: %s", filter)
+	}
+	if !strings.HasSuffix(filter, ",format=bgra") {
+		t.Fatalf("el filtro VAAPI no termina en BGRA: %s", filter)
+	}
+}
+
 func TestCanvasFromBGRARestoresRGBOrder(t *testing.T) {
 	canvas := canvasFromBGRA([]byte{10, 20, 30, 255}, 1, 1)
 	if canvas == nil || canvas.W != 1 || canvas.H != 1 {
@@ -29,6 +47,36 @@ func TestCanvasFromBGRARestoresRGBOrder(t *testing.T) {
 	}
 	if got := canvas.Pix; len(got) != 3 || got[0] != 30 || got[1] != 20 || got[2] != 10 {
 		t.Fatalf("conversión BGRA→RGB inesperada: %v", got)
+	}
+}
+
+func TestVideoSourceFallsBackWhenVAAPIFails(t *testing.T) {
+	binDir := t.TempDir()
+	writeVideoTestTool(t, binDir, "ffprobe", "#!/bin/sh\nprintf 'width=4\\nheight=2\\nduration=1.000000\\n'\n")
+	writeVideoTestTool(t, binDir, "ffmpeg", "#!/bin/sh\ncase \" $* \" in *\" -hwaccel \"*) echo 'VAAPI unavailable' >&2; exit 1;; esac\nprintf '%064d' 0\n")
+	t.Setenv("PATH", binDir)
+
+	video, err := NewVideoSource("ignored.mp4", 30)
+	if err != nil {
+		t.Fatalf("NewVideoSource: %v", err)
+	}
+	video.vaapiDevice = "/dev/dri/renderD128" // fuerza el intento en esta prueba sin GPU real
+	defer video.Close()
+
+	var frame *Canvas
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		frame = video.Frame(4, 2)
+		if frame != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if frame == nil {
+		t.Fatal("el decodificador por software no recuperó el vídeo")
+	}
+	if !video.forceSoftware || video.usingVAAPI {
+		t.Fatalf("no se activó la ruta de respaldo por software")
 	}
 }
 

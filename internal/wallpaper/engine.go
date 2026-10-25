@@ -6,6 +6,7 @@ import (
 	"image"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -271,13 +272,16 @@ func (e *Engine) Close() {
 
 // ─── Vídeo (opcional con ffmpeg) ───────────────────────────────────────────
 
-// videoSource decodifica vídeo en tiempo real. La salida usa el tamaño del
-// lienzo y un canal de un solo fotograma: si el dibujo se retrasa, se descartan
-// fotogramas viejos en vez de acumular latencia o memoria.
+// videoSource decodifica vídeo en tiempo real, probando VAAPI si hay un nodo
+// DRM accesible y volviendo a software si falla. La salida usa un canal de un
+// solo fotograma para no acumular latencia ni memoria.
 type videoSource struct {
-	path     string
-	fps      int
-	duration time.Duration
+	path          string
+	fps           int
+	duration      time.Duration
+	vaapiDevice   string
+	usingVAAPI    bool
+	forceSoftware bool
 
 	width  int
 	height int
@@ -294,8 +298,8 @@ type videoSource struct {
 	errorLogged bool
 }
 
-// NewVideoSource valida el archivo. El proceso decodificador se inicia cuando
-// el motor conoce la resolución real de la salida.
+// NewVideoSource valida el archivo y detecta un dispositivo VAAPI accesible.
+// El proceso decodificador se inicia cuando el motor conoce la resolución real.
 func NewVideoSource(path string, fps int) (*videoSource, error) {
 	if fps <= 0 {
 		fps = 24
@@ -310,7 +314,36 @@ func NewVideoSource(path string, fps int) (*videoSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &videoSource{path: path, fps: fps, duration: info.duration}, nil
+	return &videoSource{
+		path: path, fps: fps, duration: info.duration,
+		vaapiDevice: findVAAPIDevice(),
+	}, nil
+}
+
+// findVAAPIDevice devuelve el primer nodo de render accesible. FFmpeg intentará
+// usarlo para decodificar en la GPU y caerá a software si el driver no sirve.
+func findVAAPIDevice() string {
+	devices, _ := filepath.Glob("/dev/dri/renderD*")
+	for _, device := range devices {
+		f, err := os.OpenFile(device, os.O_RDWR, 0)
+		if err == nil {
+			_ = f.Close()
+			return device
+		}
+	}
+	return ""
+}
+
+// videoFilter crea el filtro de salida. Se limita FPS antes de escalar para no
+// gastar CPU en fotogramas que se descartarían; VAAPI descarga solo los frames
+// necesarios para convertirlos al formato de wl_shm.
+func videoFilter(width, height, fps int, useVAAPI bool) string {
+	if useVAAPI {
+		return fmt.Sprintf("hwdownload,format=nv12,fps=%d,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=bgra",
+			fps, width, height, width, height)
+	}
+	return fmt.Sprintf("fps=%d,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d",
+		fps, width, height, width, height)
 }
 
 // Frame devuelve el fotograma más reciente como RGB para las transiciones.
@@ -332,6 +365,9 @@ func (v *videoSource) FrameBGRA(width, height int) []uint8 {
 		select {
 		case frame, ok := <-v.frames:
 			if !ok {
+				if v.fallbackToSoftware(width, height) {
+					return nil
+				}
 				v.reportError(v.decodeErr)
 				return nil
 			}
@@ -352,6 +388,9 @@ func (v *videoSource) FrameBGRA(width, height int) []uint8 {
 				default:
 				}
 			} else {
+				if v.fallbackToSoftware(width, height) {
+					return nil
+				}
 				v.reportError(v.decodeErr)
 			}
 		default:
@@ -362,6 +401,24 @@ func (v *videoSource) FrameBGRA(width, height int) []uint8 {
 		return nil
 	}
 	return v.current
+}
+
+func (v *videoSource) fallbackToSoftware(width, height int) bool {
+	if !v.usingVAAPI || v.forceSoftware {
+		return false
+	}
+	cause := v.decodeErr
+	if cause == nil {
+		cause = fmt.Errorf("FFmpeg terminó antes de entregar el siguiente fotograma")
+	}
+	v.stopDecoder()
+	v.forceSoftware = true
+	log.Printf("swaydesk: VAAPI no pudo decodificar %q (%v); se prueba con software", filepath.Base(v.path), cause)
+	if err := v.startDecoder(width, height); err != nil {
+		v.reportError(err)
+		return false
+	}
+	return true
 }
 
 // SnapshotVideo crea una copia RGB del fotograma actual, usada solo al iniciar
@@ -395,14 +452,21 @@ func (v *videoSource) startDecoder(width, height int) error {
 	v.decodeErr = nil
 	v.stderr.Reset()
 
-	filter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,fps=%d",
-		width, height, width, height, v.fps)
-	cmd := exec.Command("ffmpeg",
-		"-nostdin", "-hide_banner", "-loglevel", "error",
+	useVAAPI := v.vaapiDevice != "" && !v.forceSoftware
+	filter := videoFilter(width, height, v.fps, useVAAPI)
+	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error"}
+	if useVAAPI {
+		args = append(args,
+			"-hwaccel", "vaapi",
+			"-hwaccel_device", v.vaapiDevice,
+			"-hwaccel_output_format", "vaapi")
+	}
+	args = append(args,
 		"-stream_loop", "-1", "-re", "-i", v.path,
 		"-map", "0:v:0", "-an", "-sn", "-dn",
 		"-vf", filter,
 		"-pix_fmt", "bgra", "-f", "rawvideo", "pipe:1")
+	cmd := exec.Command("ffmpeg", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("abriendo la salida de ffmpeg: %w", err)
@@ -414,6 +478,10 @@ func (v *videoSource) startDecoder(width, height int) error {
 	}
 	v.errorLogged = false
 	v.cmd, v.stdout = cmd, stdout
+	v.usingVAAPI = useVAAPI
+	if useVAAPI {
+		log.Printf("swaydesk: probando decodificación VAAPI para %q en %s", filepath.Base(v.path), v.vaapiDevice)
+	}
 	v.width, v.height = width, height
 	v.frames = make(chan []uint8, 1)
 	v.free = make(chan []uint8, 3)
@@ -511,6 +579,7 @@ func (v *videoSource) stopDecoder() {
 	v.cmd, v.stdout = nil, nil
 	v.frames, v.free, v.stop, v.done = nil, nil, nil, nil
 	v.width, v.height = 0, 0
+	v.usingVAAPI = false
 }
 
 // Duration devuelve la duración del vídeo.
