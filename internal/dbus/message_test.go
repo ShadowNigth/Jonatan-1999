@@ -16,7 +16,7 @@ func readMessage(t *testing.T, br *bufio.Reader) []byte {
 	}
 	bodyLen := int(binary.LittleEndian.Uint32(header[4:]))
 	fieldsLen := int(binary.LittleEndian.Uint32(header[12:]))
-	total := align8(align8(16+fieldsLen) + bodyLen)
+	total := align8(16+fieldsLen) + bodyLen
 	msg := make([]byte, total)
 	copy(msg, header)
 	if _, err := io.ReadFull(br, msg[16:]); err != nil {
@@ -45,14 +45,20 @@ func TestMessageRoundTrip(t *testing.T) {
 	m := &Message{
 		Type: Signal, Path: "/org/freedesktop/Notifications",
 		Interface: "org.freedesktop.Notifications", Member: "ActionInvoked",
-		Destination: ":1.5", Signature: "us", Body: []any{uint32(7), "default"},
+		Destination: ":1.5", Signature: "us", Body: []any{uint32(7), "mini"},
 	}
 	data, err := m.Encode(1)
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	if len(data)%8 != 0 {
-		t.Fatalf("el mensaje debe estar alineado a 8 bytes: %d", len(data))
+	bodyLen := int(binary.LittleEndian.Uint32(data[4:8]))
+	fieldsLen := int(binary.LittleEndian.Uint32(data[12:16]))
+	wantLen := align8(16+fieldsLen) + bodyLen
+	if len(data) != wantLen {
+		t.Fatalf("longitud D-Bus = %d, esperada %d (sin relleno tras el cuerpo)", len(data), wantLen)
+	}
+	if len(data)%8 == 0 {
+		t.Fatal("este caso debe terminar sin alineación a 8 bytes tras el cuerpo")
 	}
 	if data[0] != 'l' || data[1] != byte(Signal) || data[3] != 1 {
 		t.Fatalf("cabecera inesperada: % x", data[:4])
@@ -73,8 +79,28 @@ func TestMessageRoundTrip(t *testing.T) {
 	if n, ok := toUint(got.Body[0]); !ok || n != 7 {
 		t.Fatalf("primer argumento: %#v", got.Body[0])
 	}
-	if s, _ := got.Body[1].(string); s != "default" {
+	if s, _ := got.Body[1].(string); s != "mini" {
 		t.Fatalf("segundo argumento: %#v", got.Body[1])
+	}
+}
+
+func TestDecodeBigEndianMessage(t *testing.T) {
+	// Una señal mínima: cabecera con firma "u" y argumento uint32(42), toda
+	// codificada en big endian según el primer byte del mensaje.
+	data := []byte{
+		'B', byte(Signal), 0, 1,
+		0, 0, 0, 4, // longitud del cuerpo
+		0, 0, 0, 1, // serial
+		0, 0, 0, 7, // longitud de campos de cabecera
+		fieldSignature, 1, 'g', 0, 1, 'u', 0, 0, // campos + relleno
+		0, 0, 0, 42, // cuerpo
+	}
+	got, err := DecodeMessage(data)
+	if err != nil {
+		t.Fatalf("decode big endian: %v", err)
+	}
+	if got.Signature != "u" || len(got.Body) != 1 || got.Body[0] != uint32(42) {
+		t.Fatalf("mensaje decodificado: %+v", got)
 	}
 }
 

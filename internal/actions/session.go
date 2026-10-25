@@ -5,6 +5,7 @@ package actions
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -28,8 +29,18 @@ type Action struct {
 
 // Notification envía una notificación de escritorio si hay un daemon disponible.
 func Notification(summary, body string, urgency string) {
+	if bin := companionCommand("swaynotify"); bin != "" {
+		args := []string{"send", "--app", "swaydesk"}
+		if urgency != "" {
+			args = append(args, "--urgency", urgency)
+		}
+		args = append(args, summary, body)
+		if launcher.StartDetached(bin, args...) == nil {
+			return
+		}
+	}
 	if launcher.HasCommand("notify-send") {
-		args := []string{}
+		args := []string{"-a", "swaydesk"}
 		if urgency != "" {
 			args = append(args, "-u", urgency)
 		}
@@ -111,14 +122,18 @@ func swayipcDial(fn func(*swayipc.Conn) error) error {
 	return fn(c)
 }
 
-// Screenshot captura la pantalla completa o una región según el modo.
+// Screenshot captura la pantalla completa o una región según el modo, guarda
+// el PNG, lo copia como image/png y envía una notificación ligera.
 func Screenshot(mode string) error {
-	dir := screenshotDir()
 	if !launcher.HasCommand("grim") {
 		return fmt.Errorf("se necesita grim para capturas de pantalla")
 	}
-	name := filepath.Join(dir, "captura-"+time.Now().Format("20060102-150405")+".png")
-	if mode == "region" && launcher.HasCommand("slurp") {
+	var args []string
+	switch mode {
+	case "region":
+		if !launcher.HasCommand("slurp") {
+			return fmt.Errorf("se necesita slurp para seleccionar una región")
+		}
 		geometry, err := launcher.Output("slurp")
 		if err != nil {
 			return fmt.Errorf("selección cancelada")
@@ -127,25 +142,115 @@ func Screenshot(mode string) error {
 		if geometry == "" {
 			return fmt.Errorf("selección vacía")
 		}
-		return launcher.StartDetached("grim", "-g", geometry, name)
+		args = []string{"-g", geometry}
+	case "", "full":
+		// Sin geometría, grim captura todos los outputs.
+	default:
+		return fmt.Errorf("modo de captura desconocido: %q (usa region o full)", mode)
 	}
-	if launcher.HasCommand("grimblast") {
-		return launcher.StartDetached("grimblast", "save", "screen")
+
+	dir, err := screenshotDir()
+	if err != nil {
+		return err
 	}
-	return launcher.StartDetached("grim", name)
+	name := filepath.Join(dir, "captura-"+time.Now().Format("20060102-150405.000")+".png")
+	args = append(args, name)
+	cmd := exec.Command("grim", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		detail := strings.TrimSpace(string(output))
+		if detail != "" {
+			return fmt.Errorf("grim: %w: %s", err, detail)
+		}
+		return fmt.Errorf("grim: %w", err)
+	}
+
+	copyErr := copyScreenshotToClipboard(name)
+	if copyErr != nil {
+		screenshotNotification(name, false, copyErr)
+		return fmt.Errorf("captura guardada en %s, pero no se copió al portapapeles: %w", name, copyErr)
+	}
+	screenshotNotification(name, true, nil)
+	return nil
 }
 
-func screenshotDir() string {
-	home, _ := os.UserHomeDir()
-	for _, dir := range []string{"Imágenes", "Pictures"} {
-		p := filepath.Join(home, dir, "Capturas")
-		if err := os.MkdirAll(p, 0o755); err == nil {
-			return p
+// copyScreenshotToClipboard ofrece el PNG con el tipo MIME adecuado para que
+// editores y aplicaciones reciban una imagen, no una ruta o texto.
+func copyScreenshotToClipboard(path string) error {
+	if !launcher.HasCommand("wl-copy") {
+		return fmt.Errorf("no se encontró wl-copy; instala wl-clipboard")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("abriendo la captura: %w", err)
+	}
+	defer file.Close()
+
+	cmd := exec.Command("wl-copy", "--type", "image/png")
+	cmd.Stdin = file
+	if output, err := cmd.CombinedOutput(); err != nil {
+		detail := strings.TrimSpace(string(output))
+		if detail != "" {
+			return fmt.Errorf("wl-copy: %w: %s", err, detail)
+		}
+		return fmt.Errorf("wl-copy: %w", err)
+	}
+	return nil
+}
+
+// screenshotNotification envía un aviso breve, sin cargar ni dibujar la imagen;
+// así la notificación no espera a decodificar una captura grande.
+func screenshotNotification(path string, copied bool, copyErr error) {
+	summary := "Captura guardada"
+	body := "Guardada en " + path
+	urgency := "low"
+	if copied {
+		summary = "Captura copiada"
+		body += " · Copiada al portapapeles"
+	} else if copyErr != nil {
+		body += " · No se pudo copiar: " + copyErr.Error()
+		urgency = "critical"
+	}
+
+	if bin := companionCommand("swaynotify"); bin != "" {
+		if launcher.StartDetached(bin, "send", "--app", "swaydesk", "--urgency", urgency,
+			"--timeout", "3500", summary, body) == nil {
+			return
 		}
 	}
-	p := filepath.Join(home, "Capturas")
-	_ = os.MkdirAll(p, 0o755)
-	return p
+	if launcher.HasCommand("notify-send") {
+		_ = launcher.StartDetached("notify-send", "-a", "swaydesk", "-u", urgency,
+			"-t", "3500", summary, body)
+	}
+}
+
+// companionCommand encuentra un binario instalado junto a swaydesk, aunque
+// ~/.local/bin no forme parte del PATH heredado por sway.
+func companionCommand(name string) string {
+	if bin, err := exec.LookPath(name); err == nil {
+		return bin
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	bin := filepath.Join(filepath.Dir(exe), name)
+	info, err := os.Stat(bin)
+	if err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+		return bin
+	}
+	return ""
+}
+
+func screenshotDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no se pudo determinar la carpeta personal: %w", err)
+	}
+	dir := filepath.Join(home, "Capturas")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("creando la carpeta de capturas %s: %w", dir, err)
+	}
+	return dir, nil
 }
 
 // ToggleIdle gestiona el inhibidor de suspensión (swayidle).

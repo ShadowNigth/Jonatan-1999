@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -113,6 +114,7 @@ type Notification struct {
 
 	// internal
 	closed   bool
+	revision uint64 // distingue reemplazos para descartar cargas de imagen obsoletas
 	imageRaw any // valor crudo del hint image-data, ya decodificado por D-Bus
 }
 
@@ -180,12 +182,13 @@ type Options struct {
 
 // Store guarda las notificaciones vivas y el historial.
 type Store struct {
-	mu      sync.Mutex
-	opts    Options
-	items   []*Notification
-	history []Record
-	nextID  uint32
-	dnd     bool
+	mu           sync.Mutex
+	opts         Options
+	items        []*Notification
+	history      []Record
+	nextID       uint32
+	nextRevision uint64
+	dnd          bool
 }
 
 // NewStore crea un almacén con valores razonables.
@@ -223,6 +226,8 @@ func (s *Store) Add(n Notification) Notification {
 	now := s.opts.now()
 	n.Created = now
 	n.closed = false
+	s.nextRevision++
+	n.revision = s.nextRevision
 	n.Progress = -1
 
 	if n.Timeout < 0 {
@@ -317,6 +322,24 @@ func (s *Store) Get(id uint32) (Notification, bool) {
 		}
 	}
 	return Notification{}, false
+}
+
+// SetImage adjunta una imagen cargada en segundo plano solo si la notificación
+// sigue siendo la misma. Así un reemplazo o un cierre no recibe una miniatura
+// obsoleta cuando termina tarde la decodificación.
+func (s *Store) SetImage(id uint32, revision uint64, im *Image) bool {
+	if im == nil || im.Empty() {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, n := range s.items {
+		if n.ID == id && n.revision == revision {
+			n.Image = im
+			return true
+		}
+	}
+	return false
 }
 
 // Dismiss cierra una notificación y la apunta en el historial.
@@ -505,7 +528,30 @@ func StripMarkup(s string) string {
 		"&apos;", "'", "&#39;", "'", "&#40;", "(", "&#41;", ")",
 		"&nbsp;", " ",
 	)
-	return replacer.Replace(b.String())
+	return cleanNotificationText(replacer.Replace(b.String()))
+}
+
+// cleanNotificationText elimina bytes UTF-8 inválidos y controles invisibles
+// que algunas aplicaciones insertan en los avisos y las fuentes PSF dibujarían
+// como símbolos de control.
+func cleanNotificationText(s string) string {
+	s = strings.ToValidUTF8(s, "")
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\n':
+			b.WriteRune(r)
+		case r == '\t' || r == '\u200b' || unicode.IsControl(r):
+			b.WriteByte(' ')
+		case unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r):
+			// Se descartan marcas combinantes, direccionales y joiners invisibles:
+			// el rasterizador no compone glifos ni secuencias de texto.
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // tagLen devuelve la longitud de una etiqueta reconocida (incluido '>'), o 0.

@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -129,11 +130,13 @@ var (
 // Un Conn puede compartirse entre goroutines: las peticiones se serializan con
 // un mutex, ya que el protocolo no permite entrelazar respuestas.
 type Conn struct {
-	nc      net.Conn
-	br      *bufio.Reader
-	mu      sync.Mutex
-	timeout time.Duration
-	closed  bool
+	nc        net.Conn
+	br        *bufio.Reader
+	mu        sync.Mutex
+	timeout   time.Duration
+	closed    atomic.Bool
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // SwaySock devuelve la ruta del socket IPC. Consulta SWAYSOCK, luego I3SOCK y,
@@ -188,15 +191,14 @@ func (c *Conn) SetTimeout(d time.Duration) {
 	c.mu.Unlock()
 }
 
-// Close cierra la conexión. Es seguro llamarlo más de una vez.
+// Close cierra la conexión. Es seguro llamarlo más de una vez y desbloquea
+// una lectura en curso de Next o RoundTrip.
 func (c *Conn) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return nil
-	}
-	c.closed = true
-	return c.nc.Close()
+	c.closeOnce.Do(func() {
+		c.closed.Store(true)
+		c.closeErr = c.nc.Close()
+	})
+	return c.closeErr
 }
 
 // RoundTrip envía un mensaje y devuelve el payload JSON de la respuesta.
@@ -212,7 +214,7 @@ func (c *Conn) RoundTrip(t MessageType, payload any) (json.RawMessage, error) {
 func (c *Conn) RoundTripRaw(t MessageType, payload []byte) (json.RawMessage, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.closed {
+	if c.closed.Load() {
 		return nil, ErrClosed
 	}
 	if c.timeout > 0 {

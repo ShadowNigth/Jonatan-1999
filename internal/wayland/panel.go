@@ -13,7 +13,7 @@ type PanelSpec struct {
 	Width         int    // ancho en píxeles (0 = lo decide el compositor)
 	Height        int    // alto en píxeles
 	Anchors       uint32 // combinación de Anchor*
-	ExclusiveZone int    // espacio reservado al compositor (0 = ninguno)
+	ExclusiveZone int    // espacio reservado (0 evita zonas exclusivas; -1 permite solaparse)
 	MarginTop     int
 	MarginRight   int
 	MarginBottom  int
@@ -27,18 +27,25 @@ type PanelSpec struct {
 //
 // A diferencia de Background, admite márgenes, zona exclusiva y transparencia.
 type Panel struct {
-	conn    *Conn
-	surface uint32
-	layer   uint32
-	shm     *Shm
-	W, H    int
-	spec    PanelSpec
+	conn         *Conn
+	compositorID uint32
+	surface      uint32
+	layer        uint32
+	damageBuffer bool
+	shm          *Shm
+	W, H         int
+	spec         PanelSpec
 
 	mu         sync.Mutex
 	configured bool
 	closed     bool
 	ackSerial  uint32
 	cfgW, cfgH int
+	// requestedW/H recuerdan el último set_size enviado hasta que el
+	// compositor contesta con configure. Evita mandar otro commit en cada
+	// sondeo del bucle de notificaciones.
+	requestedW, requestedH int
+	requestPending         bool
 }
 
 // NewPanel crea y configura una superficie de panel.
@@ -64,7 +71,15 @@ func NewPanel(c *Conn, spec PanelSpec) (*Panel, error) {
 		spec.Layer = LayerTop
 	}
 
-	p := &Panel{conn: c, W: spec.Width, H: spec.Height, spec: spec}
+	compositorVer := versionAtMost(compositor, 4)
+	compositorID, err := c.Bind(compositor, compositorVer, nil)
+	if err != nil {
+		return nil, err
+	}
+	p := &Panel{
+		conn: c, compositorID: compositorID, W: spec.Width, H: spec.Height, spec: spec,
+		damageBuffer: compositorVer >= 4,
+	}
 
 	p.surface = c.allocID("wl_surface", func(op uint16, d *decoder) {
 		switch op {
@@ -74,13 +89,16 @@ func NewPanel(c *Conn, spec PanelSpec) (*Panel, error) {
 			d.uint32()
 		}
 	})
-	_ = c.Send(newEncoder(compositor.Name, compositorCreateSurface).newID(p.surface).bytes())
-
-	ver := shell.Version
-	if ver > 4 {
-		ver = 4
+	if err := c.Send(newEncoder(compositorID, compositorCreateSurface).newID(p.surface).bytes()); err != nil {
+		return nil, fmt.Errorf("creando wl_surface del panel: %w", err)
 	}
-	sheet := c.Bind(shell, ver, func(op uint16, d *decoder) {
+
+	ver := versionAtMost(shell, 4)
+	shellID, err := c.Bind(shell, ver, nil)
+	if err != nil {
+		return nil, err
+	}
+	p.layer = c.allocID("zwlr_layer_surface_v1", func(op uint16, d *decoder) {
 		switch op {
 		case layerSurfaceConfigureEvent:
 			serial := d.uint32()
@@ -89,6 +107,8 @@ func NewPanel(c *Conn, spec PanelSpec) (*Panel, error) {
 			p.mu.Lock()
 			p.configured = true
 			p.ackSerial = serial
+			p.requestPending = false
+			p.requestedW, p.requestedH = 0, 0
 			if w > 0 {
 				p.cfgW = int(w)
 			}
@@ -102,9 +122,8 @@ func NewPanel(c *Conn, spec PanelSpec) (*Panel, error) {
 			p.mu.Unlock()
 		}
 	})
-	p.layer = sheet
 
-	msg := newEncoder(sheet, layerShellGetSurface).
+	msg := newEncoder(shellID, layerShellGetSurface).
 		newID(p.layer).
 		newID(p.surface).
 		uint32(0). // sin salida concreta
@@ -112,35 +131,57 @@ func NewPanel(c *Conn, spec PanelSpec) (*Panel, error) {
 		string(spec.Namespace).
 		bytes()
 	if err := c.Send(msg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creando zwlr_layer_surface_v1 del panel: %w", err)
 	}
 
 	// Con anclas a izquierda y derecha el ancho lo decide el compositor; si se
 	// fija un ancho (paneles flotantes) se pide ese.
-	_ = c.Send(newEncoder(p.layer, layerSurfaceSetSize).
-		uint32(uint32(maxInt(0, spec.Width))).uint32(uint32(spec.Height)).bytes())
-	_ = c.Send(newEncoder(p.layer, layerSurfaceSetAnchor).uint32(spec.Anchors).bytes())
-	_ = c.Send(newEncoder(p.layer, layerSurfaceSetExclusiveZone).int32(int32(spec.ExclusiveZone)).bytes())
+	requests := []struct {
+		name string
+		msg  []byte
+	}{
+		{"zwlr_layer_surface_v1.set_size", newEncoder(p.layer, layerSurfaceSetSize).uint32(uint32(maxInt(0, spec.Width))).uint32(uint32(spec.Height)).bytes()},
+		{"zwlr_layer_surface_v1.set_anchor", newEncoder(p.layer, layerSurfaceSetAnchor).uint32(spec.Anchors).bytes()},
+		{"zwlr_layer_surface_v1.set_exclusive_zone", newEncoder(p.layer, layerSurfaceSetExclusiveZone).int32(int32(spec.ExclusiveZone)).bytes()},
+	}
 	if spec.MarginTop != 0 || spec.MarginRight != 0 || spec.MarginBottom != 0 || spec.MarginLeft != 0 {
-		_ = c.Send(newEncoder(p.layer, layerSurfaceSetMargin).
+		requests = append(requests, struct {
+			name string
+			msg  []byte
+		}{"zwlr_layer_surface_v1.set_margin", newEncoder(p.layer, layerSurfaceSetMargin).
 			int32(int32(spec.MarginTop)).int32(int32(spec.MarginRight)).
-			int32(int32(spec.MarginBottom)).int32(int32(spec.MarginLeft)).bytes())
+			int32(int32(spec.MarginBottom)).int32(int32(spec.MarginLeft)).bytes()})
 	}
 	kbd := uint32(0)
 	if spec.Keyboard {
 		kbd = 1
 	}
-	_ = c.Send(newEncoder(p.layer, layerSurfaceSetKeyboard).uint32(kbd).bytes())
-	_ = c.Send(newEncoder(p.layer, layerSurfaceSetLayer).uint32(spec.Layer).bytes())
-	_ = c.Send(newEncoder(p.surface, surfaceCommit).bytes())
+	requests = append(requests,
+		struct {
+			name string
+			msg  []byte
+		}{"zwlr_layer_surface_v1.set_keyboard_interactivity", newEncoder(p.layer, layerSurfaceSetKeyboard).uint32(kbd).bytes()},
+		struct {
+			name string
+			msg  []byte
+		}{"wl_surface.commit", newEncoder(p.surface, surfaceCommit).bytes()},
+	)
+	for _, req := range requests {
+		if err := c.Send(req.msg); err != nil {
+			return nil, fmt.Errorf("%s: %w", req.name, err)
+		}
+	}
 
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		p.mu.Lock()
 		done, closed := p.configured, p.closed
 		p.mu.Unlock()
-		if done || closed {
+		if done {
 			break
+		}
+		if closed {
+			return p, fmt.Errorf("el compositor cerró el panel antes de configurarlo")
 		}
 		if time.Now().After(deadline) {
 			return p, fmt.Errorf("el compositor no confirmó el panel")
@@ -211,10 +252,15 @@ func (p *Panel) Draw(pix []uint8, srcW, srcH int) error {
 	p.Ack()
 	buf := p.shm.Next()
 	buf.FillRGBA(pix, srcW, srcH)
-	_ = p.conn.Send(newEncoder(p.surface, surfaceAttach).uint32(buf.ID).int32(0).int32(0).bytes())
-	_ = p.conn.Send(newEncoder(p.surface, surfaceDamageBuf).
-		int32(0).int32(0).int32(int32(buf.W)).int32(int32(buf.H)).bytes())
-	_ = p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes())
+	if err := p.conn.Send(newEncoder(p.surface, surfaceAttach).uint32(buf.ID).int32(0).int32(0).bytes()); err != nil {
+		return fmt.Errorf("adjuntando el búfer del panel: %w", err)
+	}
+	if err := sendSurfaceDamage(p.conn, p.surface, buf.W, buf.H, p.damageBuffer); err != nil {
+		return fmt.Errorf("marcando el área del panel: %w", err)
+	}
+	if err := p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes()); err != nil {
+		return fmt.Errorf("confirmando el fotograma del panel: %w", err)
+	}
 	return nil
 }
 
@@ -229,16 +275,34 @@ func (p *Panel) RequestSize(w, h int) error {
 		h = 1
 	}
 	p.mu.Lock()
-	pending := p.cfgW == w && p.cfgH == h
-	p.mu.Unlock()
-	if pending {
+	if (!p.requestPending && p.cfgW == w && p.cfgH == h) ||
+		(p.requestPending && p.requestedW == w && p.requestedH == h) {
+		p.mu.Unlock()
 		return nil
 	}
+	p.requestPending = true
+	p.requestedW, p.requestedH = w, h
+	p.mu.Unlock()
 	if err := p.conn.Send(newEncoder(p.layer, layerSurfaceSetSize).
 		uint32(uint32(w)).uint32(uint32(h)).bytes()); err != nil {
+		p.clearSizeRequest(w, h)
 		return err
 	}
-	return p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes())
+	if err := p.conn.Send(newEncoder(p.surface, surfaceCommit).bytes()); err != nil {
+		p.clearSizeRequest(w, h)
+		return err
+	}
+	return nil
+}
+
+// clearSizeRequest desmarca una solicitud que no pudo enviarse completa.
+func (p *Panel) clearSizeRequest(w, h int) {
+	p.mu.Lock()
+	if p.requestPending && p.requestedW == w && p.requestedH == h {
+		p.requestPending = false
+		p.requestedW, p.requestedH = 0, 0
+	}
+	p.mu.Unlock()
 }
 
 // NeedsResize indica si el tamaño cambió.

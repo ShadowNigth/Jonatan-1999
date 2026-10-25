@@ -27,6 +27,7 @@ type Shm struct {
 	shmID   uint32
 	poolID  uint32
 	buffers []*Buffer
+	mem     []byte
 	size    int
 	file    *os.File
 	mu      sync.Mutex
@@ -53,8 +54,17 @@ func NewShm(c *Conn, w, h, count int) (*Shm, error) {
 		return nil, fmt.Errorf("mapeando la memoria compartida: %w", err)
 	}
 
-	s := &Shm{conn: c, buffers: make([]*Buffer, 0, count), size: size, file: f}
-	s.shmID = c.Bind(g, 1, nil)
+	s := &Shm{conn: c, buffers: make([]*Buffer, 0, count), mem: mem, size: size, file: f}
+	s.shmID = c.shmID
+	if s.shmID == 0 {
+		s.shmID, err = c.Bind(g, 1, nil)
+		if err != nil {
+			_ = syscall.Munmap(mem)
+			_ = f.Close()
+			return nil, err
+		}
+		c.shmID = s.shmID
+	}
 	poolID := c.allocID("wl_shm_pool", nil)
 	s.poolID = poolID
 	// wl_shm.create_pool(new_id, fd, size)
@@ -165,10 +175,17 @@ func (s *Shm) Close() {
 	defer s.mu.Unlock()
 	for _, b := range s.buffers {
 		_ = s.conn.Send(newEncoder(b.ID, bufferDestroy).bytes())
+		delete(s.conn.objects, b.ID)
 	}
 	_ = s.conn.Send(newEncoder(s.poolID, poolDestroy).bytes())
+	delete(s.conn.objects, s.poolID)
+	if len(s.mem) > 0 {
+		_ = syscall.Munmap(s.mem)
+		s.mem = nil
+	}
 	if s.file != nil {
-		s.file.Close()
+		_ = s.file.Close()
+		s.file = nil
 	}
 }
 
@@ -220,6 +237,40 @@ func (b *Buffer) FillRGBA(pix []uint8, srcW, srcH int) {
 			dstRow[di+1] = uint8(uint32(pix[si+1]) * a / 255)
 			dstRow[di+2] = uint8(uint32(pix[si]) * a / 255)
 			dstRow[di+3] = uint8(a)
+		}
+	}
+}
+
+// FillBGRA copia píxeles BGRA opacos (4 bytes por píxel) al búfer ARGB8888.
+// Cuando las dimensiones coinciden, usa copias por fila y evita conversión por píxel.
+func (b *Buffer) FillBGRA(pix []uint8, srcW, srcH int) {
+	if srcW <= 0 || srcH <= 0 || len(pix) < srcW*srcH*4 {
+		return
+	}
+	if srcW == b.W && srcH == b.H {
+		rowBytes := b.W * 4
+		for y := 0; y < b.H; y++ {
+			copy(b.Mem[y*b.Stride:y*b.Stride+rowBytes], pix[y*rowBytes:(y+1)*rowBytes])
+		}
+		return
+	}
+	for y := 0; y < b.H; y++ {
+		sy := y * srcH / b.H
+		if sy >= srcH {
+			sy = srcH - 1
+		}
+		rowOut := b.Mem[y*b.Stride:]
+		for x := 0; x < b.W; x++ {
+			sx := x * srcW / b.W
+			if sx >= srcW {
+				sx = srcW - 1
+			}
+			si := (sy*srcW + sx) * 4
+			di := x * 4
+			rowOut[di] = pix[si]
+			rowOut[di+1] = pix[si+1]
+			rowOut[di+2] = pix[si+2]
+			rowOut[di+3] = pix[si+3]
 		}
 	}
 }

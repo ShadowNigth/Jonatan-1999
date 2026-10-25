@@ -53,43 +53,82 @@ func (l *listPane) current() (Entry, bool) {
 	return l.entries[l.cursor], true
 }
 
-// render dibuja la lista en w×h celdas.
+// render dibuja la lista en w×h celdas. Los encabezados de grupo ocupan filas
+// visuales, pero no alteran los índices de selección de las entradas.
 func (l *listPane) render(t *ui.Theme, w, h int, title string) []string {
+	if h <= 0 {
+		return nil
+	}
+	if w < 0 {
+		w = 0
+	}
+	totalHeight := h
 	p := t.Palette
 	out := make([]string, 0, h)
 	if title != "" {
 		out = append(out, t.Accent().Render(" "+title))
 		h--
 	}
-	rows := h
-	if l.cursor < l.offset {
-		l.offset = l.cursor
+	if h <= 0 {
+		return out
 	}
-	if l.cursor >= l.offset+rows {
-		l.offset = l.cursor - rows + 1
+	if len(l.entries) == 0 {
+		for len(out) < totalHeight {
+			out = append(out, strings.Repeat(" ", w))
+		}
+		return out
+	}
+
+	type displayRow struct {
+		entry int
+		tag   string
+	}
+	rows := make([]displayRow, 0, len(l.entries)+4)
+	lastTag := ""
+	for i, e := range l.entries {
+		if e.Tag != "" && e.Tag != lastTag {
+			if i > 0 {
+				rows = append(rows, displayRow{entry: -1, tag: e.Tag})
+			}
+			lastTag = e.Tag
+		}
+		rows = append(rows, displayRow{entry: i})
+	}
+
+	if l.cursor < 0 {
+		l.cursor = 0
+	}
+	if l.cursor >= len(l.entries) {
+		l.cursor = len(l.entries) - 1
+	}
+	cursorRow := 0
+	for i, row := range rows {
+		if row.entry == l.cursor {
+			cursorRow = i
+			break
+		}
 	}
 	if l.offset < 0 {
 		l.offset = 0
 	}
-	lastTag := ""
-	for i := 0; i < rows; i++ {
-		idx := l.offset + i
-		if idx >= len(l.entries) {
-			out = append(out, strings.Repeat(" ", w))
+	if cursorRow < l.offset {
+		l.offset = cursorRow
+	} else if cursorRow >= l.offset+h {
+		l.offset = cursorRow - h + 1
+	}
+	if maxOffset := max(0, len(rows)-h); l.offset > maxOffset {
+		l.offset = maxOffset
+	}
+
+	end := min(l.offset+h, len(rows))
+	for i := l.offset; i < end; i++ {
+		row := rows[i]
+		if row.entry < 0 {
+			out = append(out, t.Muted().Render(" "+strings.ToUpper(row.tag)))
 			continue
 		}
-		e := l.entries[idx]
-		if e.Tag != "" && e.Tag != lastTag {
-			lastTag = e.Tag
-			if i > 0 {
-				out = append(out, t.Muted().Render(" "+strings.ToUpper(lastTag)))
-				i++
-				if i >= rows {
-					break
-				}
-			}
-		}
-		selected := idx == l.cursor
+		e := l.entries[row.entry]
+		selected := row.entry == l.cursor
 		bg := p.Bg
 		if selected {
 			bg = p.BgSel
@@ -124,10 +163,10 @@ func (l *listPane) render(t *ui.Theme, w, h int, title string) []string {
 		}
 		out = append(out, marker+iconStr+label+ui.Style{Bg: bg}.Render(strings.Repeat(" ", pad))+sub+" ")
 	}
-	for len(out) < h+1 {
-		out = append(out, "")
+	for len(out) < totalHeight {
+		out = append(out, strings.Repeat(" ", w))
 	}
-	return out[:max(h+1, 0)]
+	return out
 }
 
 func max(a, b int) int {

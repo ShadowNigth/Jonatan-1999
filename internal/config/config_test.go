@@ -85,6 +85,10 @@ border = "double"
 
 [input]
 keyboard_layout = "us"
+
+[gtk]
+theme = "Adwaita-dark"
+icon_theme = "Papirus-Dark"
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -102,12 +106,39 @@ keyboard_layout = "us"
 	if cfg.KeyboardLayout != "us" {
 		t.Fatalf("layout = %q", cfg.KeyboardLayout)
 	}
+	if cfg.GTKTheme != "Adwaita-dark" || cfg.GTKIconTheme != "Papirus-Dark" {
+		t.Fatalf("configuración GTK no aplicada: %q / %q", cfg.GTKTheme, cfg.GTKIconTheme)
+	}
 	// Los valores no presentes conservan el valor por defecto.
 	if cfg.Editor != "nvim" {
 		t.Fatalf("editor por defecto alterado: %q", cfg.Editor)
 	}
 	if cfg.BorderStyle() != 3 {
 		t.Fatalf("BorderStyle = %d", cfg.BorderStyle())
+	}
+}
+
+func TestDefaultBarModulesExcludePowerCPUAndRAM(t *testing.T) {
+	for _, module := range Default().BarModules {
+		switch module {
+		case "power":
+			t.Fatal("el botón de energía ya no es un módulo de la barra")
+		case "cpu", "ram":
+			t.Fatalf("CPU y RAM no deben activarse en la barra por defecto: %q", module)
+		}
+	}
+}
+
+func TestBarOpacityDefaultsAreTranslucent(t *testing.T) {
+	cfg := Default()
+	if cfg.BarOpacity != 0.68 || cfg.BarBackgroundOpacity != 0.68 {
+		t.Fatalf("opacidades por defecto: waybar=%.2f swaybar=%.2f; ambas deben ser 0.68", cfg.BarOpacity, cfg.BarBackgroundOpacity)
+	}
+	text := DefaultFile(cfg)
+	for _, want := range []string{"opacity = 0.68", "bar_opacity = 0.68"} {
+		if !contains(text, want) {
+			t.Errorf("la configuración generada debe incluir %q", want)
+		}
 	}
 }
 
@@ -239,23 +270,41 @@ func TestLoadBootSection(t *testing.T) {
 	}
 }
 
+func TestNotificationDefaultsAreCompact(t *testing.T) {
+	cfg := Default()
+	if cfg.NotifyWidth != 300 || cfg.NotifyPadding != 10 || cfg.NotifyGap != 6 ||
+		cfg.NotifyRadius != 12 || cfg.NotifyMaxLines != 2 {
+		t.Fatalf("valores compactos de notificación inesperados: ancho=%d relleno=%d separación=%d radio=%d líneas=%d",
+			cfg.NotifyWidth, cfg.NotifyPadding, cfg.NotifyGap, cfg.NotifyRadius, cfg.NotifyMaxLines)
+	}
+	text := DefaultFile(cfg)
+	for _, want := range []string{"width = 300", "padding = 10", "gap = 6", "max_lines = 2"} {
+		if !contains(text, want) {
+			t.Errorf("la configuración compacta debe incluir %q", want)
+		}
+	}
+}
+
 func TestOSDDefaults(t *testing.T) {
 	c := Default()
-	if !c.OSDEnabled {
-		t.Fatal("los avisos en pantalla deberían venir activados")
+	if !c.OSDEnabled || !c.OSDMediaEnabled {
+		t.Fatal("los OSD de volumen y reproducción deberían venir activados")
+	}
+	if c.OSDMediaTimeout < 1000 {
+		t.Fatalf("duración del OSD de reproducción poco razonable: %d", c.OSDMediaTimeout)
 	}
 	if c.OSDPosition != "bottom-center" {
 		t.Fatalf("posición por defecto = %q", c.OSDPosition)
 	}
-	if c.OSDWidth < 200 || c.OSDTimeout < 500 || c.OSDSegments < 8 {
-		t.Fatalf("valores del OSD poco razonables: %+v", c)
+	if c.OSDWidth != 260 || c.OSDPadding != 12 || c.OSDRadius != 14 || c.OSDTimeout < 500 || c.OSDSegments < 8 {
+		t.Fatalf("valores compactos del OSD poco razonables: %+v", c)
 	}
 	if c.OSDOpacity <= 0 || c.OSDOpacity > 1 {
 		t.Fatalf("opacidad del OSD = %v", c.OSDOpacity)
 	}
 	// El archivo generado trae la sección con sus valores.
 	text := DefaultFile(c)
-	for _, want := range []string{"[osd]", "position = \"bottom-center\"", "fade_ms = "} {
+	for _, want := range []string{"[osd]", "media_enabled = true", "media_timeout_ms = 3200", "position = \"bottom-center\"", "width = 260", "padding = 12", "fade_ms = "} {
 		if !contains(text, want) {
 			t.Fatalf("falta %q en la configuración generada", want)
 		}
@@ -265,9 +314,9 @@ func TestOSDDefaults(t *testing.T) {
 func TestLoadOSDSection(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
-	data := "[osd]\nenabled = false\nposition = \"bottom-right\"\nwidth = 320\n" +
-		"margin = 40\npadding = 12\nradius = 8\nopacity = 0.8\ntimeout_ms = 900\n" +
-		"fade_ms = 0\nsegments = 12\nfont_scale = 3\n"
+	data := "[osd]\nenabled = false\nmedia_enabled = false\nmedia_timeout_ms = 4500\n" +
+		"position = \"bottom-right\"\nwidth = 320\nmargin = 40\npadding = 12\n" +
+		"radius = 8\nopacity = 0.8\ntimeout_ms = 900\nfade_ms = 0\nsegments = 12\nfont_scale = 3\n"
 	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +324,8 @@ func TestLoadOSDSection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.OSDEnabled || cfg.OSDPosition != "bottom-right" || cfg.OSDWidth != 320 ||
+	if cfg.OSDEnabled || cfg.OSDMediaEnabled || cfg.OSDMediaTimeout != 4500 ||
+		cfg.OSDPosition != "bottom-right" || cfg.OSDWidth != 320 ||
 		cfg.OSDMargin != 40 || cfg.OSDPadding != 12 || cfg.OSDRadius != 8 ||
 		cfg.OSDTimeout != 900 || cfg.OSDFade != 0 || cfg.OSDSegments != 12 ||
 		cfg.OSDFontScale != 3 {

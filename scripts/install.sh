@@ -5,6 +5,7 @@
 #   PREFIX=/usr/local sudo ./scripts/install.sh
 #   ./scripts/install.sh --deps       # instala además las dependencias con pacman
 #   ./scripts/install.sh --no-config  # no escribe la configuración
+#   ./scripts/install.sh --no-path    # no toca los archivos de shell
 #
 # Instalación en un paso, sin clonar a mano (clona en un directorio temporal):
 #   curl -fsSL https://raw.githubusercontent.com/ShadowNigth/Jonatan-1999/main/scripts/install.sh | bash -s -- --deps
@@ -25,11 +26,13 @@ PREFIX="${PREFIX:-$HOME/.local}"
 WITH_DEPS=0
 WITH_CONFIG=1
 FORCE=0
+WITH_PATH=1
 
 for arg in "$@"; do
   case "$arg" in
     --deps) WITH_DEPS=1 ;;
     --no-config) WITH_CONFIG=0 ;;
+    --no-path) WITH_PATH=0 ;;
     --force) FORCE=1 ;;
     -h|--help)
       # Cabecera del archivo, quitando la almohadilla inicial.
@@ -91,15 +94,33 @@ info "Go $(go version | awk '{print $3}')"
 
 # ── Dependencias ──────────────────────────────────────────────────────────
 DEP_PKGS=(
-  sway waybar foot mako wl-clipboard grim slurp swayidle swaylock
+  waybar foot mako wl-clipboard grim slurp swayidle swaylock
+  thunar thunar-archive-plugin thunar-volman tumbler gvfs papirus-icon-theme adwaita-icon-theme
   cliphist ttf-jetbrains-mono-nerd
   # kbd trae las fuentes de consola PSF que usa la barra propia (swaybar)
   kbd
 )
+
+# sway y swayfx están declarados en conflicto: quien ya usa swayfx (sway con
+# blur y esquinas redondeadas) no debe recibir el paquete sway, o pacman
+# aborta con «paquetes con conflictos sin resolver».
+if pacman -Qq swayfx >/dev/null 2>&1; then
+  info "swayfx detectado: se usa ese compositor y no se pide sway"
+elif pacman -Qq sway >/dev/null 2>&1; then
+  info "sway detectado"
+else
+  DEP_PKGS+=(sway)
+fi
+
 if [[ $WITH_DEPS -eq 1 ]]; then
   command -v pacman >/dev/null || die "pacman no está disponible"
   info "Instalando dependencias: ${DEP_PKGS[*]}"
-  sudo pacman -S --needed --noconfirm "${DEP_PKGS[@]}"
+  # Un fallo aquí no debe impedir compilar: puede que ya esté todo y solo
+  # falte un paquete opcional, o que el usuario no tenga permisos de sudo.
+  if ! sudo pacman -S --needed --noconfirm "${DEP_PKGS[@]}"; then
+    warn "no se pudieron instalar todas las dependencias; se continúa igualmente"
+    warn "puedes revisarlas después con: swaydesk doctor"
+  fi
 else
   MISSING=()
   for pkg in "${DEP_PKGS[@]}"; do
@@ -122,10 +143,28 @@ for bin in swaydesk swaymenu swayctl swayclip swaybar swaynotify swayosd; do
   install -Dm755 "$REPO_DIR/bin/$bin" "$PREFIX/bin/$bin"
 done
 
+PATH_LINE="export PATH=\"$PREFIX/bin:\$PATH\""
 case ":$PATH:" in
-  *":$PREFIX/bin:"*) ;;
-  *) warn "$PREFIX/bin no está en el PATH. Añade esta línea a ~/.bashrc o ~/.zshrc:"
-     warn "  export PATH=\"$PREFIX/bin:\$PATH\"" ;;
+  *":$PREFIX/bin:"*) info "$PREFIX/bin ya está en el PATH" ;;
+  *)
+    if [[ $WITH_PATH -eq 1 ]]; then
+      # Se añade a los archivos de shell habituales (una sola vez). Es lo que
+      # hace que `swaydesk` funcione en la siguiente terminal, sin tener que
+      # copiar y pegar nada.
+      touch_one() {
+        [[ -f "$1" ]] || return 0
+        grep -qF "$PATH_LINE" "$1" 2>/dev/null && return 0
+        printf '\n# swaydesk\n%s\n' "$PATH_LINE" >>"$1"
+        info "PATH añadido a ${1/#$HOME/~}"
+      }
+      touch_one "$HOME/.bashrc"
+      touch_one "$HOME/.zshrc"
+      touch_one "$HOME/.profile"
+      info "En esta terminal ejecuta:  export PATH=\"$PREFIX/bin:\$PATH\"  (o abre una nueva)"
+    else
+      warn "$PREFIX/bin no está en el PATH. Añade esta línea a ~/.bashrc o ~/.zshrc:"
+      warn "  $PATH_LINE"
+    fi ;;
 esac
 
 # ── Configuración ─────────────────────────────────────────────────────────

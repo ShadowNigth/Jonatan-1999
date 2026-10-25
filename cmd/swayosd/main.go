@@ -1,11 +1,12 @@
-// swayosd muestra avisos en pantalla (OSD) sobre las ventanas: el nivel de
-// volumen aparece en una tarjeta flotante unos instantes y se va solo.
+// swayosd muestra avisos en pantalla (OSD) sobre las ventanas: volumen y
+// tarjetas de reproducción aparecen unos instantes y se van solas.
 //
-// Se puede usar de tres maneras:
+// Se puede usar de varias maneras:
 //
 //	swayosd volume up        cambia el volumen y muestra el aviso
 //	swayosd show             muestra el volumen actual (para scripts y atajos)
-//	swayosd watch            vigila el volumen y avisa de cualquier cambio
+//	swayosd watch            vigila el volumen y los cambios de pista MPRIS
+//	swayosd media show ...   dibuja una tarjeta con título, artista y carátula
 package main
 
 import (
@@ -51,6 +52,8 @@ func main() {
 		runVolume(args)
 	case "watch", "vigilar":
 		runWatch(args)
+	case "media", "reproduccion", "reproducción":
+		runMedia(args)
 	case "preview":
 		runPreview(args)
 	case "version", "v":
@@ -71,9 +74,11 @@ Uso: swayosd <orden> [opciones]
 
   volume up|down|mute [--step N]
                              cambia el volumen y muestra el aviso
-  show [--value N] [--muted] [--device NOMBRE] [--timeout MS]
-                             muestra el volumen actual (o el indicado)
-  watch [--intervalo MS]     vigila el volumen y avisa de cada cambio
+  show [--value N] [--muted] [--timeout MS]
+                             muestra volumen, estado y barra, sin nombre de salida
+  watch [--intervalo MS]     vigila el volumen y los cambios de pista MPRIS
+  media show --title T ...   muestra la tarjeta de reproducción
+  media watch [opciones]     vigila MPRIS sin vigilar el volumen
   preview --out RUTA         PNG del aviso, sin sesión gráfica
   version                    versión
 
@@ -85,8 +90,8 @@ Opciones comunes
 
 // ─── lectura del estado ────────────────────────────────────────────────────
 
-// scaleFor decide la escala de la fuente. El OSD se dibuja por defecto al
-// doble que la barra: se mira de reojo y tiene que leerse de un vistazo.
+// scaleFor decide la escala de la fuente. El valor automático es compacto
+// (escala 1); puede aumentarse con osd.font_scale, --scale o la variable de entorno.
 func scaleFor(cfg *config.Config, valor string) int {
 	if valor != "" {
 		if n, err := atoi(valor); err == nil && n >= 1 && n <= 3 {
@@ -101,7 +106,7 @@ func scaleFor(cfg *config.Config, valor string) int {
 			return n
 		}
 	}
-	return 2
+	return 1
 }
 
 // changeVolume aplica el cambio con la herramienta disponible.
@@ -112,8 +117,8 @@ func changeVolume(delta int, mute bool) error {
 	return actions.Volume(delta, mute)
 }
 
-// watch vigila el volumen y lanza un OSD por cada cambio, venga de donde venga
-// (teclas multimedia, auriculares Bluetooth, otro programa…).
+// runWatch vigila el volumen y los metadatos MPRIS; cada aviso se dibuja en
+// un proceso efímero para que el observador permanente no se bloquee.
 func runWatch(args []string) {
 	vals, _ := parseFlags(args, nil)
 	cfg, err := config.Load()
@@ -133,6 +138,13 @@ func runWatch(args []string) {
 	exe, err := os.Executable()
 	if err != nil {
 		exe = "swayosd"
+	}
+	if cfg.OSDMediaEnabled {
+		go runMediaWatch(cfg, scale, themeName)
+	}
+	if !cfg.OSDEnabled {
+		// Si solo está activado el OSD de reproducción, no sondear el audio.
+		select {}
 	}
 	ultimo := ""
 	primera := true
@@ -217,7 +229,8 @@ func parseFlags(args []string, repeat map[string]bool) (map[string][]string, []s
 // takesValue enumera las opciones que consumen el argumento siguiente.
 func takesValue(name string) bool {
 	switch name {
-	case "value", "device", "timeout", "scale", "theme", "step", "out", "intervalo":
+	case "value", "device", "timeout", "scale", "theme", "step", "out", "intervalo",
+		"title", "artist", "album", "art-url", "status":
 		return true
 	}
 	return false

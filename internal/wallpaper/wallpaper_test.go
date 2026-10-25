@@ -18,8 +18,8 @@ var testPal = ui.PaletteByName("catppuccin")
 
 func TestAvailableScenesCoversCatalogue(t *testing.T) {
 	scenes := AvailableScenes()
-	if len(scenes) < 10 {
-		t.Fatalf("se esperaban al menos 10 escenas, hay %d", len(scenes))
+	if len(scenes) < 11 {
+		t.Fatalf("se esperaban al menos 11 escenas, hay %d", len(scenes))
 	}
 	seen := map[string]bool{}
 	for _, s := range scenes {
@@ -188,6 +188,89 @@ func TestEngineSceneAndImage(t *testing.T) {
 	}
 }
 
+func TestImageToCanvasCompositesTransparency(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
+	background := ui.Color("#204060")
+	canvas := ImageToCanvasWithBackground(img, 2, 2, background)
+	for i := 0; i < len(canvas.Pix); i += 3 {
+		if canvas.Pix[i] != 32 || canvas.Pix[i+1] != 64 || canvas.Pix[i+2] != 96 {
+			t.Fatalf("píxel transparente = %v; se esperaba el color de fondo", canvas.Pix[i:i+3])
+		}
+	}
+
+	img.SetNRGBA(0, 0, color.NRGBA{R: 255, A: 128})
+	canvas = ImageToCanvasWithBackground(img, 2, 2, ui.Color("#0000ff"))
+	if got := canvas.Pix[:3]; got[0] < 126 || got[0] > 130 || got[1] != 0 || got[2] < 125 || got[2] > 129 {
+		t.Fatalf("alfa parcial compuesta = %v; se esperaba rojo sobre azul", got)
+	}
+
+	gradient := image.NewNRGBA(image.Rect(0, 0, 2, 1))
+	gradient.SetNRGBA(0, 0, color.NRGBA{R: 255, A: 255})
+	gradient.SetNRGBA(1, 0, color.NRGBA{B: 255, A: 255})
+	scaled := ImageToCanvasWithBackground(gradient, 1, 1, ui.Color("#000000"))
+	if got := scaled.Pix[:3]; got[0] < 126 || got[0] > 130 || got[1] != 0 || got[2] < 125 || got[2] > 129 {
+		t.Fatalf("remuestreo bilineal = %v; se esperaba mezcla rojo/azul", got)
+	}
+}
+
+func TestGIFLoaderComposesDisposalMethods(t *testing.T) {
+	palette := color.Palette{
+		color.RGBA{R: 255, A: 255},
+		color.RGBA{B: 255, A: 255},
+		color.RGBA{G: 255, A: 255},
+		color.RGBA{R: 255, G: 255, B: 255, A: 255},
+	}
+	for _, tc := range []struct {
+		name     string
+		disposal byte
+		want     int
+	}{
+		{name: "previous", disposal: gif.DisposalPrevious, want: 0},
+		{name: "background", disposal: gif.DisposalBackground, want: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "disposal.gif")
+			file, err := os.Create(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			base := image.NewPaletted(image.Rect(0, 0, 4, 4), palette)
+			partial := image.NewPaletted(image.Rect(1, 1, 3, 3), palette)
+			for i := range partial.Pix {
+				partial.Pix[i] = 1
+			}
+			last := image.NewPaletted(image.Rect(0, 0, 1, 1), palette)
+			last.Pix[0] = 3
+			animation := &gif.GIF{
+				Image: []*image.Paletted{base, partial, last},
+				Delay: []int{5, 5, 5},
+				Disposal: []byte{gif.DisposalNone, tc.disposal, gif.DisposalNone},
+				LoopCount: 0,
+				BackgroundIndex: 2,
+				Config: image.Config{ColorModel: palette, Width: 4, Height: 4},
+			}
+			if err := gif.EncodeAll(file, animation); err != nil {
+				file.Close()
+				t.Fatal(err)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := LoadGIF(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, g, b, _ := loaded.frames[2].At(1, 1).RGBA()
+			want := palette[tc.want]
+			wr, wg, wb, _ := want.RGBA()
+			if r != wr || g != wg || b != wb {
+				t.Fatalf("píxel tras disposición = (%d,%d,%d), se esperaba (%d,%d,%d)", r, g, b, wr, wg, wb)
+			}
+		})
+	}
+}
+
 func TestGIFLoader(t *testing.T) {
 	// GIF animado de dos fotogramas generado a mano.
 	dir := t.TempDir()
@@ -238,6 +321,48 @@ func writeGIF(t *testing.T, w *os.File, pal color.Palette) {
 	}
 }
 
+func TestPreviewBlockRendersImageAndGIFAtRequestedHeight(t *testing.T) {
+	dir := t.TempDir()
+	imagePath := filepath.Join(dir, "preview.png")
+	f, err := os.Create(imagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, image.NewRGBA(image.Rect(0, 0, 12, 8))); err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	still, err := NewEngine(Spec{Kind: KindImage, Path: imagePath, Pal: testPal})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := PreviewBlock(still, 12, 6); len(got) != 6 {
+		t.Fatalf("preview de imagen devolvió %d filas; se esperaban 6", len(got))
+	}
+	still.Close()
+
+	gifPath := filepath.Join(dir, "preview.gif")
+	gifFile, err := os.Create(gifPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeGIF(t, gifFile, color.Palette{color.RGBA{0, 0, 0, 255}, color.RGBA{255, 0, 0, 255}})
+	if err := gifFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	animated, err := NewEngine(Spec{Kind: KindGIF, Path: gifPath, Pal: testPal})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer animated.Close()
+	if got := PreviewBlock(animated, 12, 6); len(got) != 6 {
+		t.Fatalf("preview de GIF devolvió %d filas; se esperaban 6", len(got))
+	}
+}
+
 func TestPreviewAndANSI(t *testing.T) {
 	eng, err := NewEngine(Spec{Kind: KindScene, Scene: "stars", FPS: 24, Pal: testPal})
 	if err != nil {
@@ -270,6 +395,20 @@ func TestScaleFor(t *testing.T) {
 	} {
 		if got := ScaleFor(tc.w, tc.h); got != tc.want {
 			t.Fatalf("ScaleFor(%d,%d) = %d, se esperaba %d", tc.w, tc.h, got, tc.want)
+		}
+	}
+}
+
+func TestVideoScaleForKeepsNormalDisplaysAtNativeResolution(t *testing.T) {
+	for _, tc := range []struct{ w, h, want int }{
+		{1280, 720, 1},
+		{1920, 1080, 1},
+		{2560, 1440, 2},
+		{3840, 2160, 2},
+		{7680, 4320, 4},
+	} {
+		if got := videoScaleFor(tc.w, tc.h); got != tc.want {
+			t.Fatalf("videoScaleFor(%d,%d) = %d, se esperaba %d", tc.w, tc.h, got, tc.want)
 		}
 	}
 }

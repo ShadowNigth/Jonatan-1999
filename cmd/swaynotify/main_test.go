@@ -71,11 +71,20 @@ func TestItemsKeyIgnoresNothing(t *testing.T) {
 	if itemsKey(a, now) == itemsKey(b, now) {
 		t.Error("un resumen distinto debe cambiar la clave")
 	}
+	actualizada := []notify.Notification{{ID: 1, Summary: "uno", Body: "actualizado", Progress: -1}}
+	if itemsKey(a, now) == itemsKey(actualizada, now) {
+		t.Error("el cuerpo de un reemplazo debe repintarse sin esperar al siguiente segundo")
+	}
 	// La clave cambia con el segundo (la cuenta atrás avanza).
 	if itemsKey(a, now) == itemsKey(a, now.Add(1100*time.Millisecond)) {
 		t.Error("la cuenta atrás debería repintar cada segundo")
 	}
 	if len(a) > 0 && itemsKey(nil, now) == itemsKey(a, now) {
 		t.Error("sin tarjetas la clave debe ser distinta")
+	}
+	withImage := []notify.Notification{{ID: 1, Summary: "uno", Progress: -1,
+		Image: &notify.Image{W: 24, H: 24}}}
+	if itemsKey(a, now) == itemsKey(withImage, now) {
+		t.Error("la llegada asíncrona de una imagen debe forzar el repintado")
 	}
 }

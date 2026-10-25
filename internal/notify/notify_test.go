@@ -139,6 +139,31 @@ func TestClearReturnsIDs(t *testing.T) {
 	}
 }
 
+func TestSetImageOnlyUpdatesMatchingNotificationRevision(t *testing.T) {
+	s := newTestStore()
+	first := s.Add(Notification{Summary: "primera"})
+	image := &Image{W: 1, H: 1, Pix: []uint8{1, 2, 3, 255}}
+	if !s.SetImage(first.ID, first.revision, image) {
+		t.Fatal("no se pudo adjuntar la imagen a la notificación vigente")
+	}
+	got, ok := s.Get(first.ID)
+	if !ok || got.Image != image {
+		t.Fatal("la imagen no quedó asociada a la notificación")
+	}
+
+	replacement := s.Add(Notification{Summary: "reemplazo", ReplacesID: first.ID})
+	if replacement.ID != first.ID {
+		t.Fatalf("el reemplazo recibió id %d; se esperaba %d", replacement.ID, first.ID)
+	}
+	if s.SetImage(first.ID, first.revision, image) {
+		t.Fatal("una imagen atrasada modificó una notificación reemplazada")
+	}
+	got, ok = s.Get(replacement.ID)
+	if !ok || got.Image != nil {
+		t.Fatal("el reemplazo heredó una imagen obsoleta")
+	}
+}
+
 func TestSaveAndLoadHistory(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "notifications.json")
@@ -180,6 +205,20 @@ func TestStripMarkup(t *testing.T) {
 		if got := StripMarkup(c.in); got != c.want {
 			t.Errorf("StripMarkup(%q) = %q; esperado %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestNotificationTextCleansControlsAndInvalidUTF8(t *testing.T) {
+	got := Sanitize("uno\x01dos\u0085tres\u200bcuatro", 0)
+	if got != "uno dos tres cuatro" {
+		t.Fatalf("los controles deberían separar palabras sin dibujar símbolos: %q", got)
+	}
+	if got := Sanitize("cafe\u0301", 0); got != "cafe" {
+		t.Fatalf("la marca combinante no debería convertirse en un glifo extraño: %q", got)
+	}
+	malformed := string([]byte{'n', 'i', 0xff, 0xc3, 0xb1})
+	if got := StripMarkup(malformed); got != "niñ" {
+		t.Fatalf("el UTF-8 inválido dejó artefactos: %q", got)
 	}
 }
 
@@ -237,7 +276,7 @@ func sampleNotes() []Notification {
 			ID: 2, App: "pacman", Summary: "Actualización importante",
 			Body:    "Se han actualizado <b>12 paquetes</b> del sistema. Reinicia la sesión para aplicar los cambios.",
 			Urgency: Critical, Created: at(2), Progress: 65,
-			Actions: []Action{{Key: "default", Label: "Abrir"}, {Key: "later", Label: "Luego"}},
+			Actions: []Action{{Key: "default", Label: "Abrir"}, {Key: "later", Label: "Más tarde"}},
 		},
 		{
 			ID: 3, App: "wf-recorder", Summary: "Grabación detenida",

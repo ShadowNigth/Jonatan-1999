@@ -1,6 +1,7 @@
 package osd
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ShadowNigth/swaydesk/internal/bar"
@@ -20,6 +21,13 @@ func testRenderer(scale int) *Renderer {
 		Shadow:   true,
 		Segments: 20,
 	})
+}
+
+func TestRendererDefaultsAreCompact(t *testing.T) {
+	r := New(Options{Face: font.Builtin(), Theme: ui.PaletteByName("sakura")})
+	if r.Opt.Width != 260 || r.Opt.Padding != 12 || r.Scale() != 1 {
+		t.Fatalf("valores compactos del OSD: %+v, escala %d", r.Opt, r.Scale())
+	}
 }
 
 func TestStatePercentAndFill(t *testing.T) {
@@ -61,8 +69,8 @@ func TestStateTexts(t *testing.T) {
 		t.Fatalf("textos del aviso: %q %q %q", s.Label(), s.ValueText(), s.Detail())
 	}
 	m := Volume(45, true, "  ")
-	if m.ValueText() != "silencio" {
-		t.Fatalf("silenciado = %q", m.ValueText())
+	if m.ValueText() != "Silencio" {
+		t.Fatalf("estado silenciado = %q", m.ValueText())
 	}
 	if m.Detail() != "" {
 		t.Fatalf("un dispositivo en blanco no debe mostrarse: %q", m.Detail())
@@ -92,6 +100,72 @@ func TestRenderSizeAndAlpha(t *testing.T) {
 		if h3 <= h1 {
 			t.Fatalf("la escala 3 no es más alta que la 1: %d vs %d", h3, h1)
 		}
+	}
+}
+
+func TestMutedLayoutStacksTitleAndValueWhenNeeded(t *testing.T) {
+	r := New(Options{
+		Width:   150,
+		Padding: 12,
+		Face:    font.Builtin(),
+		Theme:   ui.PaletteByName("sakura"),
+	})
+	active := Volume(50, false, "")
+	muted := Volume(50, true, "")
+
+	if !r.textFitsInline(active) {
+		t.Fatal("un porcentaje corto debería compartir fila con el título")
+	}
+	if r.textFitsInline(muted) {
+		t.Fatal("«Silencio» debe pasar a otra fila si no cabe junto al título")
+	}
+	_, activeHeight := r.Size(active)
+	_, mutedHeight := r.Size(muted)
+	wantHeight := activeHeight + r.lineH(r.sc) + 2*r.sc
+	if mutedHeight != wantHeight {
+		t.Fatalf("alto del OSD silenciado = %d; se esperaba %d", mutedHeight, wantHeight)
+	}
+	if canvas := r.Render(muted, 1); canvas.H != mutedHeight {
+		t.Fatalf("el lienzo silenciado mide %d px de alto, se esperaban %d", canvas.H, mutedHeight)
+	}
+}
+
+func TestMutedValueScaleKeepsStateTextWhole(t *testing.T) {
+	r := New(Options{
+		Width:   180,
+		Padding: 12,
+		Scale:   2,
+		Face:    font.Builtin(),
+		Theme:   ui.PaletteByName("sakura"),
+	})
+	muted := Volume(50, true, "")
+	scale := r.valueScaleFor(muted)
+	if scale >= r.valueScale() {
+		t.Fatalf("el estado largo no redujo su escala: %d", scale)
+	}
+	inner := r.Opt.Width - 2*r.Opt.Padding
+	if width := bar.TextWidth(r.face, muted.ValueText(), scale, scale); width > inner {
+		t.Fatalf("«%s» mide %d px y se recortaría dentro de %d px", muted.ValueText(), width, inner)
+	}
+	canvas := r.Render(muted, 1)
+	_, wantHeight := r.Size(muted)
+	if canvas.H != wantHeight {
+		t.Fatalf("alto del lienzo %d; se esperaba %d", canvas.H, wantHeight)
+	}
+}
+
+func TestRenderOmitsTechnicalAudioDevice(t *testing.T) {
+	r := testRenderer(1)
+	withoutDevice := Volume(45, false, "")
+	withTechnicalDevice := Volume(45, false, "alsa_output.pci-0000_00_1f.3.analog-stereo")
+
+	w1, h1 := r.Size(withTechnicalDevice)
+	w2, h2 := r.Size(withoutDevice)
+	if w1 != w2 || h1 != h2 {
+		t.Fatalf("el identificador técnico no debe cambiar el tamaño del OSD: %dx%d != %dx%d", w1, h1, w2, h2)
+	}
+	if a, b := r.Render(withTechnicalDevice, 1), r.Render(withoutDevice, 1); !bytes.Equal(a.Pix, b.Pix) {
+		t.Fatal("el OSD no debe dibujar el identificador técnico de la salida de audio")
 	}
 }
 

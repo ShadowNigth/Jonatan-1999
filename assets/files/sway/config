@@ -7,16 +7,23 @@
 ### Variables ##############################################################
 
 set $mod Mod4
+# Rutas absolutas: sway no hereda el PATH de tu shell, así que si los
+# binarios están en ~/.local/bin los atajos no encontrarían nada.
+set $swaydesk {{SWAYDESK_BIN}}
+set $swaymenu {{SWAYMENU_BIN}}
+set $swayctl {{SWAYCTL_BIN}}
+set $swayclip {{SWAYCLIP_BIN}}
+
 set $term {{TERMINAL}}
-set $menu {{LAUNCHER}}
-set $menu_all swaymenu --float --commands
-set $power swaymenu --power
-set $themes swaydesk theme --gallery
-set $wall swaydesk wallpaper --gallery
-set $ctl swayctl
-set $clip swayclip
-set $boot swaydesk boot --force
-set $lock swaylock -f -c '{{THEME_BG_HEX}}'
+# Ojo: sway no expande variables dentro de otras variables, así que cada una
+# lleva la ruta completa.
+set $menu {{SWAYMENU_BIN}} --float
+set $menu_all {{SWAYMENU_BIN}} --float --commands
+set $power {{SWAYMENU_BIN}} --power --float
+set $themes {{SWAYDESK_BIN}} theme --gallery
+set $wall {{SWAYDESK_BIN}} wallpaper --gallery
+set $boot {{SWAYDESK_BIN}} boot --force
+set $lock swaylock -f -c {{THEME_BG_HEX}}
 set $browser {{BROWSER}}
 set $files {{FILES}}
 set $editor {{EDITOR}}
@@ -39,10 +46,7 @@ output * scale_filter linear
 
 default_border pixel 2
 default_floating_border normal
-default_border_color {{THEME_BORDER_HEX}}
-floating_border_color {{THEME_BORDER_HEX}}
-focused_border_color {{THEME_ACCENT_HEX}}
-urgent_border_color {{THEME_ERR_HEX}}
+{{BORDER_COLORS_BLOCK}}
 hide_edge_borders smart
 
 # Esquinas y desenfoque: se activan solos en swayfx; en sway puro quedan comentados.
@@ -57,7 +61,7 @@ smart_borders on
 font pango:{{FONT}} {{FONT_SIZE}}
 titlebar_border_thickness 1
 titlebar_padding 4 2
-focus_follows_mouse no
+focus_follows_mouse yes
 mouse_warping output
 focus_wrapping yes
 
@@ -66,6 +70,7 @@ client.focused          {{THEME_ACCENT_HEX}} {{THEME_ACCENT_HEX}} {{THEME_BG_HEX
 client.focused_inactive {{THEME_BG_SEL_HEX}}{{INACTIVE_ALPHA_HEX}}  {{THEME_BG_SEL_HEX}}  {{THEME_FG_HEX}} {{THEME_BG_SEL_HEX}}  {{THEME_BG_SEL_HEX}}
 client.unfocused        {{THEME_BG_ALT_HEX}}{{BAR_ALPHA_HEX}}  {{THEME_BG_ALT_HEX}}  {{THEME_FG_DIM_HEX}} {{THEME_BG_ALT_HEX}} {{THEME_BG_ALT_HEX}}
 client.urgent           {{THEME_ERR_HEX}}     {{THEME_ERR_HEX}}     {{THEME_BG_HEX}} {{THEME_ERR_HEX}}     {{THEME_ERR_HEX}}
+client.placeholder      {{THEME_BG_HEX}}       {{THEME_BG_HEX}}       {{THEME_FG_DIM_HEX}} {{THEME_BG_HEX}}   {{THEME_BG_HEX}}
 
 ### Ventanas flotantes de swaydesk #########################################
 
@@ -87,6 +92,8 @@ for_window [app_id="foot"] opacity {{TERM_OPACITY}}
 for_window [app_id="org.wezfurlong.wezterm"] opacity {{TERM_OPACITY}}
 for_window [app_id="Alacritty"] opacity {{TERM_OPACITY}}
 for_window [app_id="kitty"] opacity {{TERM_OPACITY}}
+# Thunar nativo en Wayland (app_id) y sobre XWayland (class).
+for_window [app_id="thunar"] opacity {{INACTIVE_OPACITY}}
 for_window [class="Thunar"] opacity {{INACTIVE_OPACITY}}
 for_window [class="org.gnome.Nautilus" title=".*"] opacity {{INACTIVE_OPACITY}}
 for_window [app_id="pavucontrol"] opacity {{INACTIVE_OPACITY}}
@@ -133,35 +140,36 @@ bindsym $mod+b exec $browser
 bindsym $mod+Shift+f exec $files
 bindsym $mod+Shift+Return exec $term -e $editor
 
-# swaydesk
-bindsym $mod+p exec $power
+# Menú de energía flotante (Super+P)
+bindsym $mod+p exec --no-startup-id $power
 bindsym $mod+t exec $themes
-bindsym $mod+Shift+t exec $themes
 bindsym $mod+Shift+w exec $wall
 bindsym $mod+Shift+b exec $boot
 # Reiniciar la barra (por ejemplo, al cambiar la configuración)
 bindsym $mod+Ctrl+b exec sh -c 'pkill -x swaybar; pkill -x waybar; sleep 0.2; ~/.config/swaydesk/autostart.sh >/dev/null 2>&1 &' 
-bindsym $mod+c exec --no-startup-id $clip
-bindsym $mod+i exec --no-startup-id $ctl
+# swayclip y swayctl abren una terminal flotante cuando Sway los lanza sin TTY.
+bindsym $mod+c exec --no-startup-id $swayclip
+bindsym $mod+i exec --no-startup-id $swayctl
 bindsym $mod+Shift+l exec $lock
-bindsym $mod+Shift+n exec --no-startup-id swaydesk notify "swaydesk" "Notificaciones de prueba"
+bindsym $mod+Shift+n exec --no-startup-id $swaydesk notify "swaydesk" "Notificaciones de prueba"
 # Modo «no molestar» de las notificaciones propias
-bindsym $mod+Ctrl+n exec --no-startup-id swaydesk notifications dnd
+bindsym $mod+Ctrl+n exec --no-startup-id $swaydesk notifications dnd
 # Cerrar todas las notificaciones en pantalla
-bindsym $mod+Ctrl+Shift+n exec --no-startup-id swaydesk notifications clear
+bindsym $mod+Ctrl+Shift+n exec --no-startup-id $swaydesk notifications clear
 # Centro de notificaciones (también se abre con clic en el indicador de la barra)
-bindsym $mod+n exec --no-startup-id swaydesk notifications center
+bindsym $mod+n exec --no-startup-id $swaydesk notifications center
 
-# Capturas de pantalla
-bindsym Print exec sh -c 'mkdir -p ~/Capturas && grim ~/Capturas/$(date +%Y%m%d-%H%M%S).png'
-bindsym $mod+Print exec sh -c 'mkdir -p ~/Capturas && grim -g "$(slurp)" ~/Capturas/$(date +%Y%m%d-%H%M%S).png'
-bindsym $mod+Shift+Print exec sh -c 'grim -g "$(slurp)" - | wl-copy'
+# Cada captura se guarda, copia como PNG al portapapeles y muestra una miniatura.
+bindsym Print exec --no-startup-id $swaydesk screenshot full
+bindsym $mod+Print exec --no-startup-id $swaydesk screenshot region
+bindsym $mod+Shift+Print exec --no-startup-id $swaydesk screenshot region
 
 # Gestión de ventanas
 bindsym $mod+q kill
 bindsym $mod+Shift+q kill
 bindsym $mod+f fullscreen toggle
-bindsym $mod+Shift+f floating toggle
+# $mod+Shift+f abre el gestor de archivos (ver «Aplicaciones»);
+# las ventanas flotantes se alternan con $mod+Shift+space.
 bindsym $mod+Shift+space floating toggle
 bindsym $mod+space focus mode_toggle
 bindsym $mod+a focus parent
@@ -180,7 +188,8 @@ bindsym $mod+Right focus right
 bindsym $mod+Shift+h move left
 bindsym $mod+Shift+j move down
 bindsym $mod+Shift+k move up
-bindsym $mod+Shift+l move right
+# $mod+Shift+l bloquea la pantalla (ver «swaydesk»); para mover la ventana a
+# la derecha está $mod+Shift+Right.
 bindsym $mod+Shift+Left move left
 bindsym $mod+Shift+Down move down
 bindsym $mod+Shift+Up move up
@@ -222,10 +231,11 @@ bindsym $mod+minus scratchpad show
 bindsym $mod+Shift+minus move scratchpad
 
 # Medios y hardware
-# El volumen muestra un aviso flotante con el nivel (swayosd) al cambiarlo.
-bindsym XF86AudioRaiseVolume exec --no-startup-id swaydesk volume up
-bindsym XF86AudioLowerVolume exec --no-startup-id swaydesk volume down
-bindsym XF86AudioMute exec --no-startup-id swaydesk volume mute
+# En portátiles, Fn+F9/F10/F11 suele emitir estas teclas XF86 multimedia.
+# El volumen muestra un aviso flotante con el nivel al cambiarlo.
+bindsym XF86AudioRaiseVolume exec --no-startup-id $swaydesk volume up
+bindsym XF86AudioLowerVolume exec --no-startup-id $swaydesk volume down
+bindsym XF86AudioMute exec --no-startup-id $swaydesk volume mute
 # Subir o bajar sin teclas multimedia, y repetir el aviso del volumen
 bindsym $mod+equal exec --no-startup-id swayosd volume up
 bindsym $mod+Shift+equal exec --no-startup-id swayosd volume down
@@ -239,12 +249,12 @@ bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
 # Recarga y salida
 bindsym $mod+Shift+c reload
 bindsym $mod+Shift+r restart
-bindsym $mod+Shift+e exec $power
-bindsym $mod+Shift+x exec swaydesk lock
+bindsym $mod+Shift+e exec --no-startup-id $power
+bindsym $mod+Shift+x exec $swaydesk lock
 
 ### Modos ##################################################################
 
-mode "resize" {
+mode "redimensionar" {
     bindsym h resize shrink width 20 px
     bindsym j resize grow height 20 px
     bindsym k resize shrink height 20 px
@@ -256,7 +266,7 @@ mode "resize" {
     bindsym Return mode "default"
     bindsym Escape mode "default"
 }
-bindsym $mod+r mode "resize"
+bindsym $mod+r mode "redimensionar"
 
 ### Entrada ################################################################
 
@@ -282,11 +292,12 @@ input type:pointer {
 ### Autostart ##############################################################
 
 # 1. Regenera waybar/foot/mako/swaylock con la paleta activa y avisa a sway.
-exec_always --no-startup-id swaydesk apply
+exec_always --no-startup-id $swaydesk apply
 
 # 2. Arranca barra, notificaciones, bloqueo por inactividad, portapapeles...
 #    El script comprueba qué programas están instalados antes de lanzarlos.
 exec_always --no-startup-id ~/.config/swaydesk/autostart.sh
 
-# Overrides del usuario
-include ~/.config/sway/config.d/*
+# Overrides del usuario. Solo *.conf: así los respaldos (*.conf.bak-*) no se
+# cargan por error y no reaparecen atajos viejos ni directivas duplicadas.
+include ~/.config/sway/config.d/*.conf

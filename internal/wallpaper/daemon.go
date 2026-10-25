@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -81,9 +82,11 @@ type daemonState struct {
 	from *Canvas // último fotograma del fondo anterior, congelado
 	last *Canvas // último fotograma dibujado
 
-	source string
-	start  time.Time
-	moving bool
+	source   string
+	start    time.Time
+	moving   bool
+	hidden   bool
+	hiddenAt time.Time
 }
 
 // runDaemonOptions implementa el bucle del fondo animado sobre wlr-layer-shell.
@@ -128,12 +131,19 @@ func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Sig
 		}
 	}
 
-	// Los eventos de sway llegan por un canal aparte para no bloquear el dibujo.
+	// Los eventos de sway y de visibilidad llegan por canales separados para
+	// que las consultas IPC no bloqueen el dibujo ni el control de Wayland.
 	events := workspaceStream(stop)
+	visibility := wallpaperVisibilityStream(stop)
 
 	for {
 		wait := d.eng.Interval()
-		if d.moving {
+		drawFrame := !d.hidden && (d.last == nil || d.moving || (d.eng.Kind() != KindImage && d.eng.Kind() != KindNone))
+		if d.hidden || !drawFrame {
+			// El fondo está oculto o es fijo: mantener activos los eventos y
+			// Wayland, pero sin generar fotogramas animados.
+			wait = 250 * time.Millisecond
+		} else if d.moving {
 			wait = 16 * time.Millisecond
 		}
 		select {
@@ -148,6 +158,12 @@ func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Sig
 				continue
 			}
 			d.onWorkspace(ev)
+		case hidden, ok := <-visibility:
+			if !ok {
+				visibility = nil
+				continue
+			}
+			d.setHidden(hidden)
 		case <-time.After(wait):
 			if bg.Closed() {
 				return nil
@@ -159,9 +175,13 @@ func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Sig
 				// Una transición a medias con otro tamaño se descarta.
 				d.moving = false
 				d.from = nil
+				d.last = nil
+				drawFrame = true
 			}
-			if err := d.frame(); err != nil {
-				return err
+			if drawFrame && !d.hidden {
+				if err := d.frame(); err != nil {
+					return err
+				}
 			}
 			// Se procesan los eventos pendientes (release de búferes, configure).
 			_ = bg.Dispatch(0)
@@ -176,24 +196,38 @@ func (d *daemonState) closeEngines() {
 	}
 }
 
-// dims calcula el tamaño del lienzo para un tipo de fondo. Las escenas usan
-// media altura: se dibujan a resolución de terminal (2 píxeles por fila).
+// dims calcula el tamaño del lienzo para un tipo de fondo. El lienzo de una
+// escena ya representa píxeles, no filas de terminal; mantener la proporción
+// completa evita que Wayland la comprima verticalmente al llenar la salida.
 func (d *daemonState) dims(kind Kind) (int, int) {
 	sw, sh := d.bg.Size()
-	w, h := sw/d.scale, sh/d.scale
+	scale := d.scale
+	if kind == KindVideo {
+		// El vídeo necesita más detalle que las escenas y no debe partir de
+		// una miniatura fija; solo se reduce en salidas mayores que Full HD.
+		scale = videoScaleFor(sw, sh)
+	}
+	w, h := sw/scale, sh/scale
 	if w < 16 {
 		w = 16
 	}
 	if h < 16 {
 		h = 16
 	}
-	if kind == KindScene {
-		h /= 2
-		if h < 16 {
-			h = 16
-		}
-	}
 	return w, h
+}
+
+// expandHomePath expande el prefijo de ruta ~/ sin alterar las rutas relativas
+// ni las referencias de escena.
+func expandHomePath(path string) (string, error) {
+	if !strings.HasPrefix(path, "~/") {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path, err
+	}
+	return filepath.Join(home, path[2:]), nil
 }
 
 // install cambia el fondo activo, con transición si animate lo permite.
@@ -202,19 +236,33 @@ func (d *daemonState) install(source string, animate bool) error {
 	if err != nil {
 		return err
 	}
+	if spec.Path != "" {
+		spec.Path, err = expandHomePath(spec.Path)
+		if err != nil {
+			return err
+		}
+	}
 	if spec.FPS == 0 {
 		spec.FPS = d.opt.FPS
+	}
+	from := d.last
+	if from == nil && animate && d.opt.Transition.Active() && d.eng != nil && d.eng.Kind() == KindVideo {
+		from = d.eng.videoSnapshot()
 	}
 	next, err := NewEngine(spec)
 	if err != nil {
 		return err
 	}
-	if !animate || !d.opt.Transition.Active() || d.last == nil || d.eng == nil {
+	if d.hidden {
+		next.Pause()
+	}
+	if !animate || !d.opt.Transition.Active() || from == nil || d.eng == nil {
 		if d.eng != nil {
 			d.eng.Close()
 		}
 		d.eng = next
 		d.from = nil
+		d.last = nil // el siguiente ciclo debe dibujar el fondo nuevo
 		d.moving = false
 		d.source = source
 		return nil
@@ -225,15 +273,57 @@ func (d *daemonState) install(source string, animate bool) error {
 		d.eng.Close()
 	}
 	d.eng = next
-	d.from = d.last
+	d.from = from
 	d.start = time.Now()
 	d.moving = true
 	d.source = source
 	return nil
 }
 
+func (d *daemonState) setHidden(hidden bool) {
+	if d.hidden == hidden {
+		return
+	}
+	now := time.Now()
+	if hidden {
+		d.hidden = true
+		d.hiddenAt = now
+		log.Printf("swaydesk: pausa del fondo: todas las salidas activas están cubiertas por ventanas a pantalla completa")
+		if d.eng != nil {
+			d.eng.Pause()
+		}
+		return
+	}
+
+	if d.eng != nil {
+		d.eng.Resume()
+	}
+	log.Printf("swaydesk: se reanuda el fondo: al menos una salida vuelve a mostrar el wallpaper")
+	if d.moving && !d.hiddenAt.IsZero() {
+		pausedFrom := d.hiddenAt
+		if d.start.After(pausedFrom) {
+			// Una transición iniciada mientras estaba oculto solo se congela
+			// desde el momento en que comenzó.
+			pausedFrom = d.start
+		}
+		d.start = d.start.Add(now.Sub(pausedFrom))
+	}
+	d.hidden = false
+	d.hiddenAt = time.Time{}
+}
+
 // frame dibuja el siguiente fotograma (con transición si hace falta).
 func (d *daemonState) frame() error {
+	if d.eng.Kind() == KindVideo && !d.moving {
+		w, h := d.dims(KindVideo)
+		pix := d.eng.videoFrameBGRA(w, h)
+		if pix == nil {
+			d.last = nil
+			return nil
+		}
+		d.last = nil
+		return d.bg.DrawBGRA(pix, w, h)
+	}
 	w, h := d.dims(d.eng.Kind())
 	c := d.eng.Frame(w, h)
 	if d.moving {
@@ -299,6 +389,16 @@ func workspaceStream(stop <-chan struct{}) <-chan swayipc.WorkspaceEvent {
 				c.Close()
 				time.Sleep(2 * time.Second)
 				continue
+			}
+			// Una conexión tardía debe aplicar el workspace que ya está enfocado,
+			// no esperar al siguiente cambio del usuario.
+			if num, name, ok := FocusedWorkspace(); ok {
+				select {
+				case out <- swayipc.WorkspaceEvent{Change: "focus", Current: swayipc.Workspace{Num: num, Name: name, Focused: true}}:
+				case <-stop:
+					c.Close()
+					return
+				}
 			}
 			for ev := range c.Events(8) {
 				if ev.Type != swayipc.EventWorkspace {

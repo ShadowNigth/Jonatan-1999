@@ -3,11 +3,13 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/ShadowNigth/swaydesk/internal/actions"
 	"github.com/ShadowNigth/swaydesk/internal/config"
@@ -17,11 +19,12 @@ import (
 
 // clipItem es una entrada del historial.
 type clipItem struct {
-	id      string
-	raw     string // línea original (necesaria para borrar con cliphist)
-	content string
-	label   string
-	hint    string
+	id        string
+	raw       string // línea original (necesaria para borrar con cliphist)
+	content   string
+	label     string
+	hint      string
+	imageMIME string // MIME original, si la entrada es una imagen
 }
 
 // backend abstrae el gestor de portapapeles disponible.
@@ -35,7 +38,7 @@ type backend interface {
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "swayclip · historial del portapapeles\n\nUso: swayclip [--backend auto|cliphist|clipman|cliente]")
-		fmt.Fprintln(os.Stderr, "  Enter copia la entrada seleccionada, Ctrl+D la borra, Esc cierra.")
+		fmt.Fprintln(os.Stderr, "  Enter copia la entrada seleccionada, Ctrl+D la borra con cliphist, Esc cierra.")
 	}
 	backendName := flag.String("backend", "auto", "backend a usar: auto, cliphist, clipman o cliente")
 	flag.Parse()
@@ -43,6 +46,17 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "swayclip: %v\n", err)
+	}
+	if relaunched, launchErr := launcher.RelaunchInTerminalIfNeeded(
+		ui.IsInteractive(), cfg.Terminal, "swaydesk-clip", "swaydesk · portapapeles", 0, 0, os.Args[1:],
+	); relaunched {
+		if launchErr != nil {
+			message := "no se pudo abrir el portapapeles en una terminal: " + launchErr.Error()
+			fmt.Fprintf(os.Stderr, "swayclip: %s\n", message)
+			actions.Notification("swayclip", message, "critical")
+			os.Exit(1)
+		}
+		return
 	}
 	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 
@@ -60,8 +74,9 @@ func main() {
 	}
 	if len(items) == 0 {
 		fmt.Println("swayclip: el historial está vacío.")
-		fmt.Println("Asegúrate de tener en marcha:")
+		fmt.Println("Asegúrate de tener en marcha los vigilantes de texto e imágenes:")
 		fmt.Println("  wl-paste --type text --watch cliphist store")
+		fmt.Println("  wl-paste --type image --watch cliphist store")
 		return
 	}
 
@@ -96,35 +111,133 @@ type cliphist struct{}
 func (cliphist) name() string { return "cliphist" }
 
 func (cliphist) list() ([]clipItem, error) {
-	out, err := launcher.Output("cliphist", "list")
+	// Las versiones recientes de cliphist exponen el MIME junto al preview,
+	// lo que permite distinguir imágenes sin decodificar todo el historial.
+	out, err := launcher.Output("cliphist", "list", "-fields", "id,mime,preview")
+	if err != nil {
+		// Compatibilidad con versiones anteriores, cuyo formato es id + preview.
+		out, err = launcher.Output("cliphist", "list")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("cliphist list: %w", err)
 	}
+	return parseCliphistList(out), nil
+}
+
+func parseCliphistList(out string) []clipItem {
 	var items []clipItem
 	for _, line := range strings.Split(out, "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		id := ""
-		content := line
-		if i := strings.IndexByte(line, '\t'); i >= 0 {
-			id = line[:i]
-			content = line[i+1:]
+		fields := strings.SplitN(line, "\t", 3)
+		id, preview, mimeField := "", line, ""
+		raw := line
+		switch len(fields) {
+		case 3:
+			id, mimeField, preview = fields[0], fields[1], fields[2]
+			// El comando delete acepta el formato tradicional id + preview.
+			raw = id + "\t" + preview
+		case 2:
+			id, preview = fields[0], fields[1]
 		}
-		// cliphist sustituye los saltos de línea por la secuencia "\n".
-		readable := strings.ReplaceAll(content, "\\n", "\n")
+		mime := normalizeImageMIME(mimeField)
+		if mime == "" && mimeField == "" {
+			mime = imageMIMEFromText(preview)
+		}
+		if mime != "" {
+			format := strings.ToUpper(strings.TrimPrefix(mime, "image/"))
+			content := strings.TrimSpace(preview)
+			if content == "" {
+				content = mime
+			}
+			items = append(items, clipItem{
+				id: id, raw: raw, content: content + " " + mime,
+				label: "Imagen (" + format + ")",
+				hint: format + " · imagen", imageMIME: mime,
+			})
+			continue
+		}
+
+		// cliphist sustituye los saltos de línea por la secuencia "\\n".
+		readable := strings.ReplaceAll(preview, "\\n", "\n")
 		items = append(items, clipItem{
-			id: id, raw: line, content: readable,
+			id: id, raw: raw, content: readable,
 			label: firstLine(readable),
 			hint:  fmt.Sprintf("%s · %s", linesLabel(readable), humanBytes(len(readable))),
 		})
 	}
-	return items, nil
+	return items
+}
+
+func normalizeImageMIME(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if i := strings.IndexByte(value, ';'); i >= 0 {
+		value = value[:i]
+	}
+	value = strings.Trim(value, `[](){}<>,;:"'`)
+	if !strings.HasPrefix(value, "image/") {
+		return ""
+	}
+	return value
+}
+
+func imageMIMEFromText(text string) string {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	binaryPreview := strings.Contains(lower, "binary data")
+	if !binaryPreview && !strings.HasPrefix(lower, "image/") {
+		return ""
+	}
+	for _, field := range strings.Fields(text) {
+		if mime := normalizeImageMIME(field); mime != "" {
+			return mime
+		}
+	}
+	// Versiones antiguas de cliphist muestran las imágenes como, por ejemplo,
+	// "[[ binary data 24 KiB png 1920x1080 ]]" en vez de incluir el MIME.
+	if !binaryPreview {
+		return ""
+	}
+	for _, field := range strings.Fields(text) {
+		switch strings.ToLower(strings.Trim(field, "[](){}<>,;:")) {
+		case "png":
+			return "image/png"
+		case "jpeg", "jpg":
+			return "image/jpeg"
+		case "gif":
+			return "image/gif"
+		case "webp":
+			return "image/webp"
+		case "bmp":
+			return "image/bmp"
+		case "tiff", "tif":
+			return "image/tiff"
+		}
+	}
+	return ""
 }
 
 func (cliphist) copy(it clipItem) error {
-	cmd := exec.Command("sh", "-c", "cliphist decode "+it.id+" | wl-copy")
-	return cmd.Run()
+	decoded, err := exec.Command("cliphist", "decode", it.id).Output()
+	if err != nil {
+		return fmt.Errorf("cliphist decode: %w", err)
+	}
+	args := []string{}
+	if it.imageMIME != "" {
+		args = append(args, "--type", it.imageMIME)
+	}
+	cmd := exec.Command("wl-copy", args...)
+	cmd.Stdin = bytes.NewReader(decoded)
+	// Aísla el propietario del clipboard de la terminal que aloja swayclip;
+	// al cerrar la ventana no debe recibir señales de su grupo de procesos.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	// wl-copy bifurca para mantener viva la selección de Wayland. No hay que
+	// capturar stdout/stderr: CombinedOutput espera EOF de los descriptores que
+	// hereda el proceso residente y deja bloqueado Enter indefinidamente.
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("wl-copy: %w", err)
+	}
+	return nil
 }
 
 func (cliphist) remove(it clipItem) error {
@@ -164,7 +277,7 @@ func (clipman) copy(it clipItem) error {
 
 func (clipman) remove(it clipItem) error {
 	// clipman no permite borrar entradas concretas desde la CLI.
-	return fmt.Errorf("clipman no permite borrar entradas individuales")
+	return fmt.Errorf("clipman no permite borrar entradas individuales; instala cliphist para usar Ctrl+D")
 }
 
 // client es el modo mínimo: sólo muestra el contenido actual del portapapeles.
@@ -224,10 +337,11 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 		}
 	)
 	rebuild := func() {
-		sel.Items = nil
+		list := make([]ui.Item, 0, len(items))
 		for _, it := range items {
-			sel.Items = append(sel.Items, ui.Item{Key: it.id, Label: it.label, Hint: it.hint})
+			list = append(list, ui.Item{Key: it.id, Label: it.label, Hint: it.hint})
 		}
+		sel.SetItems(list)
 	}
 	rebuild()
 	applyFilter := func() {
@@ -268,7 +382,7 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 				}
 				actions.Notification("Portapapeles", "Entrada copiada", "low")
 				return true
-			case k.Ctrl && k.IsRune('d'):
+			case isDeleteShortcut(k):
 				if len(filter) == 0 {
 					return false
 				}
@@ -287,11 +401,11 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 				status = "entrada borrada"
 				rebuild()
 				applyFilter()
-			case k.Is("up") || (k.Ctrl && k.IsRune('p')):
+			case k.Is("up") || k.IsCtrlRune('p'):
 				if cursor > 0 {
 					cursor--
 				}
-			case k.Is("down") || (k.Ctrl && k.IsRune('n')):
+			case k.Is("down") || k.IsCtrlRune('n'):
 				if cursor < len(filter)-1 {
 					cursor++
 				}
@@ -306,7 +420,7 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 			case k.Is("backspace"):
 				sel.Backspace()
 				applyFilter()
-			case k.Ctrl && k.IsRune('u'):
+			case k.IsCtrlRune('u'):
 				sel.ClearFilter()
 				applyFilter()
 			case k.Rune >= 32 && !k.Ctrl && !k.Alt:
@@ -316,6 +430,10 @@ func run(theme *ui.Theme, cfg *config.Config, b backend, items []clipItem) {
 			return false
 		}, nil)
 }
+
+// isDeleteShortcut reconoce Ctrl+D aunque el decodificador también asigne
+// Name="ctrl+d" a las teclas de control.
+func isDeleteShortcut(k ui.Key) bool { return k.IsCtrlRune('d') }
 
 // viewClip dibuja la lista y la vista previa de la entrada seleccionada.
 func viewClip(t *ui.Theme, sel *ui.Selector, items []clipItem, cursor, offset int, status string, preview []string, w, h int) string {

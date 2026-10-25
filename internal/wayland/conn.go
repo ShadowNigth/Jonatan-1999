@@ -1,6 +1,7 @@
 package wayland
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -24,9 +25,13 @@ type Conn struct {
 	readBuf []byte
 	// pendingFds son descriptores recibidos pendientes de asignar.
 	pendingFds []int
-	// registryID es el objeto wl_registry.
+	// registryID es el objeto wl_registry. shmID conserva un único enlace a
+	// wl_shm durante la conexión; los paneles pueden reconstruir sus pools sin
+	// crear un objeto global nuevo por cada redimensionado.
 	registryID uint32
+	shmID      uint32
 	closed     bool
+	fatalErr   error
 }
 
 // object representa un objeto del protocolo con su escucha de eventos.
@@ -67,7 +72,14 @@ func NewConn() (*Conn, error) {
 		objects: map[uint32]*object{},
 		readBuf: make([]byte, 0, 64*1024),
 	}
-	c.objects[1] = &object{id: 1, iface: "wl_display"}
+	c.objects[1] = &object{id: 1, iface: "wl_display", handler: func(op uint16, d *decoder) {
+		switch op {
+		case displayErrorEvent:
+			c.fatalErr = Error{ObjectID: d.uint32(), Code: d.uint32(), Message: d.string()}
+		case displayDeleteID:
+			d.uint32() // los ids no se reutilizan, pero hay que consumir el evento
+		}
+	}}
 	return c, nil
 }
 
@@ -122,25 +134,49 @@ func (c *Conn) SendWithFD(msg []byte, fd int) error {
 }
 
 // Dispatch lee y procesa los mensajes disponibles, esperando como máximo timeout.
+// Un timeout cero o negativo sondea el socket sin bloquear.
 //
 // Devuelve el número de mensajes procesados.
 func (c *Conn) Dispatch(timeout time.Duration) (int, error) {
-	if timeout > 0 {
-		_ = c.nc.SetReadDeadline(time.Now().Add(timeout))
-	} else {
-		_ = c.nc.SetReadDeadline(time.Time{})
-	}
 	// Primero se procesa lo que quedó pendiente de la lectura anterior.
 	processed := c.drain()
+	if c.fatalErr != nil {
+		return processed, c.fatalErr
+	}
 
 	buf := make([]byte, 64*1024)
 	oob := make([]byte, syscall.CmsgSpace(4*8))
-	n, oobn, _, _, err := c.nc.ReadMsgUnix(buf, oob)
+	var n, oobn int
+	var err error
+	if timeout <= 0 {
+		// Un deadline cero en net.Conn significa «sin límite», no lectura
+		// inmediata. Los loops de Wayland usan Dispatch(0) para no bloquear
+		// el render/IPC mientras sondean eventos pendientes, así que usamos
+		// recvmsg(MSG_DONTWAIT) dentro del control seguro del descriptor.
+		n, oobn, err = c.readAvailable(buf, oob)
+	} else {
+		_ = c.nc.SetReadDeadline(time.Now().Add(timeout))
+		n, oobn, _, _, err = c.nc.ReadMsgUnix(buf, oob)
+	}
+	// Un Read puede devolver bytes y también un error (por ejemplo, EOF tras
+	// recibir el último evento); procesa siempre los bytes antes de propagarlo.
+	if n > 0 {
+		fds := parseFDs(oob[:oobn])
+		c.readBuf = append(c.readBuf, buf[:n]...)
+		c.pendingFds = append(c.pendingFds, fds...)
+		processed += c.drain()
+	}
+	if c.fatalErr != nil {
+		return processed, c.fatalErr
+	}
 	if err != nil {
+		if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) {
+			return processed, nil
+		}
 		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 			return processed, nil
 		}
-		if err == syscall.EINTR {
+		if errors.Is(err, syscall.EINTR) {
 			return processed, nil
 		}
 		return processed, err
@@ -148,11 +184,24 @@ func (c *Conn) Dispatch(timeout time.Duration) (int, error) {
 	if n == 0 {
 		return processed, fmt.Errorf("el compositor cerró la conexión")
 	}
-	fds := parseFDs(oob[:oobn])
-	c.readBuf = append(c.readBuf, buf[:n]...)
-	c.pendingFds = append(c.pendingFds, fds...)
-	processed += c.drain()
 	return processed, nil
+}
+
+// readAvailable lee un lote sin esperar a que llegue un evento. SyscallConn
+// mantiene el descriptor protegido mientras recvmsg usa MSG_DONTWAIT.
+func (c *Conn) readAvailable(buf, oob []byte) (int, int, error) {
+	raw, err := c.nc.SyscallConn()
+	if err != nil {
+		return 0, 0, err
+	}
+	var n, oobn int
+	var recvErr error
+	if err := raw.Control(func(fd uintptr) {
+		n, oobn, _, _, recvErr = syscall.Recvmsg(int(fd), buf, oob, syscall.MSG_DONTWAIT|syscall.MSG_CMSG_CLOEXEC)
+	}); err != nil {
+		return 0, 0, err
+	}
+	return n, oobn, recvErr
 }
 
 // drain procesa todos los mensajes completos del búfer de lectura.
@@ -299,14 +348,31 @@ func (c *Conn) GetRegistry() ([]Global, error) {
 	return c.globals, nil
 }
 
-// Bind crea un objeto local a partir de un global.
-func (c *Conn) Bind(g Global, version uint32, handler func(uint16, *decoder)) uint32 {
+// Bind enlaza un global anunciado por wl_registry y devuelve el id del objeto
+// cliente creado. El nombre del global no es un id de objeto y no debe usarse
+// para enviar solicitudes de interfaz.
+func (c *Conn) Bind(g Global, version uint32, handler func(uint16, *decoder)) (uint32, error) {
+	if version == 0 || version > g.Version {
+		return 0, fmt.Errorf("versión inválida de %s: %d (máxima anunciada: %d)", g.Interface, version, g.Version)
+	}
+	if c.registryID == 0 {
+		return 0, fmt.Errorf("no se puede enlazar %s antes de obtener wl_registry", g.Interface)
+	}
 	id := c.allocID(g.Interface, handler)
-	regID := c.registryID
-	msg := newEncoder(regID, registryBind).
+	msg := newEncoder(c.registryID, registryBind).
 		uint32(g.Name).string(g.Interface).uint32(version).newID(id).bytes()
-	_ = c.Send(msg)
-	return id
+	if err := c.Send(msg); err != nil {
+		delete(c.objects, id)
+		return 0, fmt.Errorf("enlazando %s: %w", g.Interface, err)
+	}
+	return id, nil
+}
+
+func versionAtMost(g Global, max uint32) uint32 {
+	if max > 0 && g.Version > max {
+		return max
+	}
+	return g.Version
 }
 
 // Error del compositor, recibido en wl_display.
@@ -317,7 +383,7 @@ type Error struct {
 }
 
 func (e Error) Error() string {
-	return fmt.Sprintf("error del compositor Wayland (objeto %d, código %d): %s", e.ObjectID, e.Code, e.Message)
+	return fmt.Sprintf("error de protocolo Wayland (objeto %d, código %d): %s", e.ObjectID, e.Code, e.Message)
 }
 
 // RegistryID devuelve el id del objeto registro.

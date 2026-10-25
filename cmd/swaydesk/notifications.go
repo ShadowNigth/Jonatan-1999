@@ -92,7 +92,11 @@ func notifyStatus(cfg *config.Config, args []string) {
 				_ = json.Unmarshal([]byte(s), &st)
 			}
 			fmt.Printf("\n  notificaciones · swaydesk\n")
-			fmt.Printf("  daemon       %s (D-Bus %s)\n", mark(running), notify.Iface)
+			daemonState := mark(running)
+			if !st.Ready {
+				daemonState = "iniciando"
+			}
+			fmt.Printf("  daemon       %s (D-Bus %s)\n", daemonState, notify.Iface)
 			fmt.Printf("  en pantalla  %d · pendientes %d\n", len(st.Visible), st.Pending)
 			dnd := "desactivado"
 			if st.DND {
@@ -243,7 +247,7 @@ func notifyPreview(cfg *config.Config, args []string) {
 		{ID: 2, App: "pacman", Summary: "Actualización pendiente",
 			Body: "12 paquetes nuevos, entre ellos el kernel", Urgency: notify.Critical,
 			Created: now, Progress: 42,
-			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Luego"}}},
+			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Más tarde"}}},
 	}
 	backdrop := !hasFlagArg(args, "transparent")
 	if err := writeNotifyPNGWith(cfg, items, out, backdrop); err != nil {

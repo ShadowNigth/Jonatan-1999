@@ -59,6 +59,49 @@ func writeMessage(t *testing.T, nc net.Conn, m *Message, serial uint32) {
 	}
 }
 
+func TestReadLoopHandlesUnpaddedBackToBackMessages(t *testing.T) {
+	client, server := net.Pipe()
+	conn := WrapConn(client)
+	t.Cleanup(func() {
+		_ = conn.Close()
+		_ = server.Close()
+	})
+
+	received := make(chan *Message, 2)
+	conn.SetSignalHandler(func(m *Message) { received <- m })
+	first, err := NewSignal("/test", "org.example.Test", "First", "s", "a").Encode(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewSignal("/test", "org.example.Test", "Second", "s", "b").Encode(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream := append(first, second...)
+	writeDone := make(chan error, 1)
+	go func() {
+		_, err := server.Write(stream)
+		writeDone <- err
+	}()
+
+	for i, want := range []string{"First", "Second"} {
+		select {
+		case m := <-received:
+			if m.Member != want {
+				t.Fatalf("mensaje %d: llegó %q, se esperaba %q", i+1, m.Member, want)
+			}
+			if len(m.Body) != 1 || m.Body[0] != []string{"a", "b"}[i] {
+				t.Fatalf("cuerpo del mensaje %q: %#v", want, m.Body)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("no llegó el mensaje %q", want)
+		}
+	}
+	if err := <-writeDone; err != nil {
+		t.Fatalf("escritura del flujo: %v", err)
+	}
+}
+
 func TestClientHello(t *testing.T) {
 	addr := fakeBus(t, func(br *bufio.Reader, nc net.Conn) {
 		msg, err := DecodeMessage(readMessage(t, br))

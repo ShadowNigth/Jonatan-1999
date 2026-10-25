@@ -33,8 +33,10 @@ func cmdOSD(args []string) {
 
 	switch sub {
 	case "":
-		fmt.Printf("enabled     = %v\n", cfg.OSDEnabled)
-		fmt.Printf("position    = %s\n", cfg.OSDPosition)
+		fmt.Printf("enabled             = %v  (volumen)\n", cfg.OSDEnabled)
+		fmt.Printf("media_enabled       = %v  (MPRIS)\n", cfg.OSDMediaEnabled)
+		fmt.Printf("media_timeout_ms    = %d\n", cfg.OSDMediaTimeout)
+		fmt.Printf("position            = %s\n", cfg.OSDPosition)
 		fmt.Printf("width       = %d\n", cfg.OSDWidth)
 		fmt.Printf("margin      = %d\n", cfg.OSDMargin)
 		fmt.Printf("padding     = %d\n", cfg.OSDPadding)

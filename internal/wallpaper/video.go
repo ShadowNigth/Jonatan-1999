@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -11,45 +12,78 @@ import (
 
 // VideoSource video: decodificación con ffmpeg.
 //
-// Un fondo de vídeo (incluidos los paquetes de Wallpaper Engine, que suelen ser
-// .mp4/.webm) se decodifica una vez a baja resolución y se mantiene en memoria.
-// Es suficiente para un fondo animado y evita lanzar procesos en cada fotograma.
+// El demonio intenta decodificar y escalar mediante VAAPI; usa escalado por
+// software o decodificación por software como respaldo. Entrega fotogramas BGRA
+// por una tubería acotada, sin cargar el clip entero.
 
-// ProbeVideo devuelve la duración y el tamaño del vídeo usando ffprobe.
-func ProbeVideo(path string) (time.Duration, int, error) {
+type videoMetadata struct {
+	duration time.Duration
+	width    int
+	height   int
+}
+
+func probeVideo(path string) (videoMetadata, error) {
 	if _, err := exec.LookPath("ffprobe"); err != nil {
-		return 0, 0, fmt.Errorf("se necesita ffprobe (paquete ffmpeg) para fondos de vídeo")
+		return videoMetadata{}, fmt.Errorf("se necesita ffprobe (paquete ffmpeg) para fondos de vídeo")
 	}
 	out, err := exec.Command("ffprobe", "-v", "error",
 		"-select_streams", "v:0",
-		"-show_entries", "stream=width,height,duration",
-		"-show_entries", "format=duration",
+		"-show_entries", "stream=width,height,duration:format=duration",
 		"-of", "default=noprint_wrappers=1", path).Output()
 	if err != nil {
-		return 0, 0, fmt.Errorf("ffprobe no pudo leer %s", path)
+		return videoMetadata{}, fmt.Errorf("ffprobe no pudo leer %s: %w", path, err)
 	}
-	var dur float64
-	var w int
+
+	var info videoMetadata
 	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if v, ok := strings.CutPrefix(line, "duration="); ok {
-			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
-				dur = f
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "width":
+			info.width, _ = strconv.Atoi(value)
+		case "height":
+			info.height, _ = strconv.Atoi(value)
+		case "duration":
+			if seconds, err := strconv.ParseFloat(value, 64); err == nil && seconds > 0 {
+				info.duration = time.Duration(seconds * float64(time.Second))
 			}
 		}
-		if v, ok := strings.CutPrefix(line, "width="); ok {
-			w, _ = strconv.Atoi(v)
-		}
 	}
-	if dur == 0 {
-		dur = 5
+	if info.width < 1 || info.height < 1 {
+		return videoMetadata{}, fmt.Errorf("ffprobe no pudo determinar el tamaño del vídeo %s", path)
 	}
-	return time.Duration(dur * float64(time.Second)), w, nil
+	if info.duration <= 0 {
+		info.duration = 5 * time.Second
+	}
+	return info, nil
 }
 
-// DecodeVideo decodifica el vídeo a `fps` fotogramas por segundo con un ancho
-// máximo de `width` píxeles. Devuelve los fotogramas en formato RGB (3 bytes
-// por píxel).
+// ProbeVideo devuelve la duración y el ancho del vídeo usando ffprobe.
+func ProbeVideo(path string) (time.Duration, int, error) {
+	info, err := probeVideo(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	return info.duration, info.width, nil
+}
+
+// scaledVideoHeight calcula la altura par que usa scale=ancho:-2 en ffmpeg.
+func scaledVideoHeight(sourceWidth, sourceHeight, width int) int {
+	if sourceWidth < 1 || sourceHeight < 1 || width < 1 {
+		return 0
+	}
+	height := int(math.Round(float64(width) * float64(sourceHeight) / float64(sourceWidth) / 2)) * 2
+	if height < 2 {
+		height = 2
+	}
+	return height
+}
+
+// DecodeVideo decodifica hasta 30 segundos a `fps` fotogramas por segundo y
+// a un ancho máximo de `width`. Se conserva como utilidad para consumidores
+// puntuales; el demonio usa el decodificador en streaming de engine.go.
 func DecodeVideo(path string, width, fps int) ([][]uint8, int, int, time.Duration, error) {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return nil, 0, 0, 0, fmt.Errorf("se necesita ffmpeg para los fondos de vídeo")
@@ -60,12 +94,17 @@ func DecodeVideo(path string, width, fps int) ([][]uint8, int, int, time.Duratio
 	if fps <= 0 {
 		fps = 15
 	}
-	// Se limita la duración a 30 s para no consumir memoria sin control.
+	info, err := probeVideo(path)
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+	height := scaledVideoHeight(info.width, info.height, width)
 	args := []string{
 		"-v", "error",
-		"-t", "30",
 		"-i", path,
-		"-vf", fmt.Sprintf("fps=%d,scale=%d:-2", fps, width),
+		"-t", "30",
+		"-an", "-sn", "-dn",
+		"-vf", fmt.Sprintf("fps=%d,scale=%d:%d", fps, width, height),
 		"-pix_fmt", "rgb24",
 		"-f", "rawvideo", "-",
 	}
@@ -76,51 +115,20 @@ func DecodeVideo(path string, width, fps int) ([][]uint8, int, int, time.Duratio
 	if err != nil {
 		return nil, 0, 0, 0, fmt.Errorf("ffmpeg: %v (%s)", err, strings.TrimSpace(stderr.String()))
 	}
-	dur, srcW, err := ProbeVideo(path)
-	if err != nil {
-		return nil, 0, 0, 0, err
-	}
-	_ = srcW
-	// El alto se deduce del tamaño total: ancho fijo, alto múltiplo par.
-	if width == 0 || len(out) == 0 {
+	if len(out) == 0 {
 		return nil, 0, 0, 0, fmt.Errorf("el vídeo no contiene fotogramas")
 	}
-	height := 0
-	// Se busca un alto que haga que el total sea múltiplo de w*h*3 probando
-	// divisores razonables (el escalado -2 garantiza par).
-	for _, h := range candidateHeights(len(out), width) {
-		if len(out)%(width*h*3) == 0 {
-			height = h
-			break
-		}
-	}
-	if height == 0 {
-		return nil, 0, 0, 0, fmt.Errorf("no se pudo determinar el tamaño de los fotogramas")
-	}
 	frameSize := width * height * 3
+	if frameSize <= 0 || len(out)%frameSize != 0 {
+		return nil, 0, 0, 0, fmt.Errorf("ffmpeg devolvió %d bytes para fotogramas de %dx%d", len(out), width, height)
+	}
 	count := len(out) / frameSize
 	frames := make([][]uint8, 0, count)
 	for i := 0; i < count; i++ {
-		f := make([]uint8, frameSize)
-		copy(f, out[i*frameSize:(i+1)*frameSize])
-		frames = append(frames, f)
+		frame := make([]uint8, frameSize)
+		copy(frame, out[i*frameSize:(i+1)*frameSize])
+		frames = append(frames, frame)
 	}
-	if len(frames) > 0 {
-		dur = time.Duration(len(frames)) * time.Second / time.Duration(fps)
-	}
-	return frames, width, height, dur, nil
-}
-
-// candidateHeights propone alturas probables para el búfer de vídeo.
-func candidateHeights(total, width int) []int {
-	var out []int
-	for h := 32; h <= 2000; h += 2 {
-		if total%(width*h*3) == 0 {
-			out = append(out, h)
-			if len(out) >= 4 {
-				break
-			}
-		}
-	}
-	return out
+	duration := time.Duration(count) * time.Second / time.Duration(fps)
+	return frames, width, height, duration, nil
 }

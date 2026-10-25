@@ -26,7 +26,7 @@ func Pick(theme *ui.Theme, title string, items []ui.Item, opts SelectorOptions) 
 	defer sc.Close()
 
 	sel := ui.NewSelector(theme, title, items)
-	sel.Filter = opts.Filter
+	sel.SetFilter(opts.Filter)
 	sel.Multi = opts.Multi
 	if opts.Placeholder != "" {
 		sel.Placeholder = opts.Placeholder
@@ -42,9 +42,9 @@ func Pick(theme *ui.Theme, title string, items []ui.Item, opts SelectorOptions) 
 			case k.Is("enter"):
 				accepted = true
 				return true
-			case k.Is("up") || (k.Ctrl && k.IsRune('p')):
+			case k.Is("up") || k.IsCtrlRune('p'):
 				sel.Move(-1)
-			case k.Is("down") || (k.Ctrl && k.IsRune('n')):
+			case k.Is("down") || k.IsCtrlRune('n'):
 				sel.Move(1)
 			case k.Is("pgup"):
 				sel.Move(-10)
@@ -56,17 +56,16 @@ func Pick(theme *ui.Theme, title string, items []ui.Item, opts SelectorOptions) 
 				sel.Cursor = len(sel.Filtered()) - 1
 			case k.Is("backspace"):
 				sel.Backspace()
-			case k.Ctrl && k.IsRune('u'):
+			case k.IsCtrlRune('u'):
 				sel.ClearFilter()
-			case k.Ctrl && k.IsRune('w'):
+			case k.IsCtrlRune('w'):
 				// Borra la última palabra del filtro.
 				f := strings.TrimRight(sel.Filter, " ")
 				if i := strings.LastIndexByte(f, ' '); i >= 0 {
-					sel.Filter = f[:i+1]
+					sel.SetFilter(f[:i+1])
 				} else {
-					sel.Filter = ""
+					sel.SetFilter("")
 				}
-				sel.Cursor, sel.Offset = 0, 0
 			case k.Is("space") && opts.Multi:
 				sel.ToggleMarks()
 			case k.IsRune(' ') && opts.Multi:

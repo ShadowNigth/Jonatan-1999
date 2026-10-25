@@ -75,7 +75,7 @@ func (c *Conn) Subscribe(events ...string) error {
 func (c *Conn) Next() (*Event, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.closed {
+	if c.closed.Load() {
 		return nil, ErrClosed
 	}
 	if c.timeout > 0 {

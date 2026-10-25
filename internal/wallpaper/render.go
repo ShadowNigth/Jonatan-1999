@@ -6,10 +6,13 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/ShadowNigth/swaydesk/internal/ui"
 )
 
 // Renderer de imágenes: convierte fotogramas RGB (escenas o GIF) en secuencias
@@ -50,14 +53,37 @@ func (a *ANSIRenderer) RenderImage(img image.Image, w, h int) string {
 }
 
 // ImageToCanvas convierte una imagen a un Canvas del tamaño en celdas indicado
-// (h son filas de caracteres; el lienzo tendrá 2·h píxeles de alto).
+// (h son filas de caracteres; el lienzo tendrá 2·h píxeles de alto). Usa un
+// remuestreo rápido para no elevar el coste de reproducir fondos animados.
 func ImageToCanvas(img image.Image, w, h int) *Canvas {
+	return imageToCanvas(img, w, h, 0, 0, 0, false)
+}
+
+// ImageToCanvasWithBackground compone las zonas transparentes sobre el color de
+// fondo indicado y suaviza el remuestreo; está pensado para vistas previas.
+func ImageToCanvasWithBackground(img image.Image, w, h int, background ui.Color) *Canvas {
+	return imageToCanvasWithBackground(img, w, h, background, true)
+}
+
+func imageToCanvasWithBackground(img image.Image, w, h int, background ui.Color, smooth bool) *Canvas {
+	if background == "" {
+		background = "#000000"
+	}
+	r, g, b := hexRGB(background)
+	return imageToCanvas(img, w, h, clamp8(r), clamp8(g), clamp8(b), smooth)
+}
+
+func imageToCanvas(img image.Image, w, h int, bgR, bgG, bgB uint8, smooth bool) *Canvas {
 	if img == nil || w <= 0 || h <= 0 {
 		return &Canvas{W: 1, H: 1, Pix: make([]uint8, 3)}
 	}
+	bounds := img.Bounds()
+	sw, sh := bounds.Dx(), bounds.Dy()
+	if sw <= 0 || sh <= 0 {
+		return &Canvas{W: 1, H: 1, Pix: make([]uint8, 3)}
+	}
 	c := &Canvas{W: w, H: h * 2, Pix: make([]uint8, w*h*2*3)}
-	b := img.Bounds()
-	sw, sh := b.Dx(), b.Dy()
+
 	// La imagen se recorta al centro para respetar la proporción del área.
 	targetRatio := float64(w) / float64(h) * 0.5
 	srcRatio := float64(sw) / float64(sh)
@@ -70,23 +96,80 @@ func ImageToCanvas(img image.Image, w, h int) *Canvas {
 	offX := (float64(sw) - cropW) / 2
 	offY := (float64(sh) - cropH) / 2
 	for y := 0; y < c.H; y++ {
-		for x := 0; x < w; x++ {
-			sx := b.Min.X + int(offX+(float64(x)+0.5)*cropW/float64(w))
-			sy := b.Min.Y + int(offY+(float64(y)+0.5)*cropH/float64(c.H))
-			if sx >= b.Max.X {
-				sx = b.Max.X - 1
+		sy := float64(bounds.Min.Y) + offY + (float64(y)+0.5)*cropH/float64(c.H)
+		for x := 0; x < c.W; x++ {
+			sx := float64(bounds.Min.X) + offX + (float64(x)+0.5)*cropW/float64(c.W)
+			var r, g, b, a float64
+			if smooth {
+				r, g, b, a = sampleBilinearRGBA(img, bounds, sx-0.5, sy-0.5)
+			} else {
+				r, g, b, a = sampleNearestRGBA(img, bounds, sx, sy)
 			}
-			if sy >= b.Max.Y {
-				sy = b.Max.Y - 1
-			}
-			r, g, bl, _ := img.At(sx, sy).RGBA()
-			i := (y*w + x) * 3
-			c.Pix[i] = uint8(r >> 8)
-			c.Pix[i+1] = uint8(g >> 8)
-			c.Pix[i+2] = uint8(bl >> 8)
+			i := (y*c.W + x) * 3
+			c.Pix[i] = clamp8(r + float64(bgR)*(1-a))
+			c.Pix[i+1] = clamp8(g + float64(bgG)*(1-a))
+			c.Pix[i+2] = clamp8(b + float64(bgB)*(1-a))
 		}
 	}
 	return c
+}
+
+func sampleNearestRGBA(img image.Image, bounds image.Rectangle, x, y float64) (r, g, b, a float64) {
+	px, py := int(math.Floor(x)), int(math.Floor(y))
+	if px < bounds.Min.X {
+		px = bounds.Min.X
+	} else if px >= bounds.Max.X {
+		px = bounds.Max.X - 1
+	}
+	if py < bounds.Min.Y {
+		py = bounds.Min.Y
+	} else if py >= bounds.Max.Y {
+		py = bounds.Max.Y - 1
+	}
+	cr, cg, cb, ca := img.At(px, py).RGBA()
+	return float64(cr) / 257, float64(cg) / 257, float64(cb) / 257, float64(ca) / 65535
+}
+
+// sampleBilinearRGBA interpola canales RGBA premultiplicados. El alfa se
+// devuelve normalizado para componer luego sobre el fondo de la paleta.
+func sampleBilinearRGBA(img image.Image, bounds image.Rectangle, x, y float64) (r, g, b, a float64) {
+	clampCoord := func(value float64, min, max int) float64 {
+		if value < float64(min) {
+			return float64(min)
+		}
+		if value > float64(max-1) {
+			return float64(max - 1)
+		}
+		return value
+	}
+	x = clampCoord(x, bounds.Min.X, bounds.Max.X)
+	y = clampCoord(y, bounds.Min.Y, bounds.Max.Y)
+	x0, y0 := int(math.Floor(x)), int(math.Floor(y))
+	x1, y1 := x0+1, y0+1
+	if x1 >= bounds.Max.X {
+		x1 = bounds.Max.X - 1
+	}
+	if y1 >= bounds.Max.Y {
+		y1 = bounds.Max.Y - 1
+	}
+	dx, dy := x-float64(x0), y-float64(y0)
+	channels := func(px, py int) (float64, float64, float64, float64) {
+		cr, cg, cb, ca := img.At(px, py).RGBA()
+		return float64(cr) / 257, float64(cg) / 257, float64(cb) / 257, float64(ca) / 65535
+	}
+	c00r, c00g, c00b, c00a := channels(x0, y0)
+	c10r, c10g, c10b, c10a := channels(x1, y0)
+	c01r, c01g, c01b, c01a := channels(x0, y1)
+	c11r, c11g, c11b, c11a := channels(x1, y1)
+	mix := func(v00, v10, v01, v11 float64) float64 {
+		top := v00*(1-dx) + v10*dx
+		bottom := v01*(1-dx) + v11*dx
+		return top*(1-dy) + bottom*dy
+	}
+	return mix(c00r, c10r, c01r, c11r),
+		mix(c00g, c10g, c01g, c11g),
+		mix(c00b, c10b, c01b, c11b),
+		mix(c00a, c10a, c01a, c11a)
 }
 
 // ─── Protocolos de imágenes del terminal ────────────────────────────────────

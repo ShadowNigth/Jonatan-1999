@@ -15,6 +15,9 @@ func (f *Face) Each(s string, scale, spacing int, fn func(x, y int)) {
 	cell := (f.W + spacing) * scale
 	cx := 0
 	for _, r := range s {
+		if isNonRenderingRune(r) {
+			continue
+		}
 		rows := f.Glyph(r)
 		for y := 0; y < f.H && y < len(rows); y++ {
 			row := rows[y]

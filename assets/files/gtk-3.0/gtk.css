@@ -1,0 +1,55 @@
+/* Paleta swaydesk para Thunar y otras aplicaciones GTK 3.
+ * Se regenera con `swaydesk theme <paleta>` o `swaydesk apply`.
+ */
+/* BEGIN SWAYDESK GTK PALETTE */
+@define-color swaydesk_bg {{THEME_BG_HEX}};
+@define-color swaydesk_bg_alt {{THEME_BG_ALT_HEX}};
+@define-color swaydesk_bg_sel {{THEME_BG_SEL_HEX}};
+@define-color swaydesk_fg {{THEME_FG_HEX}};
+@define-color swaydesk_fg_dim {{THEME_FG_DIM_HEX}};
+@define-color swaydesk_accent {{THEME_ACCENT_HEX}};
+@define-color swaydesk_border {{THEME_BORDER_HEX}};
+
+window, .background {
+  background-color: @swaydesk_bg;
+  color: @swaydesk_fg;
+}
+
+headerbar, .titlebar {
+  background-color: @swaydesk_bg_alt;
+  color: @swaydesk_fg;
+}
+
+.sidebar, .sidebar .view {
+  background-color: @swaydesk_bg;
+  color: @swaydesk_fg;
+}
+
+.view, treeview.view {
+  background-color: @swaydesk_bg_alt;
+  color: @swaydesk_fg;
+}
+
+.view:selected, treeview.view:selected, iconview.view:selected {
+  background-color: @swaydesk_accent;
+  color: @swaydesk_bg;
+}
+
+entry, spinbutton, textview {
+  background-color: @swaydesk_bg_alt;
+  color: @swaydesk_fg;
+}
+
+button {
+  color: @swaydesk_fg;
+  border-color: @swaydesk_border;
+}
+
+button:hover {
+  background-color: @swaydesk_bg_sel;
+}
+
+.dim-label, .subtitle {
+  color: @swaydesk_fg_dim;
+}
+/* END SWAYDESK GTK PALETTE */

@@ -35,7 +35,7 @@ func New(opt Options) *Renderer {
 		opt.Width = 260
 	}
 	if opt.Padding <= 0 {
-		opt.Padding = 16
+		opt.Padding = 12
 	}
 	if opt.Radius < 0 {
 		opt.Radius = 0
@@ -78,12 +78,26 @@ func (r *Renderer) lineH(scale int) int {
 	return r.rows(scale) + lead
 }
 
-// valueScale es la escala del número grande.
+// valueScale es la escala del valor destacado.
 func (r *Renderer) valueScale() int {
 	if r.sc < 3 {
 		return r.sc + 1
 	}
 	return r.sc
+}
+
+// valueScaleFor reduce el texto de silencio si hace falta para mostrarlo
+// completo dentro del ancho disponible, incluso con fuentes PSF grandes.
+func (r *Renderer) valueScaleFor(s State) int {
+	scale := r.valueScale()
+	if !s.Muted {
+		return scale
+	}
+	inner := r.Opt.Width - 2*r.Opt.Padding
+	for scale > 1 && bar.TextWidth(r.face, s.ValueText(), scale, scale) > inner {
+		scale--
+	}
+	return scale
 }
 
 // barH es el alto de la barra de nivel.
@@ -95,15 +109,27 @@ func (r *Renderer) barH() int {
 	return h
 }
 
-// Size devuelve el tamaño de la tarjeta, que depende de la fuente y de si hay
-// que mostrar el nombre del dispositivo.
+// textFitsInline indica si el título y el valor caben en la misma fila.
+func (r *Renderer) textFitsInline(s State) bool {
+	inner := r.Opt.Width - 2*r.Opt.Padding
+	if inner <= 0 {
+		return false
+	}
+	labelWidth := bar.TextWidth(r.face, strings.ToUpper(s.Label()), r.sc, r.sc)
+	scale := r.valueScaleFor(s)
+	valueWidth := bar.TextWidth(r.face, s.ValueText(), scale, scale)
+	return labelWidth+4*r.sc+valueWidth <= inner
+}
+
+// Size devuelve el tamaño compacto de la tarjeta y reserva otra fila cuando
+// el título y el valor no caben juntos (por ejemplo, «VOLUMEN» y «Silencio»).
 func (r *Renderer) Size(s State) (int, int) {
 	h := 2 * r.Opt.Padding
-	h += r.lineH(r.valueScale())
+	h += r.lineH(r.valueScaleFor(s))
 	h += 4 * r.sc
 	h += r.barH()
-	if s.Detail() != "" {
-		h += 3*r.sc + r.lineH(r.sc)
+	if !r.textFitsInline(s) {
+		h += r.lineH(r.sc) + 2*r.sc
 	}
 	return r.Opt.Width, h
 }
@@ -118,6 +144,7 @@ func (r *Renderer) Render(s State, alpha float64) *bar.Canvas {
 		alpha = 1
 	}
 	w, h := r.Size(s)
+	valueScale := r.valueScaleFor(s)
 	c := bar.NewCanvas(w, h)
 	if alpha <= 0 {
 		return c
@@ -134,10 +161,16 @@ func (r *Renderer) Render(s State, alpha float64) *bar.Canvas {
 	inner := w - 2*pad
 	y := pad
 
-	// Primera fila: qué es a la izquierda y el valor en grande a la derecha.
-	// La etiqueta se alinea abajo para compartir la línea base con el número.
+	// El título y el valor comparten fila mientras haya espacio; si no, se
+	// apilan para evitar que «VOLUMEN» y «Silencio» se pisen.
 	label := strings.ToUpper(s.Label())
-	c.Text(r.face, x, y+r.lineH(r.valueScale())-r.lineH(r.sc), label, r.sc, r.sc, muted)
+	inline := r.textFitsInline(s)
+	if inline {
+		c.Text(r.face, x, y+r.lineH(valueScale)-r.lineH(r.sc), label, r.sc, r.sc, muted)
+	} else {
+		c.Text(r.face, x, y, label, r.sc, r.sc, muted)
+		y += r.lineH(r.sc) + 2*r.sc
+	}
 
 	col := accent
 	switch {
@@ -147,13 +180,17 @@ func (r *Renderer) Render(s State, alpha float64) *bar.Canvas {
 		col = warn
 	}
 	valor := s.ValueText()
-	vw := bar.TextWidth(r.face, valor, r.valueScale(), r.valueScale())
+	vw := bar.TextWidth(r.face, valor, valueScale, valueScale)
 	if vw > inner {
-		valor = ui.Truncate(valor, inner/((r.face.W+r.valueScale())*r.valueScale()))
-		vw = bar.TextWidth(r.face, valor, r.valueScale(), r.valueScale())
+		valor = ui.Truncate(valor, inner/((r.face.W+valueScale)*valueScale))
+		vw = bar.TextWidth(r.face, valor, valueScale, valueScale)
 	}
-	c.Text(r.face, x+inner-vw, y, valor, r.valueScale(), r.valueScale(), col)
-	y += r.lineH(r.valueScale()) + 4*r.sc
+	valueX := x + inner - vw
+	if !inline {
+		valueX = x + (inner-vw)/2
+	}
+	c.Text(r.face, valueX, y, valor, valueScale, valueScale, col)
+	y += r.lineH(valueScale) + 4*r.sc
 
 	// Barra de nivel segmentada.
 	track := border
@@ -189,12 +226,6 @@ func (r *Renderer) Render(s State, alpha float64) *bar.Canvas {
 	}
 	y += bh
 
-	// Dispositivo de salida, si se conoce.
-	if d := s.Detail(); d != "" {
-		y += 3 * r.sc
-		d = ui.Truncate(d, inner/((r.face.W+r.sc)*r.sc))
-		c.Text(r.face, x, y, d, r.sc, r.sc, muted)
-	}
 	return c
 }
 

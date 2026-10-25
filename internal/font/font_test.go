@@ -85,6 +85,34 @@ func TestEachAndMeasure(t *testing.T) {
 	}
 }
 
+func TestGlyphFallbackForEllipsisAndTypographicPunctuation(t *testing.T) {
+	face := &Face{W: 5, H: 1, glyphs: map[rune][]uint8{
+		'.': {0x10}, '?': {0x20}, '-': {0x30}, '\'': {0x40},
+	}}
+	if !bytes.Equal(face.Glyph('…'), face.Glyph('.')) {
+		t.Fatal("la elipsis sin glifo debe verse como un punto, no como un signo de interrogación")
+	}
+	if !bytes.Equal(face.Glyph('—'), face.Glyph('-')) {
+		t.Fatal("la raya larga debería usar el guion ASCII como reserva")
+	}
+	if !bytes.Equal(face.Glyph('’'), face.Glyph('\'')) {
+		t.Fatal("la comilla tipográfica debería usar la comilla ASCII como reserva")
+	}
+}
+
+func TestMeasureSkipsControlsAndCombiningMarks(t *testing.T) {
+	face := Builtin()
+	for _, test := range []struct{ with, plain string }{
+		{"e\u0301", "e"},
+		{"A\x01B", "AB"},
+		{"A\u200dB", "AB"},
+	} {
+		if got, want := face.Measure(test.with, 1, 1), face.Measure(test.plain, 1, 1); got != want {
+			t.Errorf("Measure(%q) = %d, quería %d como %q", test.with, got, want, test.plain)
+		}
+	}
+}
+
 func TestAccentFallback(t *testing.T) {
 	f := Builtin()
 	if string(f.Glyph('á')) != string(f.Glyph('a')) {
@@ -113,18 +141,17 @@ func buildPSF2(width, height, count int, withUnicode bool) []byte {
 	binary.LittleEndian.PutUint32(header[28:], uint32(width))
 
 	glyphs := make([]byte, charSize*count)
-	// El glifo 0 lleva la primera fila encendida para poder comprobarlo.
-	glyphs[0] = 0xff
+	// Cada glifo tiene un patrón distinto para verificar los alias Unicode.
+	for i := 0; i < count && i < 8; i++ {
+		glyphs[i*charSize] = byte(0x80 >> i)
+	}
 
 	out := append(header, glyphs...)
 	if withUnicode {
-		// Tabla: secuencia 0xFFFE "A" "B" 0xFFFF, luego un código suelto.
-		table := []uint16{0xFFFE, 'A', 'B', 0xFFFF, 'Z'}
-		for _, v := range table {
-			var b [2]byte
-			binary.LittleEndian.PutUint16(b[:], v)
-			out = append(out, b[:]...)
-		}
+		// PSF2 usa UTF-8 y 0xFF como separador de cada glifo. B y ñ
+		// comparten el segundo glifo como dos alias independientes.
+		table := []byte{'A', 0xFF, 'B', 0xC3, 0xB1, 0xFF, 'Z', 0xFF, 'Q', 0xFF}
+		out = append(out, table...)
 	}
 	return out
 }
@@ -145,16 +172,55 @@ func TestLoadPSF2(t *testing.T) {
 	if f.Name != "test.psf" {
 		t.Fatalf("nombre %q", f.Name)
 	}
-	// La secuencia de la tabla Unicode asigna A y B al primer glifo.
-	if string(f.Glyph('A')) != string(f.Glyph(rune(0))) {
-		t.Fatal("la tabla Unicode no mapeó la A")
+	if got := f.Glyph('A')[0]; got != 0x80 {
+		t.Fatalf("A se asignó al glifo equivocado: primer byte %02x", got)
 	}
-	if string(f.Glyph('B')) != string(f.Glyph(rune(0))) {
-		t.Fatal("la tabla Unicode no mapeó la B")
+	if got := f.Glyph('B')[0]; got != 0x40 {
+		t.Fatalf("B se asignó al glifo equivocado: primer byte %02x", got)
 	}
-	// El código suelto posterior va al glifo siguiente.
-	if string(f.Glyph('Z')) != string(f.Glyph(rune(1))) {
-		t.Fatal("la tabla Unicode no mapeó la Z")
+	if got := f.Glyph('ñ')[0]; got != 0x40 {
+		t.Fatalf("el alias UTF-8 ñ se asignó al glifo equivocado: %02x", got)
+	}
+	if got := f.Glyph('Z')[0]; got != 0x20 {
+		t.Fatalf("Z se asignó al glifo equivocado: primer byte %02x", got)
+	}
+	if _, ok := f.glyphs['C']; ok {
+		t.Fatal("la tabla Unicode no debe inventar un alias ASCII según el índice del glifo")
+	}
+}
+
+func TestPSF2UnicodeSequenceKeepsOnlyItsFirstRune(t *testing.T) {
+	face := &Face{glyphs: make(map[rune][]uint8)}
+	glyphs := [][]uint8{{0x80}}
+	if err := applyPSF2UnicodeTable(face, []byte{0xFE, 'f', 'i', 0xFF}, glyphs); err != nil {
+		t.Fatal(err)
+	}
+	if face.glyphs['f'][0] != 0x80 {
+		t.Fatal("la primera runa de la secuencia debe conservar su alias individual")
+	}
+	if _, ok := face.glyphs['i']; ok {
+		t.Fatal("la continuación de la secuencia no debe convertirse en alias del glifo")
+	}
+}
+
+func TestPSF1UnicodeTableMapsAliases(t *testing.T) {
+	face := &Face{glyphs: make(map[rune][]uint8)}
+	glyphs := [][]uint8{{0x80}, {0x40}}
+	var table []byte
+	for _, codepoint := range []uint16{'A', 'Á', 0xFFFE, 'f', 'i', 0xFFFF, 'B', 0xFFFF} {
+		var word [2]byte
+		binary.LittleEndian.PutUint16(word[:], codepoint)
+		table = append(table, word[:]...)
+	}
+	applyPSF1UnicodeTable(face, table, glyphs)
+	if face.glyphs['A'][0] != 0x80 || face.glyphs['Á'][0] != 0x80 || face.glyphs['B'][0] != 0x40 {
+		t.Fatal("la tabla PSF1 no asoció correctamente los alias a sus glifos")
+	}
+	if face.glyphs['f'][0] != 0x80 {
+		t.Fatal("la primera runa de la secuencia PSF1 debe conservar su alias individual")
+	}
+	if _, ok := face.glyphs['i']; ok {
+		t.Fatal("la continuación de una secuencia PSF1 no debe ser alias independiente")
 	}
 }
 

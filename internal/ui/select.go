@@ -31,6 +31,9 @@ type Selector struct {
 	// Se usa cuando la aplicación construye la lista de resultados por su
 	// cuenta (por ejemplo, la calculadora del lanzador).
 	BypassFilter bool
+
+	filtered      []Item
+	filteredValid bool
 }
 
 // NewSelector crea un selector con las entradas indicadas.
@@ -42,19 +45,55 @@ func NewSelector(theme *Theme, title string, items []Item) *Selector {
 	}
 }
 
+// SetItems reemplaza la lista y descarta los resultados de búsqueda anteriores.
+func (s *Selector) SetItems(items []Item) {
+	s.Items = items
+	s.Cursor, s.Offset = 0, 0
+	s.invalidateFiltered()
+}
+
+// SetFilter cambia el texto de búsqueda y reinicia la selección.
+func (s *Selector) SetFilter(filter string) {
+	if s.Filter != filter {
+		s.Filter = filter
+		s.invalidateFiltered()
+	}
+	s.Cursor, s.Offset = 0, 0
+}
+
+// SetBypassFilter permite mostrar Items sin filtrar (p. ej., una calculadora).
+func (s *Selector) SetBypassFilter(bypass bool) {
+	if s.BypassFilter == bypass {
+		return
+	}
+	s.BypassFilter = bypass
+	s.invalidateFiltered()
+}
+
+func (s *Selector) invalidateFiltered() {
+	s.filtered = nil
+	s.filteredValid = false
+}
+
 // Filtered devuelve las entradas que coinciden con el filtro, ya ordenadas.
+// El resultado se conserva hasta que cambie el filtro o la lista.
 func (s *Selector) Filtered() []Item {
+	if s.filteredValid {
+		return s.filtered
+	}
 	if s.BypassFilter || strings.TrimSpace(s.Filter) == "" {
-		return s.Items
+		s.filtered = s.Items
+	} else {
+		idx := FilterItems(s.Items, s.Filter, func(it Item) []string {
+			return []string{it.Label, it.Hint, it.Group}
+		})
+		s.filtered = make([]Item, 0, len(idx))
+		for _, i := range idx {
+			s.filtered = append(s.filtered, s.Items[i])
+		}
 	}
-	idx := FilterItems(s.Items, s.Filter, func(it Item) []string {
-		return []string{it.Label, it.Hint, it.Group}
-	})
-	out := make([]Item, 0, len(idx))
-	for _, i := range idx {
-		out = append(out, s.Items[i])
-	}
-	return out
+	s.filteredValid = true
+	return s.filtered
 }
 
 // Selected devuelve la entrada bajo el cursor.
@@ -90,9 +129,7 @@ func (s *Selector) Move(delta int) {
 
 // Type añade texto al filtro.
 func (s *Selector) Type(r rune) {
-	s.Filter += string(r)
-	s.Cursor = 0
-	s.Offset = 0
+	s.SetFilter(s.Filter + string(r))
 }
 
 // Backspace borra el último carácter del filtro.
@@ -101,16 +138,13 @@ func (s *Selector) Backspace() {
 		return
 	}
 	r := []rune(s.Filter)
-	s.Filter = string(r[:len(r)-1])
-	s.Cursor = 0
-	s.Offset = 0
+	s.SetFilter(string(r[:len(r)-1]))
 }
 
 // ClearFilter vacía el filtro.
 func (s *Selector) ClearFilter() {
-	s.Filter = ""
-	s.Cursor = 0
-	s.Offset = 0
+	s.SetFilter("")
+	s.Cursor, s.Offset = 0, 0
 }
 
 // ensureVisible ajusta el desplazamiento para que el cursor quede a la vista.

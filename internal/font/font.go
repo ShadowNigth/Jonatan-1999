@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // Face es una fuente de mapa de bits ya cargada.
@@ -29,8 +30,16 @@ type Face struct {
 // Glyph devuelve el mapa de bits de un carácter: H filas de W bits (1 = píxel
 // encendido), empaquetados en bytes con el bit más significativo a la izquierda.
 func (f *Face) Glyph(r rune) []byte {
+	if isNonRenderingRune(r) {
+		return f.glyphs[' ']
+	}
 	if b, ok := f.glyphs[r]; ok {
 		return b
+	}
+	if fallback, ok := punctuationFallback(r); ok {
+		if b, exists := f.glyphs[fallback]; exists {
+			return b
+		}
 	}
 	// Se prueban variantes razonables antes de rendirse con el bloque lleno.
 	if f.upper {
@@ -52,14 +61,51 @@ func (f *Face) Glyph(r rune) []byte {
 	return f.glyphs[' ']
 }
 
+// isNonRenderingRune filtra controles, marcas sin ancho propio y caracteres
+// de formato (por ejemplo, selectores de emoji o marcas bidireccionales).
+func isNonRenderingRune(r rune) bool {
+	return unicode.IsControl(r) || unicode.Is(unicode.Mn, r) ||
+		unicode.Is(unicode.Me, r) || unicode.Is(unicode.Cf, r)
+}
+
+// punctuationFallback conserva legibles signos tipográficos comunes cuando
+// la fuente PSF no trae su glifo Unicode.
+func punctuationFallback(r rune) (rune, bool) {
+	switch r {
+	case '…', '·', '•':
+		return '.', true
+	case '‘', '’', '‚', '‛':
+		return '\'', true
+	case '“', '”', '„', '‟':
+		return '"', true
+	case '–', '—', '−', '‐', '‑':
+		return '-', true
+	case '→', '➜', '➝':
+		return '>', true
+	case '←':
+		return '<', true
+	case '↑':
+		return '^', true
+	case '↓':
+		return 'v', true
+	case '×':
+		return 'x', true
+	case '\u00a0', '\u2007', '\u202f':
+		return ' ', true
+	}
+	return 0, false
+}
+
 // Advance es el ancho de avance de un carácter (celda + separación).
 func (f *Face) Advance(spacing int) int { return f.W + spacing }
 
 // Measure devuelve el ancho en píxeles de un texto.
 func (f *Face) Measure(s string, scale, spacing int) int {
 	n := 0
-	for range s {
-		n++
+	for _, r := range s {
+		if !isNonRenderingRune(r) {
+			n++
+		}
 	}
 	if n == 0 {
 		return 0

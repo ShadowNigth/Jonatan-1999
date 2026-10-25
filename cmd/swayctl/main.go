@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ShadowNigth/swaydesk/internal/actions"
 	"github.com/ShadowNigth/swaydesk/internal/config"
 	"github.com/ShadowNigth/swaydesk/internal/host"
+	"github.com/ShadowNigth/swaydesk/internal/launcher"
 	"github.com/ShadowNigth/swaydesk/internal/setup"
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 	"github.com/ShadowNigth/swaydesk/internal/ui"
@@ -45,6 +47,17 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "swayctl: %v\n", err)
+	}
+	if relaunched, launchErr := launcher.RelaunchInTerminalIfNeeded(
+		ui.IsInteractive(), cfg.Terminal, "swaydesk-ctl", "swaydesk · panel", 0, 0, os.Args[1:],
+	); relaunched {
+		if launchErr != nil {
+			message := "no se pudo abrir el panel en una terminal: " + launchErr.Error()
+			fmt.Fprintf(os.Stderr, "swayctl: %s\n", message)
+			actions.Notification("swayctl", message, "critical")
+			os.Exit(1)
+		}
+		return
 	}
 	if *themeFlag != "" {
 		cfg.Theme = *themeFlag

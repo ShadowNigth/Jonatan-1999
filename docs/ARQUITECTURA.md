@@ -28,12 +28,13 @@ cmd/swayctl      panel de control: 5 pestañas y acciones sobre sway
 cmd/swayclip     portapapeles: lista, filtra, copia, borra
 cmd/swaybar      barra de estado: CLI, recogida de datos y bucle de dibujo
 cmd/swaynotify   daemon de notificaciones: D-Bus, capa overlay y entrada
-cmd/swayosd      avisos en pantalla (volumen) con fundido, en capa overlay
+cmd/swayosd      avisos de volumen y reproducción MPRIS, con fundido
+internal/mpris   descubrimiento de reproductores y escucha de metadatos por D-Bus
 
 internal/wayland cliente Wayland puro: conexión, registry, xdg-shell, shm y
                  wlr-layer-shell (capa background para el fondo animado)
 internal/wallpaper motor de fondos de pantalla
-  scenes.go      11 escenas procedurales sobre un Canvas RGB
+  scenes.go      catálogo y 12 escenas procedurales sobre un Canvas RGB
   gif.go         carga de GIF animado (fotogramas ya compuestos)
   video.go       decodificación con ffmpeg → tramas RGB24 en memoria
   render.go      protocolos kitty y sixel, PNG, escalado y recorte
@@ -126,22 +127,24 @@ sway IPC ──eventos──▶ cmd/swaybar/run.go ──Snapshot──▶ inter
 ## Los avisos en pantalla
 
 ```
-wpctl / pactl / amixer            swayosd
-        │  estado del altavoz         │
-        ▼                             ▼
-   internal/host ──── Audio ──── internal/osd.Renderer
-                                      │
-                                      ▼
-                             wl_surface (capa overlay)
+wpctl / pactl / amixer ──► internal/host ──► osd.Renderer ──┐
+                                                           ├─► wl_surface (overlay)
+MPRIS ──► internal/dbus ──► internal/mpris ──► MediaRenderer ┘
+                                   │
+                                   └─► LoadArtwork (file:// o HTTP[S])
 ```
 
-- **Un proceso por aviso**: `swayosd show` dibuja el aviso, espera
-  `timeout_ms` y termina; así el aviso desaparece solo aunque la sesión esté
-  cargada, sin dejar una superficie viva toda la jornada.
-- **`swayosd watch`** es el único proceso permanente: consulta el altavoz por
-  defecto cada 300 ms y, cuando cambia el valor, lanza el aviso. Cubre los
-  cambios de las teclas multimedia, de los auriculares Bluetooth y de
-  cualquier aplicación.
+- **Un proceso por aviso**: `swayosd show` o `swayosd media show` dibuja la
+  tarjeta, espera su duración configurada y termina; no deja superficies vivas
+  durante toda la sesión.
+- **`swayosd watch`** es el vigilante habitual: consulta el altavoz por defecto
+  cada 300 ms y, si está habilitado, escucha en paralelo `PropertiesChanged` y
+  `NameOwnerChanged` en el bus D-Bus para detectar pistas MPRIS. También se
+  puede ejecutar `swayosd media watch` para vigilar solo reproducción. El estado
+  inicial no dispara un aviso; las señales duplicadas se deduplican por
+  reproductor, ID y metadatos de pista.
+- **Carátulas seguras**: solo se aceptan archivos locales y HTTP(S); lectura,
+  dimensiones, tiempo de espera y bytes transferidos están limitados.
 - **Fundido sin estado**: la animación son fotogramas con alfa creciente o
   decreciente sobre la misma tarjeta; `fade_ms = 0` la desactiva.
 - **Clic pasante**: la región de entrada de la superficie está vacía, así que
@@ -176,6 +179,12 @@ app (Chromium, pacman…)              swaynotify
   el resto de la franja deja pasar el ratón a las ventanas de debajo.
 - **Sin mako**: el autostart arranca `swaynotify` si `notify.enabled` y si no
   hay otro servidor; en caso contrario, `mako`.
+- **Autostart idempotente**: sway lanza `autostart.sh` con `exec_always`, es
+  decir, también en cada `swaymsg reload`. El script arranca cada servicio con
+  `once` (solo si `pgrep -x` no lo encuentra) y lo que es de una sola vez por
+  sesión (animación de arranque, bienvenida) con `una_vez`, cuya marca lleva el
+  `SWAYSOCK` del arranque. Resultado: recargar no duplica la barra ni los
+  demonios, y un servicio caído se recupera al recargar.
 
 ## Flujo de `swaydesk init`
 
@@ -263,6 +272,11 @@ pantalla alternativa (`\x1b[?1049h`), restaurada con `defer sc.Close()`.
 - `SS3` (`\x1bOP` = F1),
 - y distingue `Esc` solo (timeout de 35 ms) de `Alt+tecla`.
 
+Al cerrar `Screen`, se cancela y se espera al lector de entrada antes de restaurar
+el terminal. Esto evita dejar varios lectores compitiendo por `stdin` cuando un
+menú abre otro selector (por ejemplo, la confirmación de apagado); el TTY se
+sondea con `select` y nunca se cierra el descriptor compartido.
+
 **Colores.** Las paletas se declaran en `#rrggbb`. En `truecolor` se emiten
 `\x1b[38;2;r;g;bm`; si el terminal solo soporta 256 colores se aproxima al índice
 xterm-256 más cercano comparando con el cubo 6×6×6 y la rampa de grises; si
@@ -270,7 +284,10 @@ xterm-256 más cercano comparando con el cubo 6×6×6 y la rampa de grises; si
 
 **Búsqueda difusa.** `Fuzzy("chrm", "Chromium")` comprueba subsecuencia y puntúa:
 +20 al inicio, +15 tras separador, +12 por caracteres consecutivos, −2 por hueco,
-+200 por coincidencia exacta. `FilterItems` puntúa cada campo y ordena estable.
++200 por coincidencia exacta. `FilterItems` compila el patrón una vez, puntúa cada
+campo y ordena estable; `Selector` conserva la lista filtrada hasta que cambie
+el texto o las entradas. El lanzador descubre los `.desktop` en segundo plano y
+mantiene el TUI interactivo durante esa carga.
 
 ## Frecency del lanzador
 
@@ -287,7 +304,7 @@ que lo usado ayer gana a lo usado cien veces hace un mes.
 | TUI en lugar de GTK/Qt | Coherente con sway, rápido en cualquier hardware, se puede probar en un pty. |
 | Plantillas embebidas con `embed` | El binario es autosuficiente: se puede instalar sin el código fuente. |
 | `syscall` directo para modo crudo | Evita `golang.org/x/term`; el struct `Termios` de Linux es estable. |
-| Fondo animado en un demonio aparte | Es el único proceso que necesita Wayland nativo; si el compositor no lo soporta, sway sigue mostrando un fotograma estático. |
+| Fondo animado en un demonio aparte | Es el único proceso que necesita Wayland nativo; Sway conserva un color sólido del tema como respaldo para evitar que el primer fotograma se superponga al GIF/vídeo. |
 | Opacidad en las plantillas, no por IPC | sway no permite cambiar el alpha de una ventana ya abierta; escribir `for_window` al generar la configuración es lo único fiable. |
 | Escenas procedurales en vez de vídeos de regalo | Sin binarios pesados en el repositorio y adaptadas a la paleta activa. Los GIF y vídeos del usuario se reproducen igual. |
 | `blur`/`rounding` solo en swayfx | Sway no implementa desenfoque ni esquinas; se detecta el compositor y las líneas quedan comentadas si no aplica. |
@@ -299,6 +316,11 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
 (`internal/swayipc`, `internal/wayland`) y de los fondos
 (`internal/wallpaper`), hay suites propias para:
 
+- **`internal/setup`** — los atajos: análisis de `bindsym`/`bindcode` con la
+  misma expansión de variables que hace sway (una sola pasada, sin anidar),
+  bloques `mode` separados del modo normal, detección de teclas repetidas y de
+  programas que no existen, y `GET_CONFIG` por IPC para auditar la configuración
+  que la sesión tiene cargada de verdad.
 - **`internal/dbus`** — ida y vuelta de mensajes con todos los tipos del
   formato (arrays de cadenas y bytes, estructuras, diccionarios con variantes),
   validación de firmas, y un autobús de pruebas sobre socket UNIX que verifica
@@ -331,7 +353,7 @@ Además de los tests del toolkit (`internal/ui`), de los protocolos
   fondo es menos opaco que a plena intensidad.
 - **`internal/bar`** — colores, composición alfa, esquinas redondeadas,
   medidas de texto, elección de variantes cuando falta espacio y zonas
-  pulsables (el indicador de notificaciones se publica como `Region` y
+  pulsables (el indicador de notificaciones se publica como `Region`, y
   `RegionAt` resuelve el clic del ratón).
 - **`internal/font`** — PSF1/PSF2 sintéticos con gzip y tabla Unicode,
   archivos corruptos y la fuente incorporada.
@@ -345,18 +367,19 @@ Cobertura destacada:
 
 - `swayipc`: frames binarios, magic inválido, payloads, con/sin argumentos,
   comandos fallidos, árbol, eventos y suscripción.
-- `ui`: anchos CJK/emoji, truncado, wrap de palabras largas, diff de secuencias
-  de teclas, dimensiones exactas de los paneles, `SGR` en 3 perfiles de color,
-  validación de las 8 paletas.
+- `ui`: anchos CJK/emoji, truncado, wrap de palabras largas, búsqueda difusa y
+  caché/invalidez del selector, secuencias de teclas, dimensiones exactas de los
+  paneles, `SGR` en 3 perfiles de color y validación de las 8 paletas.
 - `config`: TOML (comentarios, arrays, comillas simples, errores), aplicación de
   valores y `SaveTheme` conservando el resto del archivo.
 - `setup`: render sin marcadores, colores por tema, iconos según Nerd Font,
   instalación con respaldos y `apply` sobre directorio vacío.
-- `launcher`: `.desktop` (localización, `NoDisplay`, `Hidden`), `Exec` con
-  comillas y códigos `%f`, historial persistente y recortado, `PATH`.
+- `launcher`: `.desktop` (localización, `NoDisplay`, `Hidden`, descarte de
+  archivos especiales), `Exec` con comillas y códigos `%f`, historial persistente
+  y recortado, `PATH`.
 - `wayland`: cabeceras de mensaje, alineación a 4 bytes de strings, decodificación
   de eventos, descriptores y detección de compositor sin servidor.
-- `wallpaper`: las 11 escenas (tamaño, búfer y no-negro), `ParseSpec` con sus
+- `wallpaper`: las 12 escenas (tamaño, búfer y no-negro), `ParseSpec` con sus
   formatos y errores, ciclo de vida del motor para escena e imagen, GIF animado
   de dos fotogramas, protocolos kitty (troceado) y sixel, vista previa y escalado;
   y —nuevo— las reglas por workspace (precedencia nombre → sufijo → número,

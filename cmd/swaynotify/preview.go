@@ -32,7 +32,7 @@ func demoNotes(now time.Time) []notify.Notification {
 			ID: 2, App: "pacman", Summary: "12 paquetes por actualizar",
 			Body:    "Entre ellos el kernel y Mesa. Reinicia la sesión al terminar.",
 			Urgency: notify.Critical, Created: now.Add(-30 * time.Second), Progress: 42,
-			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Luego"}},
+			Actions: []notify.Action{{Key: "default", Label: "Actualizar"}, {Key: "later", Label: "Más tarde"}},
 		},
 		{
 			ID: 3, App: "spotify", Summary: "Lofi Girl · Midnight Study",
@@ -146,7 +146,7 @@ func renderPreviewWith(cfg *config.Config, path string, backdrop bool) error {
 		Opacity:  cfg.NotifyOpacity,
 		Face:     font.Best(cfg.NotifyFont),
 		Theme:    ui.PaletteByName(cfg.Theme),
-		Scale:    2,
+		Scale:    scaleFor(cfg, 1),
 		MaxLines: cfg.NotifyMaxLines,
 		Shadow:   true,
 	})

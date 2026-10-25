@@ -43,10 +43,36 @@ func ANSIFrame(c *Canvas) string {
 // PreviewBlock devuelve el fondo dibujado en exactamente w×h celdas, listo para
 // insertarlo en un panel de la interfaz.
 func PreviewBlock(eng *Engine, w, h int) []string {
-	if w < 2 || h < 2 {
+	if eng == nil || w < 2 || h < 2 {
 		return nil
 	}
-	c := eng.Frame(w, h*2)
+	var c *Canvas
+	switch eng.spec.Kind {
+	case KindImage:
+		if eng.still != nil {
+			c = ImageToCanvasWithBackground(eng.still.Img, w, h, eng.spec.Pal.Bg)
+		}
+	case KindGIF:
+		if eng.gif != nil {
+			frame, _ := eng.gif.FrameAt(time.Since(eng.start))
+			c = ImageToCanvasWithBackground(frame, w, h, eng.spec.Pal.Bg)
+		}
+	case KindVideo:
+		if eng.video == nil {
+			return nil
+		}
+		c = eng.Frame(w, h*2)
+		if len(eng.video.current) == 0 {
+			// FFmpeg decodifica en segundo plano; no pintar el color de reserva
+			// como si fuese un fotograma real mientras llega el primero.
+			return nil
+		}
+	default:
+		c = eng.Frame(w, h*2)
+	}
+	if c == nil || c.W < w || c.H < h*2 || len(c.Pix) < c.W*c.H*3 {
+		return nil
+	}
 	lines := make([]string, 0, h)
 	for row := 0; row < h; row++ {
 		var b strings.Builder
@@ -125,7 +151,7 @@ func RunTerminal(eng *Engine, opts Options) error {
 				return nil
 			}
 			switch {
-			case key.Is("esc") || key.IsRune('q') || (key.Ctrl && key.IsRune('c')):
+			case key.Is("esc") || key.IsRune('q') || key.IsCtrlRune('c'):
 				return nil
 			case key.IsRune(' '):
 				paused = !paused
@@ -219,6 +245,20 @@ func ScaleFor(width, height int) int {
 		return 2
 	default:
 		return 2
+	}
+}
+
+// videoScaleFor conserva resolución nativa hasta Full HD y reduce solo en
+// pantallas mayores para evitar que la decodificación monopolice la CPU.
+func videoScaleFor(width, height int) int {
+	pixels := width * height
+	switch {
+	case pixels > 3840*2160:
+		return 4
+	case pixels > 1920*1080:
+		return 2
+	default:
+		return 1
 	}
 }
 

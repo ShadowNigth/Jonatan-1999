@@ -5,8 +5,10 @@
 // handshake SASL EXTERNAL, el formato binario de los mensajes (con firmas),
 // llamadas a método, respuestas, errores y señales.
 //
-// Formato de un mensaje (siempre en little endian, que es lo que usan los
-// autobuses de escritorio):
+// Los mensajes se codifican en little endian y se decodifican según el byte de
+// orden indicado por el emisor, como exige el protocolo D-Bus.
+//
+// Formato de un mensaje:
 //
 //	byte  'l' | byte tipo | byte flags | byte versión (1)
 //	uint32 longitud del cuerpo
@@ -59,6 +61,8 @@ const (
 	fieldSender      = 7
 	fieldSignature   = 8
 	fieldUnixFDs     = 9
+
+	maxMessageSize = 128 << 20
 )
 
 // Variant es un valor con su firma, como los `v` de D-Bus.
@@ -551,25 +555,29 @@ func (m *Message) Encode(serial uint32) ([]byte, error) {
 	binary.LittleEndian.PutUint32(tmp[:], uint32(len(fields.b)))
 	out = append(out, tmp[:]...)
 	out = append(out, fields.b...)
-	// El cuerpo empieza en el siguiente múltiplo de 8; el relleno forma parte
-	// de la cabecera, no de la longitud del cuerpo.
+	// El cuerpo empieza en el siguiente múltiplo de 8; ese relleno forma
+	// parte de la cabecera. D-Bus no añade relleno después del cuerpo: el
+	// siguiente mensaje del flujo empieza inmediatamente al terminarlo.
 	for len(out)%8 != 0 {
 		out = append(out, 0)
 	}
 	out = append(out, body.b...)
-	// El mensaje completo se rellena a 8 bytes; la longitud del cuerpo no
-	// incluye este relleno.
-	for len(out)%8 != 0 {
-		out = append(out, 0)
-	}
 	return out, nil
 }
 
 // ─── Decodificación ─────────────────────────────────────────────────────────
 
 type reader struct {
-	b   []byte
-	pos int
+	b     []byte
+	pos   int
+	order binary.ByteOrder
+}
+
+func (r *reader) byteOrder() binary.ByteOrder {
+	if r.order != nil {
+		return r.order
+	}
+	return binary.LittleEndian
 }
 
 func (r *reader) pad(n int) {
@@ -590,7 +598,7 @@ func (r *reader) u32() (uint32, error) {
 	if err := r.need(4); err != nil {
 		return 0, err
 	}
-	v := binary.LittleEndian.Uint32(r.b[r.pos:])
+	v := r.byteOrder().Uint32(r.b[r.pos:])
 	r.pos += 4
 	return v, nil
 }
@@ -600,7 +608,7 @@ func (r *reader) u64() (uint64, error) {
 	if err := r.need(8); err != nil {
 		return 0, err
 	}
-	v := binary.LittleEndian.Uint64(r.b[r.pos:])
+	v := r.byteOrder().Uint64(r.b[r.pos:])
 	r.pos += 8
 	return v, nil
 }
@@ -652,7 +660,7 @@ func (r *reader) value(sig string) (any, error) {
 		if err := r.need(2); err != nil {
 			return nil, err
 		}
-		v := int16(binary.LittleEndian.Uint16(r.b[r.pos:]))
+		v := int16(r.byteOrder().Uint16(r.b[r.pos:]))
 		r.pos += 2
 		return v, nil
 	case 'q':
@@ -660,7 +668,7 @@ func (r *reader) value(sig string) (any, error) {
 		if err := r.need(2); err != nil {
 			return nil, err
 		}
-		v := binary.LittleEndian.Uint16(r.b[r.pos:])
+		v := r.byteOrder().Uint16(r.b[r.pos:])
 		r.pos += 2
 		return v, nil
 	case 'i', 'h':
@@ -770,27 +778,42 @@ func (r *reader) structure(sig string) (any, error) {
 	return out, nil
 }
 
-// DecodeMessage decodifica un mensaje completo (sin relleno final).
+// DecodeMessage decodifica un mensaje completo, sin suponer relleno tras el
+// cuerpo: en un flujo D-Bus el siguiente mensaje empieza inmediatamente allí.
 func DecodeMessage(data []byte) (*Message, error) {
 	if len(data) < 16 {
 		return nil, fmt.Errorf("D-Bus: mensaje demasiado corto (%d bytes)", len(data))
 	}
-	if data[0] != 'l' && data[0] != 'B' {
+	var order binary.ByteOrder
+	switch data[0] {
+	case 'l':
+		order = binary.LittleEndian
+	case 'B':
+		order = binary.BigEndian
+	default:
 		return nil, fmt.Errorf("D-Bus: orden de bytes desconocido %q", data[0])
 	}
-	m := &Message{Type: MsgType(data[1]), Flags: data[2]}
 	if data[3] != 1 {
 		return nil, fmt.Errorf("D-Bus: versión de protocolo %d no soportada", data[3])
 	}
-	bodyLen := int(binary.LittleEndian.Uint32(data[4:]))
-	m.Serial = binary.LittleEndian.Uint32(data[8:])
-	fieldsLen := int(binary.LittleEndian.Uint32(data[12:]))
-	fieldsEnd := 16 + fieldsLen
-	if fieldsEnd > len(data) {
-		return nil, fmt.Errorf("D-Bus: cabecera fuera de límites")
+	bodyLen := uint64(order.Uint32(data[4:8]))
+	m := &Message{Type: MsgType(data[1]), Flags: data[2], Serial: order.Uint32(data[8:12])}
+	fieldsLen := uint64(order.Uint32(data[12:16]))
+	if bodyLen+fieldsLen+16 > maxMessageSize {
+		return nil, fmt.Errorf("D-Bus: mensaje demasiado grande (cuerpo %d, cabeceras %d)", bodyLen, fieldsLen)
 	}
 
-	fr := &reader{b: data[16:fieldsEnd]}
+	fieldsEnd := 16 + int(fieldsLen)
+	bodyStart := align8(fieldsEnd)
+	total := bodyStart + int(bodyLen)
+	if total > maxMessageSize {
+		return nil, fmt.Errorf("D-Bus: mensaje demasiado grande (%d bytes)", total)
+	}
+	if fieldsEnd > len(data) || total > len(data) {
+		return nil, fmt.Errorf("D-Bus: mensaje truncado (se necesitan %d bytes, hay %d)", total, len(data))
+	}
+
+	fr := &reader{b: data[16:fieldsEnd], order: order}
 	for fr.pos < len(fr.b) {
 		fr.pad(8)
 		if fr.pos >= len(fr.b) {
@@ -825,15 +848,8 @@ func DecodeMessage(data []byte) (*Message, error) {
 		}
 	}
 
-	bodyStart := fieldsEnd
-	if bodyStart%8 != 0 {
-		bodyStart += 8 - bodyStart%8
-	}
 	if bodyLen > 0 {
-		if bodyStart+bodyLen > len(data) {
-			return nil, fmt.Errorf("D-Bus: cuerpo fuera de límites")
-		}
-		br := &reader{b: data[bodyStart : bodyStart+bodyLen]}
+		br := &reader{b: data[bodyStart:total], order: order}
 		rest := m.Signature
 		for rest != "" {
 			var one string

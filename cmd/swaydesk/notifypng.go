@@ -32,7 +32,7 @@ func writeNotifyPNGWith(cfg *config.Config, items []notify.Notification, path st
 		Opacity:  cfg.NotifyOpacity,
 		Face:     font.Best(cfg.NotifyFont),
 		Theme:    ui.PaletteByName(cfg.Theme),
-		Scale:    2,
+		Scale:    1,
 		MaxLines: cfg.NotifyMaxLines,
 	})
 	canvas, _ := r.RenderGroups(notify.Views(items, nil), now)
