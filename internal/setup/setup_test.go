@@ -109,6 +109,7 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 	var waybar struct {
+		ModulesLeft   []string `json:"modules-left"`
 		ModulesCenter []string `json:"modules-center"`
 		ModulesRight  []string `json:"modules-right"`
 		Clock         struct {
@@ -130,6 +131,13 @@ func TestWaybarCentersClockAndDateInsteadOfWindowTitle(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(files["waybar/config.json"]), &waybar); err != nil {
 		t.Fatalf("configuración Waybar no válida: %v", err)
+	}
+	if len(waybar.ModulesLeft) == 0 || waybar.ModulesLeft[0] != "sway/workspaces" {
+		t.Fatalf("los workspaces deben quedar al inicio, sin el botón anterior: %v", waybar.ModulesLeft)
+	}
+	if strings.Contains(files["waybar/config.json"], `"custom/logo"`) ||
+		strings.Contains(files["waybar/style.css"], "#custom-logo") {
+		t.Fatal("la plantilla todavía incluye el botón del lanzador junto a los workspaces")
 	}
 	if len(waybar.ModulesCenter) != 1 || waybar.ModulesCenter[0] != "clock" {
 		t.Fatalf("el centro debe contener solo el reloj, obtuvo %v", waybar.ModulesCenter)
@@ -389,6 +397,42 @@ func TestInstallYRespaldo(t *testing.T) {
 	}
 }
 
+func TestRemoveLegacyWaybarLauncherButtonOnly(t *testing.T) {
+	dest := t.TempDir()
+	waybarDir := filepath.Join(dest, "waybar")
+	if err := os.MkdirAll(waybarDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(waybarDir, "config.json")
+	legacy := `{"modules-left":["custom/logo","sway/workspaces"],"custom/logo":{"on-click":"swaymenu --float"}}`
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	changed, err := removeUnusedWaybarModules(dest)
+	if err != nil {
+		t.Fatalf("removeUnusedWaybarModules: %v", err)
+	}
+	if len(changed) != 1 || changed[0] != path {
+		t.Fatalf("la migración no reportó el archivo modificado: %v", changed)
+	}
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(updated, &got); err != nil {
+		t.Fatalf("JSON actualizado inválido: %v", err)
+	}
+	modules, ok := got["modules-left"].([]any)
+	if !ok || len(modules) != 1 || modules[0] != "sway/workspaces" {
+		t.Fatalf("se debe quitar solo el botón y conservar workspaces: %#v", got["modules-left"])
+	}
+	if _, ok := got["custom/logo"]; ok {
+		t.Fatal("se conservó la definición del botón del lanzador")
+	}
+}
+
 func TestApplyRemovesUnusedLegacyWaybarModules(t *testing.T) {
 	cfg := config.Default()
 	dest := t.TempDir()
@@ -397,7 +441,7 @@ func TestApplyRemovesUnusedLegacyWaybarModules(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(waybarDir, "config.json")
-	legacy := `{"modules-right":["cpu","memory","custom/power","clock","temperature"],"cpu":{"format":"{usage}%"},"memory":{"format":"{percentage}%"},"custom/power":{"on-click":"swaymenu --power"},"custom/keep":{"format":"still here"}}`
+	legacy := `{"modules-left":["custom/logo","sway/workspaces"],"modules-right":["cpu","memory","custom/power","clock","temperature"],"cpu":{"format":"{usage}%"},"memory":{"format":"{percentage}%"},"custom/power":{"on-click":"swaymenu --power"},"custom/logo":{"on-click":"swaymenu --float"},"custom/keep":{"format":"still here"}}`
 	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -413,6 +457,22 @@ func TestApplyRemovesUnusedLegacyWaybarModules(t *testing.T) {
 	var got map[string]any
 	if err := json.Unmarshal(updated, &got); err != nil {
 		t.Fatalf("JSON actualizado inválido: %v", err)
+	}
+	leftModules, ok := got["modules-left"].([]any)
+	if !ok {
+		t.Fatalf("modules-left no quedó como lista: %#v", got["modules-left"])
+	}
+	workspaceKept := false
+	for _, module := range leftModules {
+		if module == "custom/logo" {
+			t.Fatalf("Apply dejó el botón obsoleto junto a los workspaces: %v", leftModules)
+		}
+		if module == "sway/workspaces" {
+			workspaceKept = true
+		}
+	}
+	if !workspaceKept {
+		t.Fatalf("Apply quitó los workspaces al retirar el botón: %v", leftModules)
 	}
 	modules, ok := got["modules-right"].([]any)
 	if !ok {
@@ -431,6 +491,9 @@ func TestApplyRemovesUnusedLegacyWaybarModules(t *testing.T) {
 	}
 	if _, ok := got["custom/power"]; ok {
 		t.Fatal("se conservó la definición del botón de energía")
+	}
+	if _, ok := got["custom/logo"]; ok {
+		t.Fatal("se conservó la definición del botón del lanzador")
 	}
 	if _, ok := got["custom/keep"]; !ok {
 		t.Fatal("se perdió la configuración personalizada ajena a CPU/RAM")

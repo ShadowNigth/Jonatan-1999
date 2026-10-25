@@ -7,7 +7,7 @@
   "margin-bottom": 0,
   "margin-left": 0,
   "margin-right": 0,
-  "modules-left": ["custom/logo", "sway/workspaces", "sway/mode", "sway/scratchpad"],
+  "modules-left": ["sway/workspaces", "sway/mode", "sway/scratchpad"],
   "modules-center": ["clock"],
   "modules-right": [
     "custom/recording",
@@ -47,12 +47,6 @@
     "format-icons": ["", ""],
     "tooltip": false,
     "on-click": "swaymsg scratchpad show"
-  },
-  "custom/logo": {
-    "format": "  {{ICON_LOGO}} ",
-    "tooltip": false,
-    "on-click": "swaymenu --float",
-    "interval": "once"
   },
   "custom/recording": {
     "exec": "swaydesk status --module recording",

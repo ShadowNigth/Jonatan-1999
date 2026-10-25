@@ -69,7 +69,6 @@ tooltip label {
 #network,
 #clock,
 #tray,
-#custom-logo,
 #custom-recording {
     padding: 0 10px;
     color: @fg;
@@ -86,19 +85,9 @@ tooltip label {
 #battery:hover,
 #pulseaudio:hover,
 #network:hover,
-#clock:hover,
-#custom-logo:hover {
+#clock:hover {
     background: @bg_sel;
     color: @accent;
-}
-
-/* ─── Logo ──────────────────────────────────────────────────────────── */
-#custom-logo {
-    color: @accent;
-    font-weight: 700;
-    font-size: {{BAR_FONT_SIZE_LOGO}}px;
-    padding-left: 6px;
-    padding-right: 4px;
 }
 
 #custom-recording {

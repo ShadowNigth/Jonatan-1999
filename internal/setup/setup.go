@@ -163,14 +163,13 @@ func templateData(cfg *config.Config) map[string]string {
 		"FX_BLUR_LINE":        fxBlur(cfg),
 		"BORDER_COLORS_BLOCK": borderColorsBlock(cfg),
 
-		"FONT":               font,
-		"FONT_SIZE":          itoa(fontSize - 1),
-		"TERM_FONT_SIZE":     itoa(fontSize),
-		"BAR_FONT_SIZE":      itoa(barSize),
-		"BAR_FONT_SIZE_LOGO": itoa(barSize + 2),
-		"NOTIF_FONT_SIZE":    fmt.Sprintf("%.1f", float64(fontSize)-0.5),
-		"LOCK_FONT_SIZE":     itoa(fontSize + 5),
-		"LOCK_CLOCK_SIZE":    itoa(fontSize*4 + 4),
+		"FONT":            font,
+		"FONT_SIZE":       itoa(fontSize - 1),
+		"TERM_FONT_SIZE":  itoa(fontSize),
+		"BAR_FONT_SIZE":   itoa(barSize),
+		"NOTIF_FONT_SIZE": fmt.Sprintf("%.1f", float64(fontSize)-0.5),
+		"LOCK_FONT_SIZE":  itoa(fontSize + 5),
+		"LOCK_CLOCK_SIZE": itoa(fontSize*4 + 4),
 
 		"TERMINAL":        pickProgram(cfg.Terminal, terminalCandidates),
 		"BROWSER":         pickProgram(cfg.Browser, browserCandidates),
@@ -185,7 +184,6 @@ func templateData(cfg *config.Config) map[string]string {
 		"SWAYMENU_BIN":  binPath("swaymenu"),
 		"SWAYCTL_BIN":   binPath("swayctl"),
 		"SWAYCLIP_BIN":  binPath("swayclip"),
-		"ICON_LOGO":     ic.Workspace,
 		"ICON_VOLUME":   ic.Volume,
 		"ICON_MUTED":    ic.Muted,
 		"ICON_WIFI":     ic.Wifi,
@@ -867,8 +865,8 @@ func reloadSwayConfig() {
 	_ = c.CommandOK("reload")
 }
 
-// removeUnusedWaybarModules quita CPU, RAM y el antiguo botón de energía de
-// configuraciones JSON existentes, preservando los demás módulos y opciones.
+// removeUnusedWaybarModules quita CPU, RAM y los botones obsoletos del
+// lanzador y de energía, preservando los demás módulos y opciones.
 func removeUnusedWaybarModules(dest string) ([]string, error) {
 	var changed []string
 	for _, name := range []string{"config", "config.json", "config.jsonc"} {
@@ -882,6 +880,7 @@ func removeUnusedWaybarModules(dest string) ([]string, error) {
 		}
 		text := string(data)
 		if !strings.Contains(text, `"custom/power"`) &&
+			!strings.Contains(text, `"custom/logo"`) &&
 			!strings.Contains(text, `"cpu"`) && !strings.Contains(text, `"memory"`) {
 			continue
 		}
@@ -899,7 +898,7 @@ func removeUnusedWaybarModules(dest string) ([]string, error) {
 			filtered := make([]any, 0, len(modules))
 			for _, module := range modules {
 				switch module {
-				case "cpu", "memory", "custom/power":
+				case "cpu", "memory", "custom/power", "custom/logo":
 					modified = true
 					continue
 				}
@@ -909,7 +908,7 @@ func removeUnusedWaybarModules(dest string) ([]string, error) {
 				cfg[key] = filtered
 			}
 		}
-		for _, module := range []string{"cpu", "memory", "custom/power"} {
+		for _, module := range []string{"cpu", "memory", "custom/power", "custom/logo"} {
 			if _, ok := cfg[module]; ok {
 				delete(cfg, module)
 				modified = true

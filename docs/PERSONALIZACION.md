@@ -961,10 +961,11 @@ Módulos disponibles: `logo`, `recording`, `clock`, `cpu`, `ram`, `battery`,
 }
 ```
 
-La plantilla Waybar tampoco incluye un botón `custom/power`. `swaydesk apply`
-retira esa entrada obsoleta de las configuraciones JSON de Waybar sin cambiar
-los demás módulos. Reinicia la barra (`Super+Ctrl+B`) para que un proceso viejo
-cargue los cambios. El menú de energía se abre con **Super+P**
+La plantilla de Waybar no incluye el botón del lanzador `custom/logo` que
+estaba junto a los workspaces, ni un botón `custom/power`. `swaydesk apply`
+retira ambas entradas obsoletas de las configuraciones JSON de Waybar sin
+cambiar los demás módulos. Reinicia la barra (`Super+Ctrl+B`) para que un
+proceso viejo cargue los cambios. El menú de energía se abre con **Super+P**
 (`swaymenu --power --float`) desde la configuración Sway; también está
 disponible como `swaydesk power`. Si ya tienes una configuración Sway que el
 instalador conservó, agrega allí un atajo equivalente: `--no-config` no modifica
