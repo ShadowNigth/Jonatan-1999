@@ -210,6 +210,21 @@ func (e *Engine) Frame(w, h int) *Canvas {
 	}
 }
 
+func (e *Engine) videoFrameBGRA(w, h int) []uint8 {
+	if e.video == nil {
+		return nil
+	}
+	e.last = nil
+	return e.video.FrameBGRA(w, h)
+}
+
+func (e *Engine) videoSnapshot() *Canvas {
+	if e.video == nil {
+		return nil
+	}
+	return e.video.SnapshotVideo()
+}
+
 // Duration devuelve la duración del bucle (0 si es infinito o procedural).
 func (e *Engine) Duration() time.Duration {
 	switch {
@@ -298,8 +313,13 @@ func NewVideoSource(path string, fps int) (*videoSource, error) {
 	return &videoSource{path: path, fps: fps, duration: info.duration}, nil
 }
 
-// Frame devuelve el fotograma más reciente al tamaño exacto del lienzo.
+// Frame devuelve el fotograma más reciente como RGB para las transiciones.
 func (v *videoSource) Frame(width, height int) *Canvas {
+	return canvasFromBGRA(v.FrameBGRA(width, height), width, height)
+}
+
+// FrameBGRA devuelve el fotograma más reciente en el formato nativo de wl_shm.
+func (v *videoSource) FrameBGRA(width, height int) []uint8 {
 	if width <= 0 || height <= 0 {
 		return nil
 	}
@@ -338,10 +358,30 @@ func (v *videoSource) Frame(width, height int) *Canvas {
 		}
 	}
 
-	if len(v.current) != width*height*3 {
+	if len(v.current) != width*height*4 {
 		return nil
 	}
-	return &Canvas{W: width, H: height, Pix: v.current}
+	return v.current
+}
+
+// SnapshotVideo crea una copia RGB del fotograma actual, usada solo al iniciar
+// una transición de workspace desde un vídeo.
+func (v *videoSource) SnapshotVideo() *Canvas {
+	return canvasFromBGRA(v.current, v.width, v.height)
+}
+
+func canvasFromBGRA(pix []uint8, width, height int) *Canvas {
+	if width <= 0 || height <= 0 || len(pix) < width*height*4 {
+		return nil
+	}
+	canvas := &Canvas{W: width, H: height, Pix: make([]uint8, width*height*3)}
+	for i := 0; i < width*height; i++ {
+		src, dst := i*4, i*3
+		canvas.Pix[dst] = pix[src+2]
+		canvas.Pix[dst+1] = pix[src+1]
+		canvas.Pix[dst+2] = pix[src]
+	}
+	return canvas
 }
 
 func (v *videoSource) startDecoder(width, height int) error {
@@ -362,7 +402,7 @@ func (v *videoSource) startDecoder(width, height int) error {
 		"-stream_loop", "-1", "-re", "-i", v.path,
 		"-map", "0:v:0", "-an", "-sn", "-dn",
 		"-vf", filter,
-		"-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1")
+		"-pix_fmt", "bgra", "-f", "rawvideo", "pipe:1")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("abriendo la salida de ffmpeg: %w", err)
@@ -378,11 +418,11 @@ func (v *videoSource) startDecoder(width, height int) error {
 	v.frames = make(chan []uint8, 1)
 	v.free = make(chan []uint8, 3)
 	for i := 0; i < cap(v.free); i++ {
-		v.free <- make([]uint8, width*height*3)
+		v.free <- make([]uint8, width*height*4)
 	}
 	v.stop = make(chan struct{})
 	v.done = make(chan struct{})
-	go v.readFrames(width * height * 3)
+	go v.readFrames(width * height * 4)
 	return nil
 }
 

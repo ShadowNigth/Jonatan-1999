@@ -227,6 +227,25 @@ func (b *Background) Draw(pix []uint8, srcW, srcH int) error {
 	b.Ack()
 	buf := b.shm.Next()
 	buf.FillRGB(pix, srcW, srcH)
+	return b.present(buf)
+}
+
+// DrawBGRA publica un fotograma BGRA opaco. Con resolución nativa, las filas
+// se copian directamente a wl_shm sin convertir cada píxel en Go.
+func (b *Background) DrawBGRA(pix []uint8, srcW, srcH int) error {
+	if b.shm == nil {
+		return fmt.Errorf("la memoria compartida no está inicializada")
+	}
+	if b.Closed() {
+		return fmt.Errorf("la superficie de fondo fue cerrada por el compositor")
+	}
+	b.Ack()
+	buf := b.shm.Next()
+	buf.FillBGRA(pix, srcW, srcH)
+	return b.present(buf)
+}
+
+func (b *Background) present(buf *Buffer) error {
 	if err := b.conn.Send(newEncoder(b.surface, surfaceAttach).uint32(buf.ID).int32(0).int32(0).bytes()); err != nil {
 		return fmt.Errorf("adjuntando el búfer del fondo: %w", err)
 	}

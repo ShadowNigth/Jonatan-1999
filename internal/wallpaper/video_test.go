@@ -22,11 +22,21 @@ func TestScaledVideoHeightUsesSourceAspectRatio(t *testing.T) {
 	}
 }
 
+func TestCanvasFromBGRARestoresRGBOrder(t *testing.T) {
+	canvas := canvasFromBGRA([]byte{10, 20, 30, 255}, 1, 1)
+	if canvas == nil || canvas.W != 1 || canvas.H != 1 {
+		t.Fatalf("canvas BGRA inválido: %+v", canvas)
+	}
+	if got := canvas.Pix; len(got) != 3 || got[0] != 30 || got[1] != 20 || got[2] != 10 {
+		t.Fatalf("conversión BGRA→RGB inesperada: %v", got)
+	}
+}
+
 func TestVideoSourceStreamsFramesAtRequestedSize(t *testing.T) {
 	binDir := t.TempDir()
 	writeVideoTestTool(t, binDir, "ffprobe", "#!/bin/sh\nprintf 'width=4\\nheight=2\\nduration=1.000000\\n'\n")
-	// El falso ffmpeg escribe exactamente dos fotogramas RGB de 4x2 píxeles.
-	writeVideoTestTool(t, binDir, "ffmpeg", "#!/bin/sh\nprintf '%048d' 0\n")
+	// El falso ffmpeg escribe exactamente dos fotogramas BGRA de 4x2 píxeles.
+	writeVideoTestTool(t, binDir, "ffmpeg", "#!/bin/sh\nprintf '%064d' 0\n")
 	t.Setenv("PATH", binDir)
 
 	video, err := NewVideoSource("ignored.mp4", 30)

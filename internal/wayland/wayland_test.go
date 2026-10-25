@@ -1,6 +1,7 @@
 package wayland
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"net"
@@ -23,6 +24,26 @@ func TestEncoderHeaderAndAlignment(t *testing.T) {
 	size := int(binary.LittleEndian.Uint16(msg[6:]))
 	if size != len(msg) {
 		t.Fatalf("tamaño declarado %d, real %d", size, len(msg))
+	}
+}
+
+func TestFillBGRAFastPathPreservesBytes(t *testing.T) {
+	pixels := []byte{1, 2, 3, 255, 4, 5, 6, 255}
+	buffer := &Buffer{W: 2, H: 1, Stride: 8, Mem: make([]byte, 8)}
+	buffer.FillBGRA(pixels, 2, 1)
+	if !bytes.Equal(buffer.Mem, pixels) {
+		t.Fatalf("FillBGRA alteró el formato BGRA: %v", buffer.Mem)
+	}
+}
+
+func TestFillBGRAScalesPixels(t *testing.T) {
+	pixel := []byte{10, 20, 30, 255}
+	buffer := &Buffer{W: 2, H: 2, Stride: 8, Mem: make([]byte, 16)}
+	buffer.FillBGRA(pixel, 1, 1)
+	for i := 0; i < len(buffer.Mem); i += 4 {
+		if !bytes.Equal(buffer.Mem[i:i+4], pixel) {
+			t.Fatalf("píxel escalado %d = %v; se esperaba %v", i/4, buffer.Mem[i:i+4], pixel)
+		}
 	}
 }
 

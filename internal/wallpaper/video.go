@@ -12,7 +12,7 @@ import (
 
 // VideoSource video: decodificación con ffmpeg.
 //
-// El demonio reproduce vídeo mediante una tubería acotada de fotogramas RGB;
+// El demonio reproduce vídeo mediante una tubería acotada de fotogramas BGRA;
 // así conserva la resolución de salida sin cargar el clip entero en memoria.
 
 type videoMetadata struct {

@@ -229,6 +229,40 @@ func (b *Buffer) FillRGBA(pix []uint8, srcW, srcH int) {
 	}
 }
 
+// FillBGRA copia píxeles BGRA opacos (4 bytes por píxel) al búfer ARGB8888.
+// Cuando las dimensiones coinciden, usa copias por fila y evita conversión por píxel.
+func (b *Buffer) FillBGRA(pix []uint8, srcW, srcH int) {
+	if srcW <= 0 || srcH <= 0 || len(pix) < srcW*srcH*4 {
+		return
+	}
+	if srcW == b.W && srcH == b.H {
+		rowBytes := b.W * 4
+		for y := 0; y < b.H; y++ {
+			copy(b.Mem[y*b.Stride:y*b.Stride+rowBytes], pix[y*rowBytes:(y+1)*rowBytes])
+		}
+		return
+	}
+	for y := 0; y < b.H; y++ {
+		sy := y * srcH / b.H
+		if sy >= srcH {
+			sy = srcH - 1
+		}
+		rowOut := b.Mem[y*b.Stride:]
+		for x := 0; x < b.W; x++ {
+			sx := x * srcW / b.W
+			if sx >= srcW {
+				sx = srcW - 1
+			}
+			si := (sy*srcW + sx) * 4
+			di := x * 4
+			rowOut[di] = pix[si]
+			rowOut[di+1] = pix[si+1]
+			rowOut[di+2] = pix[si+2]
+			rowOut[di+3] = pix[si+3]
+		}
+	}
+}
+
 // Fill copia una imagen RGB (3 bytes por píxel) escalándola al tamaño del búfer.
 //
 // El búfer es opaco (alfa = 255).

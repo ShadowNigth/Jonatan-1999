@@ -239,11 +239,15 @@ func (d *daemonState) install(source string, animate bool) error {
 	if spec.FPS == 0 {
 		spec.FPS = d.opt.FPS
 	}
+	from := d.last
+	if from == nil && animate && d.opt.Transition.Active() && d.eng != nil && d.eng.Kind() == KindVideo {
+		from = d.eng.videoSnapshot()
+	}
 	next, err := NewEngine(spec)
 	if err != nil {
 		return err
 	}
-	if !animate || !d.opt.Transition.Active() || d.last == nil || d.eng == nil {
+	if !animate || !d.opt.Transition.Active() || from == nil || d.eng == nil {
 		if d.eng != nil {
 			d.eng.Close()
 		}
@@ -260,7 +264,7 @@ func (d *daemonState) install(source string, animate bool) error {
 		d.eng.Close()
 	}
 	d.eng = next
-	d.from = d.last
+	d.from = from
 	d.start = time.Now()
 	d.moving = true
 	d.source = source
@@ -269,6 +273,16 @@ func (d *daemonState) install(source string, animate bool) error {
 
 // frame dibuja el siguiente fotograma (con transición si hace falta).
 func (d *daemonState) frame() error {
+	if d.eng.Kind() == KindVideo && !d.moving {
+		w, h := d.dims(KindVideo)
+		pix := d.eng.videoFrameBGRA(w, h)
+		if pix == nil {
+			d.last = nil
+			return nil
+		}
+		d.last = nil
+		return d.bg.DrawBGRA(pix, w, h)
+	}
 	w, h := d.dims(d.eng.Kind())
 	c := d.eng.Frame(w, h)
 	if d.moving {
