@@ -8,8 +8,8 @@ import (
 
 const visibilityPollInterval = 500 * time.Millisecond
 
-// wallpaperVisibilityStream publica cambios cuando una ventana visible pasa a
-// pantalla completa o deja de estarlo.
+// wallpaperVisibilityStream publica cambios cuando todas las salidas activas
+// quedan cubiertas por ventanas visibles a pantalla completa.
 func wallpaperVisibilityStream(stop <-chan struct{}) <-chan bool {
 	out := make(chan bool, 1)
 	go func() {
@@ -17,14 +17,14 @@ func wallpaperVisibilityStream(stop <-chan struct{}) <-chan bool {
 		ticker := time.NewTicker(visibilityPollInterval)
 		defer ticker.Stop()
 
-		hidden := fullscreenWindowVisible()
+		hidden := fullscreenCoversAllOutputs()
 		out <- hidden
 		for {
 			select {
 			case <-stop:
 				return
 			case <-ticker.C:
-				next := fullscreenWindowVisible()
+				next := fullscreenCoversAllOutputs()
 				if next == hidden {
 					continue
 				}
@@ -49,7 +49,7 @@ func wallpaperVisibilityStream(stop <-chan struct{}) <-chan bool {
 	return out
 }
 
-func fullscreenWindowVisible() bool {
+func fullscreenCoversAllOutputs() bool {
 	conn, err := swayipc.Dial()
 	if err != nil {
 		return false
@@ -68,10 +68,10 @@ func fullscreenWindowVisible() bool {
 	if err != nil {
 		return false
 	}
-	return anyVisibleFullscreen(outputs, workspaces, tree)
+	return allActiveOutputsFullscreen(outputs, workspaces, tree)
 }
 
-func anyVisibleFullscreen(outputs []swayipc.Output, workspaces []swayipc.Workspace, tree *swayipc.Node) bool {
+func allActiveOutputsFullscreen(outputs []swayipc.Output, workspaces []swayipc.Workspace, tree *swayipc.Node) bool {
 	if tree == nil {
 		return false
 	}
@@ -85,35 +85,64 @@ func anyVisibleFullscreen(outputs []swayipc.Output, workspaces []swayipc.Workspa
 		return false
 	}
 
-	visibleWorkspaces := make(map[string]struct{})
+	visibleWorkspaceOutput := make(map[string]string)
+	visibleOutputs := make(map[string]struct{})
 	for _, workspace := range workspaces {
 		if !workspace.Visible || workspace.Name == "" {
 			continue
 		}
-		if _, active := activeOutputs[workspace.Output]; active {
-			visibleWorkspaces[workspace.Name] = struct{}{}
+		if _, active := activeOutputs[workspace.Output]; !active {
+			continue
 		}
+		visibleWorkspaceOutput[workspace.Name] = workspace.Output
+		visibleOutputs[workspace.Output] = struct{}{}
 	}
-	if len(visibleWorkspaces) == 0 {
+	// Si falta información de un monitor activo, no asumir que el fondo quedó
+	// cubierto: el wallpaper puede seguir visible allí.
+	if len(visibleOutputs) != len(activeOutputs) {
 		return false
 	}
 
-	fullscreen := false
+	coveredOutputs := make(map[string]struct{})
+	globalFullscreen := false
 	tree.Walk(func(node *swayipc.Node) bool {
 		if node.Type != "workspace" {
 			return true
 		}
-		if _, visible := visibleWorkspaces[node.Name]; !visible {
+		output, visible := visibleWorkspaceOutput[node.Name]
+		if !visible {
 			return true
 		}
 		node.Walk(func(child *swayipc.Node) bool {
-			if child.FullscreenMode > 0 {
-				fullscreen = true
+			if !isFullscreenWindow(child) {
+				return true
+			}
+			if child.FullscreenMode > 1 {
+				globalFullscreen = true
 				return false
 			}
-			return true
+			coveredOutputs[output] = struct{}{}
+			return false
 		})
-		return !fullscreen
+		return !globalFullscreen
 	})
-	return fullscreen
+	if globalFullscreen {
+		return true
+	}
+	for output := range activeOutputs {
+		if _, covered := coveredOutputs[output]; !covered {
+			return false
+		}
+	}
+	return true
+}
+
+// isFullscreenWindow excluye los nodos de workspace y los contenedores de
+// distribución: solo una ventana hoja visible en fullscreen debe contar.
+func isFullscreenWindow(node *swayipc.Node) bool {
+	if node == nil || !node.IsWindow() || node.FullscreenMode <= 0 ||
+		len(node.Nodes) != 0 || len(node.FloatingNodes) != 0 {
+		return false
+	}
+	return node.Visible == nil || *node.Visible
 }

@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -292,6 +293,7 @@ func (d *daemonState) setHidden(hidden bool) {
 	if hidden {
 		d.hidden = true
 		d.hiddenAt = now
+		log.Printf("swaydesk: pausa del fondo: todas las salidas activas están cubiertas por ventanas a pantalla completa")
 		if d.eng != nil {
 			d.eng.Pause()
 		}
@@ -301,6 +303,7 @@ func (d *daemonState) setHidden(hidden bool) {
 	if d.eng != nil {
 		d.eng.Resume()
 	}
+	log.Printf("swaydesk: se reanuda el fondo: al menos una salida vuelve a mostrar el wallpaper")
 	if d.moving && !d.hiddenAt.IsZero() {
 		pausedFrom := d.hiddenAt
 		if d.start.After(pausedFrom) {

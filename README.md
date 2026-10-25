@@ -74,9 +74,10 @@ terceros.
   rejilla synthwave, pradera, burbujas) y reproducción de **GIF animados**,
   **imágenes** y **vídeos** (`mp4`, `webm`, `mkv` — incluidos los de Wallpaper
   Engine) con un demonio propio que dibuja en una capa
-  `wlr-layer-shell` detrás de las ventanas. Pausa las animaciones mientras haya
-  una ventana visible a pantalla completa y las reanuda desde el mismo fotograma
-  al salir de ese modo. Cliente Wayland implementado a mano, sin librerías.
+  `wlr-layer-shell` detrás de las ventanas. Pausa las animaciones solo cuando
+  todas las salidas activas están cubiertas por ventanas visibles a pantalla
+  completa; si el fondo sigue visible en otra salida, continúa reproduciéndose.
+  Cliente Wayland implementado a mano, sin librerías.
 - **Selector de fondos** (`Super+Shift+w`): galería con vista previa animada en
   vivo, metadatos (duración, tamaño, tipo) y exploración de tus carpetas.
 - **Barra de estado propia** (`swaybar`): islas redondeadas y translúcidas
