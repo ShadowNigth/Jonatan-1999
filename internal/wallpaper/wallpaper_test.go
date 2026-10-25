@@ -81,6 +81,18 @@ func TestNebulaUsesThemePaletteAndMoves(t *testing.T) {
 	if next := renderer.Frame(80, 40); bytes.Equal(first, next.Pix) {
 		t.Fatal("las nubes de la nebulosa no se animan")
 	}
+	var atTwoSeconds *Canvas
+	for i := 0; i < 58; i++ {
+		atTwoSeconds = renderer.Frame(80, 40)
+	}
+	twoSecondSnapshot := append([]uint8(nil), atTwoSeconds.Pix...)
+	var later *Canvas
+	for i := 0; i < 60; i++ {
+		later = renderer.Frame(80, 40)
+	}
+	if bytes.Equal(twoSecondSnapshot, later.Pix) {
+		t.Fatal("la animación de la nebulosa se detiene después de unos dos segundos")
+	}
 
 	nord := NewRenderer("nebula", ui.PaletteByName("nord")).Frame(80, 40)
 	if bytes.Equal(first, nord.Pix) {

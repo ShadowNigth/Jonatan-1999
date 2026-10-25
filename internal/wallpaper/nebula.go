@@ -17,16 +17,16 @@ func (r *Renderer) drawNebula(c *Canvas) {
 	gridW := (c.W+cellSize-1)/cellSize + 1
 	gridH := (c.H+cellSize-1)/cellSize + 1
 	noise := make([]float64, gridW*gridH)
-	phase := float64(r.frame) * 0.018
+	phase := float64(r.frame) * 0.03
 
-	// El campo de ruido se desplaza lentamente para que el gas parezca fluir,
-	// sin tener que calcular ruido fractal a resolución completa en cada frame.
+	// La fase sigue al contador global de cuadros, sin límite de duración. El
+	// ruido fluye continuamente sin calcular ruido fractal a resolución completa.
 	for gy := 0; gy < gridH; gy++ {
 		v := float64(gy*cellSize) / math.Max(1, float64(c.H-1))
 		for gx := 0; gx < gridW; gx++ {
 			u := float64(gx*cellSize) / math.Max(1, float64(c.W-1))
-			nx := u*3.8 + phase*0.22
-			ny := v*2.7 - phase*0.16
+			nx := u*3.8 + phase*0.35
+			ny := v*2.7 - phase*0.26
 			coarse := nebulaValueNoise(nx, ny, 17)
 			medium := nebulaValueNoise(nx*2.03+2.4, ny*2.03-1.7, 53)
 			fine := nebulaValueNoise(nx*4.07-3.1, ny*4.07+5.2, 97)
@@ -42,13 +42,13 @@ func (r *Renderer) drawNebula(c *Canvas) {
 	if r.light {
 		strength = 0.28
 	}
-	breath := 0.90 + 0.10*math.Sin(phase*2.2)
-	centerAX := 0.32 + 0.050*math.Sin(phase*0.8)
-	centerAY := 0.46 + 0.040*math.Cos(phase*0.7)
-	centerBX := 0.72 + 0.055*math.Sin(phase*0.53+1.1)
-	centerBY := 0.58 + 0.045*math.Cos(phase*0.61+0.4)
-	filamentPulse := 0.82 + 0.18*math.Sin(phase*2.7)
-	filamentShift := 0.022 * math.Sin(phase*1.4)
+	breath := 0.88 + 0.12*math.Sin(phase*2.3)
+	centerAX := 0.32 + 0.065*math.Sin(phase*1.05)
+	centerAY := 0.46 + 0.050*math.Cos(phase*0.9)
+	centerBX := 0.72 + 0.070*math.Sin(phase*0.75+1.1)
+	centerBY := 0.58 + 0.060*math.Cos(phase*0.85+0.4)
+	filamentPulse := 0.74 + 0.26*math.Sin(phase*3.0)
+	filamentShift := 0.032 * math.Sin(phase*1.6)
 
 	for y := 0; y < c.H; y++ {
 		v := float64(y) / math.Max(1, float64(c.H-1))
@@ -64,7 +64,7 @@ func (r *Renderer) drawNebula(c *Canvas) {
 			n0 := lerp(noise[i], noise[i+1], tx)
 			n1 := lerp(noise[i+gridW], noise[i+gridW+1], tx)
 			cloudNoise := lerp(n0, n1, ty)
-			warp := (cloudNoise - 0.5) * 0.19
+			warp := (cloudNoise - 0.5) * 0.22
 
 			// Dos masas elongadas y rotadas forman la nube principal y su cola.
 			dxA, dyA := u-centerAX, v-centerAY+warp
@@ -122,8 +122,8 @@ func (r *Renderer) drawNebulaStars(c *Canvas, starR, starG, starB float64) {
 	frame := float64(r.frame)
 	for i := 0; i < count; i++ {
 		baseX, baseY := float64(rng.Intn(c.W)), float64(rng.Intn(c.H))
-		xPos := math.Mod(baseX+math.Sin(frame*0.007+float64(i)*1.5)*1.6, float64(c.W))
-		yPos := math.Mod(baseY+math.Cos(frame*0.005+float64(i)*1.2), float64(c.H))
+		xPos := math.Mod(baseX+math.Sin(frame*0.010+float64(i)*1.5)*2.4, float64(c.W))
+		yPos := math.Mod(baseY+math.Cos(frame*0.008+float64(i)*1.2)*1.4, float64(c.H))
 		if xPos < 0 {
 			xPos += float64(c.W)
 		}
@@ -131,7 +131,7 @@ func (r *Renderer) drawNebulaStars(c *Canvas, starR, starG, starB float64) {
 			yPos += float64(c.H)
 		}
 		x, y := int(xPos), int(yPos)
-		brightness := 0.45 + 0.55*(0.5+0.5*math.Sin(frame*0.06+float64(i)*1.83))
+		brightness := 0.45 + 0.55*(0.5+0.5*math.Sin(frame*0.09+float64(i)*1.83))
 		alpha := brightness * (0.30 + rng.Float64()*0.38)
 		c.blend(x, y, starR, starG, starB, alpha)
 		if i%13 == 0 {
@@ -158,14 +158,14 @@ func (r *Renderer) drawNebulaDust(c *Canvas, colorA, colorB, colorC, altR, altG,
 	w, h := float64(c.W), float64(c.H)
 	for i := 0; i < count; i++ {
 		baseX, baseY := rng.Float64()*w, rng.Float64()*h
-		speedX := 0.08 + rng.Float64()*0.19
+		speedX := 0.12 + rng.Float64()*0.22
 		if rng.Intn(2) == 0 {
 			speedX = -speedX
 		}
-		speedY := (rng.Float64() - 0.5) * 0.025
+		speedY := (rng.Float64() - 0.5) * 0.036
 		phase := rng.Float64() * 2 * math.Pi
 		x := math.Mod(baseX+frame*speedX, w)
-		y := math.Mod(baseY+frame*speedY+math.Sin(frame*0.025+phase)*1.4, h)
+		y := math.Mod(baseY+frame*speedY+math.Sin(frame*0.03+phase)*1.8, h)
 		if x < 0 {
 			x += w
 		}
@@ -173,14 +173,14 @@ func (r *Renderer) drawNebulaDust(c *Canvas, colorA, colorB, colorC, altR, altG,
 			y += h
 		}
 
-		pulse := 0.45 + 0.55*(0.5+0.5*math.Sin(frame*0.075+phase))
+		pulse := 0.42 + 0.58*(0.5+0.5*math.Sin(frame*0.11+phase))
 		alpha := pulse * (0.15 + rng.Float64()*0.17)
 		red, green, blue := colorA, colorB, colorC
 		if i%3 == 0 {
 			red, green, blue = altR, altG, altB
 		}
 		if i%6 == 0 {
-			tailY := y - 1.1*math.Cos(frame*0.025+phase)
+			tailY := y - 1.4*math.Cos(frame*0.03+phase)
 			c.cline(x-speedX*5, tailY, x, y, red, green, blue, alpha*0.42)
 			c.glow(x, y, 2.8, red, green, blue, pulse*0.07)
 		}
