@@ -436,9 +436,9 @@ así no queda un primer fotograma estático superpuesto al fondo animado.
 
 Escenas disponibles: `petals`, `snow`, `stars`, `rain`, `aurora`, `wave`,
 `city`, `embers`, `grid`, `meadow`, `bubbles`, `blackhole`. Las escenas toman
-los colores del tema activo cuando corresponde; `blackhole` combina un disco
-dorado lenteado, anillo fotónico y chorros azulados con tintes sutiles del tema.
-Puedes elegirla con `swaydesk wallpaper set scene:blackhole`.
+los colores del tema activo cuando corresponde; `blackhole` mantiene una paleta
+astronómica oscura con disco de acreción cálido. Puedes elegirla con
+`swaydesk wallpaper set scene:blackhole`.
 
 También puedes usar el nombre de una paleta y swaydesk toma su escena asociada:
 `swaydesk wallpaper set scene:sakura` es lo mismo que `scene:petals`, y
