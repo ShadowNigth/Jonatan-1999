@@ -52,7 +52,7 @@ func (r *Renderer) drawNebula(c *Canvas) {
 		v := float64(y) / math.Max(1, float64(c.H-1))
 		gy := y / cellSize
 		ty := float64(y%cellSize) / cellSize
-		ty = tty * tty * (3 - 2*tty)
+		ty = ty * ty * (3 - 2*ty)
 		for x := 0; x < c.W; x++ {
 			u := float64(x) / math.Max(1, float64(c.W-1))
 			gx := x / cellSize
