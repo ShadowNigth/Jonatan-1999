@@ -189,7 +189,13 @@ func (d *daemonState) closeEngines() {
 // media altura: se dibujan a resolución de terminal (2 píxeles por fila).
 func (d *daemonState) dims(kind Kind) (int, int) {
 	sw, sh := d.bg.Size()
-	w, h := sw/d.scale, sh/d.scale
+	scale := d.scale
+	if kind == KindVideo {
+		// El vídeo necesita más detalle que las escenas y no debe partir de
+		// una miniatura fija; solo se reduce en salidas mayores que Full HD.
+		scale = videoScaleFor(sw, sh)
+	}
+	w, h := sw/scale, sh/scale
 	if w < 16 {
 		w = 16
 	}

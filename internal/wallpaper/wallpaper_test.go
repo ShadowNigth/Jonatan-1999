@@ -274,6 +274,20 @@ func TestScaleFor(t *testing.T) {
 	}
 }
 
+func TestVideoScaleForKeepsNormalDisplaysAtNativeResolution(t *testing.T) {
+	for _, tc := range []struct{ w, h, want int }{
+		{1280, 720, 1},
+		{1920, 1080, 1},
+		{2560, 1440, 2},
+		{3840, 2160, 2},
+		{7680, 4320, 4},
+	} {
+		if got := videoScaleFor(tc.w, tc.h); got != tc.want {
+			t.Fatalf("videoScaleFor(%d,%d) = %d, se esperaba %d", tc.w, tc.h, got, tc.want)
+		}
+	}
+}
+
 func TestSupported(t *testing.T) {
 	yes := []string{"a.gif", "b.PNG", "c.jpg", "d.jpeg", "f.mp4", "g.mkv", "h.webm"}
 	for _, n := range yes {

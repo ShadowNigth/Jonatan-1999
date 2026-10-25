@@ -1,8 +1,12 @@
 package wallpaper
 
 import (
+	"bytes"
 	"fmt"
 	"image"
+	"io"
+	"log"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -104,7 +108,7 @@ type Engine struct {
 
 // NewEngine prepara el motor para la especificación dada.
 func NewEngine(spec Spec) (*Engine, error) {
-	e := &Engine{spec: spec, start: time.Now()}
+	e := &Engine{spec: spec}
 	switch spec.Kind {
 	case KindScene:
 		e.scene = NewRenderer(spec.Scene, spec.Pal)
@@ -131,6 +135,7 @@ func NewEngine(spec Spec) (*Engine, error) {
 	default:
 		return nil, fmt.Errorf("tipo de fondo no soportado: %s", spec.Kind)
 	}
+	e.start = time.Now()
 	return e, nil
 }
 
@@ -174,7 +179,7 @@ func (e *Engine) Size(w, h int) (int, int) {
 	return w, h * 2
 }
 
-// Frame produce el fotograma correspondiente al instante t.
+// Frame produce el siguiente fotograma al tamaño del lienzo indicado.
 func (e *Engine) Frame(w, h int) *Canvas {
 	e.frame++
 	switch e.spec.Kind {
@@ -192,12 +197,12 @@ func (e *Engine) Frame(w, h int) *Canvas {
 		e.last = ImageToCanvas(img, w, h/2)
 		return e.last
 	case KindVideo:
-		img := e.video.FrameAt(time.Since(e.start))
-		if img == nil {
+		frame := e.video.Frame(w, h)
+		if frame == nil {
 			e.last = NewCanvas(w, h, e.spec.Pal.Bg)
 			return e.last
 		}
-		e.last = ImageToCanvas(img, w, h/2)
+		e.last = frame
 		return e.last
 	default:
 		e.last = NewCanvas(w, h, e.spec.Pal.Bg)
@@ -251,72 +256,231 @@ func (e *Engine) Close() {
 
 // ─── Vídeo (opcional con ffmpeg) ───────────────────────────────────────────
 
-// videoSource decodifica fotogramas de vídeo bajo demanda usando ffmpeg.
-//
-// Para evitar lanzar un proceso por fotograma, se mantiene una tubería abierta
-// con fotogramas RGB en bruto a resolución reducida.
+// videoSource decodifica vídeo en tiempo real. La salida usa el tamaño del
+// lienzo y un canal de un solo fotograma: si el dibujo se retrasa, se descartan
+// fotogramas viejos en vez de acumular latencia o memoria.
 type videoSource struct {
 	path     string
 	fps      int
-	frames   [][]uint8
-	width    int
-	height   int
 	duration time.Duration
-	loaded   bool
+
+	width  int
+	height int
+	cmd    *exec.Cmd
+	stdout io.ReadCloser
+	stderr bytes.Buffer
+	frames chan []uint8
+	free   chan []uint8
+	stop   chan struct{}
+	done   chan struct{}
+
+	current     []uint8
+	decodeErr   error
+	errorLogged bool
 }
 
-// NewVideoSource prepara la fuente de vídeo (la descodificación real es perezosa).
+// NewVideoSource valida el archivo. El proceso decodificador se inicia cuando
+// el motor conoce la resolución real de la salida.
 func NewVideoSource(path string, fps int) (*videoSource, error) {
 	if fps <= 0 {
-		fps = 15
+		fps = 24
 	}
-	v := &videoSource{path: path, fps: fps}
-	// Comprobación temprana para dar un error claro.
-	if _, _, err := ProbeVideo(path); err != nil {
+	if fps > 60 {
+		fps = 60
+	}
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return nil, fmt.Errorf("se necesita ffmpeg para los fondos de vídeo")
+	}
+	info, err := probeVideo(path)
+	if err != nil {
 		return nil, err
 	}
-	if err := v.load(); err != nil {
-		return nil, err
-	}
-	return v, nil
+	return &videoSource{path: path, fps: fps, duration: info.duration}, nil
 }
 
-func (v *videoSource) load() error {
-	frames, w, h, dur, err := DecodeVideo(v.path, 160, v.fps)
-	if err != nil {
-		return err
+// Frame devuelve el fotograma más reciente al tamaño exacto del lienzo.
+func (v *videoSource) Frame(width, height int) *Canvas {
+	if width <= 0 || height <= 0 {
+		return nil
 	}
-	v.frames, v.width, v.height, v.duration, v.loaded = frames, w, h, dur, true
+	if err := v.startDecoder(width, height); err != nil {
+		v.reportError(err)
+		return nil
+	}
+
+	if v.current == nil {
+		select {
+		case frame, ok := <-v.frames:
+			if !ok {
+				v.reportError(v.decodeErr)
+				return nil
+			}
+			v.current = frame
+		default:
+			// No bloquea el bucle Wayland durante el arranque: el siguiente
+			// ciclo tomará el primer fotograma en cuanto ffmpeg lo entregue.
+			return nil
+		}
+	} else {
+		select {
+		case frame, ok := <-v.frames:
+			if ok {
+				previous := v.current
+				v.current = frame
+				select {
+				case v.free <- previous:
+				default:
+				}
+			} else {
+				v.reportError(v.decodeErr)
+			}
+		default:
+		}
+	}
+
+	if len(v.current) != width*height*3 {
+		return nil
+	}
+	return &Canvas{W: width, H: height, Pix: v.current}
+}
+
+func (v *videoSource) startDecoder(width, height int) error {
+	if v.cmd != nil && v.width == width && v.height == height {
+		return nil
+	}
+	if v.cmd != nil {
+		v.stopDecoder()
+	}
+	v.current = nil
+	v.decodeErr = nil
+	v.stderr.Reset()
+
+	filter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,fps=%d",
+		width, height, width, height, v.fps)
+	cmd := exec.Command("ffmpeg",
+		"-nostdin", "-hide_banner", "-loglevel", "error",
+		"-stream_loop", "-1", "-re", "-i", v.path,
+		"-map", "0:v:0", "-an", "-sn", "-dn",
+		"-vf", filter,
+		"-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("abriendo la salida de ffmpeg: %w", err)
+	}
+	cmd.Stderr = &v.stderr
+	if err := cmd.Start(); err != nil {
+		_ = stdout.Close()
+		return fmt.Errorf("iniciando ffmpeg: %w", err)
+	}
+	v.errorLogged = false
+	v.cmd, v.stdout = cmd, stdout
+	v.width, v.height = width, height
+	v.frames = make(chan []uint8, 1)
+	v.free = make(chan []uint8, 3)
+	for i := 0; i < cap(v.free); i++ {
+		v.free <- make([]uint8, width*height*3)
+	}
+	v.stop = make(chan struct{})
+	v.done = make(chan struct{})
+	go v.readFrames(width * height * 3)
 	return nil
 }
 
-// FrameAt devuelve el fotograma más cercano al instante t.
-func (v *videoSource) FrameAt(t time.Duration) image.Image {
-	if !v.loaded || len(v.frames) == 0 {
-		return nil
+func (v *videoSource) readFrames(frameSize int) {
+	defer close(v.done)
+	defer close(v.frames)
+	var readErr error
+	defer func() {
+		waitErr := v.cmd.Wait()
+		select {
+		case <-v.stop:
+			return // cierre solicitado: no es un error de reproducción
+		default:
+		}
+		if waitErr != nil {
+			v.decodeErr = fmt.Errorf("ffmpeg: %v (%s)", waitErr, strings.TrimSpace(v.stderr.String()))
+		} else if readErr != nil {
+			v.decodeErr = fmt.Errorf("se interrumpió un fotograma de vídeo: %w", readErr)
+		} else {
+			v.decodeErr = fmt.Errorf("ffmpeg terminó la reproducción inesperadamente")
+		}
+	}()
+
+	for {
+		var frame []uint8
+		select {
+		case frame = <-v.free:
+		case <-v.stop:
+			return
+		}
+		if _, err := io.ReadFull(v.stdout, frame[:frameSize]); err != nil {
+			readErr = err
+			return
+		}
+		select {
+		case <-v.stop:
+			return
+		default:
+		}
+		select {
+		case v.frames <- frame:
+		default:
+			// Mantiene solo el fotograma más reciente; no deja que una salida
+			// lenta acumule una cola creciente de vídeo atrasado.
+			select {
+			case dropped := <-v.frames:
+				v.free <- dropped
+			default:
+			}
+			select {
+			case v.frames <- frame:
+			case <-v.stop:
+				return
+			}
+		}
 	}
-	dur := v.duration
-	if dur <= 0 {
-		dur = time.Duration(len(v.frames)) * time.Second / time.Duration(v.fps)
+}
+
+func (v *videoSource) reportError(err error) {
+	if v.errorLogged {
+		return
 	}
-	if dur > 0 {
-		t = t % dur
+	v.errorLogged = true
+	if err == nil {
+		err = fmt.Errorf("ffmpeg no entregó fotogramas")
 	}
-	idx := int(float64(t) / float64(dur) * float64(len(v.frames)))
-	if idx < 0 {
-		idx = 0
+	log.Printf("swaydesk: fondo de vídeo %q: %v", filepath.Base(v.path), err)
+}
+
+func (v *videoSource) stopDecoder() {
+	if v.done == nil {
+		return
 	}
-	if idx >= len(v.frames) {
-		idx = len(v.frames) - 1
+	select {
+	case <-v.stop:
+	default:
+		close(v.stop)
 	}
-	return RGBAFromRGB(v.frames[idx], v.width, v.height)
+	if v.stdout != nil {
+		_ = v.stdout.Close()
+	}
+	if v.cmd != nil && v.cmd.Process != nil {
+		_ = v.cmd.Process.Kill()
+	}
+	<-v.done
+	v.cmd, v.stdout = nil, nil
+	v.frames, v.free, v.stop, v.done = nil, nil, nil, nil
+	v.width, v.height = 0, 0
 }
 
 // Duration devuelve la duración del vídeo.
 func (v *videoSource) Duration() time.Duration { return v.duration }
 
-// Close libera los fotogramas en memoria.
-func (v *videoSource) Close() { v.frames = nil }
+// Close detiene ffmpeg y libera el búfer del último fotograma.
+func (v *videoSource) Close() {
+	v.stopDecoder()
+	v.current = nil
+}
 
 // RGBAFromRGB envuelve un búfer RGB en una imagen.
 func RGBAFromRGB(pix []uint8, w, h int) image.Image {

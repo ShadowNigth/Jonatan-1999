@@ -222,6 +222,20 @@ func ScaleFor(width, height int) int {
 	}
 }
 
+// videoScaleFor conserva resolución nativa hasta Full HD y reduce solo en
+// pantallas mayores para evitar que la decodificación monopolice la CPU.
+func videoScaleFor(width, height int) int {
+	pixels := width * height
+	switch {
+	case pixels > 3840*2160:
+		return 4
+	case pixels > 1920*1080:
+		return 2
+	default:
+		return 1
+	}
+}
+
 // clamp limita v al rango [lo, hi].
 func clamp(v, lo, hi int) int {
 	if v < lo {
