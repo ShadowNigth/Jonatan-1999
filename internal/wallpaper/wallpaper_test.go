@@ -95,6 +95,27 @@ func TestBlackHoleSceneCatalogAndRenderer(t *testing.T) {
 		t.Fatal("no se renderizó el disco de acreción brillante")
 	}
 
+	jetPixels := 0
+	for y := 0; y < c.H; y++ {
+		distance := y*2 - c.H
+		if distance < 0 {
+			distance = -distance
+		}
+		if distance < 16 || distance > 54 {
+			continue
+		}
+		for x := c.W/2 - 2; x <= c.W/2+2; x++ {
+			i := (y*c.W + x) * 3
+			red, green, blue := int(c.Pix[i]), int(c.Pix[i+1]), int(c.Pix[i+2])
+			if blue > red+18 && blue > green {
+				jetPixels++
+			}
+		}
+	}
+	if jetPixels == 0 {
+		t.Fatal("no se renderizaron los chorros polares azulados")
+	}
+
 	first := append([]uint8(nil), c.Pix...)
 	if next := r.Frame(120, 68); bytes.Equal(first, next.Pix) {
 		t.Fatal("el disco y el firmamento no presentan movimiento entre fotogramas")
@@ -110,6 +131,14 @@ func TestBlackHoleSceneCatalogAndRenderer(t *testing.T) {
 	}
 	if lines := PreviewBlock(eng, 32, 12); len(lines) != 12 {
 		t.Fatalf("la vista previa devolvió %d líneas; se esperaban 12", len(lines))
+	}
+}
+
+func TestBlackHoleColorVariesWithTheme(t *testing.T) {
+	catppuccin := NewRenderer("blackhole", testPal).Frame(96, 54)
+	nord := NewRenderer("blackhole", ui.PaletteByName("nord")).Frame(96, 54)
+	if bytes.Equal(catppuccin.Pix, nord.Pix) {
+		t.Fatal("los acentos del tema no producen una variante de color")
 	}
 }
 

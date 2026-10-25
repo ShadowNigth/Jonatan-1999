@@ -88,8 +88,8 @@ var scenes = map[string]SceneInfo{
 		Intensity: 0.50, Animation: "ascenso", Tags: []string{"agua", "suave", "kawaii"}, Cost: "image",
 	},
 	"blackhole": {
-		Key: "blackhole", Name: "Agujero negro", Description: "Sombra gravitacional, anillo fotónico y disco de acreción",
-		Intensity: 0.42, Animation: "turbulencia y rotación sutil", Tags: []string{"espacio", "astronomía", "cosmos", "relatividad", "singularidad"}, Cost: "image",
+		Key: "blackhole", Name: "Agujero negro", Description: "Disco de acreción lenteado, anillo fotónico y chorros relativistas",
+		Intensity: 0.52, Animation: "órbita del plasma y chorros pulsantes", Tags: []string{"espacio", "astronomía", "cosmos", "relatividad", "lente gravitacional", "chorros"}, Cost: "image",
 	},
 }
 

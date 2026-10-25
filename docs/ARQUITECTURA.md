@@ -35,7 +35,7 @@ internal/wayland cliente Wayland puro: conexión, registry, xdg-shell, shm y
                  wlr-layer-shell (capa background para el fondo animado)
 internal/wallpaper motor de fondos de pantalla
   scenes.go      catálogo y escenas procedurales sobre un Canvas RGB
-  blackhole.go   sombra, anillo fotónico, disco de acreción y lente gravitacional
+  blackhole.go   sombra, disco lenteado, anillo fotónico y chorros relativistas
   gif.go         carga de GIF animado (fotogramas ya compuestos)
   video.go       decodificación con ffmpeg → tramas RGB24 en memoria
   render.go      protocolos kitty y sixel, PNG, escalado y recorte

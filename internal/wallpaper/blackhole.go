@@ -47,12 +47,68 @@ func (r *Renderer) drawBlackHole(c *Canvas, pixelAspectY float64) {
 	}
 
 	r.drawBlackHoleStars(c, cx, cy, pixelAspectY, horizon, outerDisk)
+	r.drawRelativisticJets(c, cx, cy, pixelAspectY, horizon, shortSide)
 	r.drawAccretionDisk(c, cx, cy, pixelAspectY, horizon, innerDisk, outerDisk, false)
+	// La parte trasera del disco se curva sobre y bajo la sombra por efecto de
+	// lente gravitacional, como un anillo de luz más ancho que el anillo fotónico.
+	r.drawLensedDiskArc(c, cx, cy, pixelAspectY, horizon)
 	drawBlackHoleShadow(c, cx, cy, pixelAspectY, horizon)
 	// El lado cercano del plasma queda delante del borde de la sombra, pero
 	// nunca pinta sobre el horizonte de sucesos.
 	r.drawAccretionDisk(c, cx, cy, pixelAspectY, horizon, innerDisk, outerDisk, true)
 	r.drawPhotonRing(c, cx, cy, pixelAspectY, horizon)
+}
+
+// drawRelativisticJets pinta los dos chorros polares como plasma azul muy
+// fino. El lado que apunta hacia el observador es más brillante; nudos de
+// plasma recorren lentamente ambos chorros para darles movimiento.
+func (r *Renderer) drawRelativisticJets(c *Canvas, cx, cy, pixelAspectY, horizon, shortSide float64) {
+	physicalH := float64(c.H) * pixelAspectY
+	halfHeight := math.Min(cy, physicalH-cy)
+	jetEnd := math.Min(shortSide*0.46, halfHeight*0.92)
+	jetStart := horizon * 1.12
+	if jetEnd <= jetStart {
+		return
+	}
+
+	accentR, accentG, accentB := hexRGB(r.pal.Accent)
+	jetR := lerp(55, accentR, 0.16)
+	jetG := lerp(145, accentG, 0.13)
+	jetB := lerp(255, accentB, 0.10)
+	frame := float64(r.frame)
+	maxWidth := math.Max(1, horizon*0.075)
+	x0 := max(0, int(math.Floor(cx-maxWidth*3)))
+	x1 := min(c.W-1, int(math.Ceil(cx+maxWidth*3)))
+	y0 := max(0, int(math.Floor((cy-jetEnd)/pixelAspectY)))
+	y1 := min(c.H-1, int(math.Ceil((cy+jetEnd)/pixelAspectY)))
+
+	for y := y0; y <= y1; y++ {
+		dy := (float64(y)+0.5)*pixelAspectY - cy
+		distance := math.Abs(dy)
+		if distance < jetStart || distance > jetEnd {
+			continue
+		}
+		t := (distance - jetStart) / (jetEnd - jetStart)
+		width := math.Max(0.75, horizon*(0.025+0.045*t))
+		centerX := cx + horizon*(0.018*math.Sin(t*7+frame*0.025)+0.009*math.Sin(t*19-frame*0.042))
+		fade := math.Pow(1-t, 0.72)
+		beaming := 1.0 // el chorro inferior se acerca al observador
+		if dy < 0 {
+			beaming = 0.48
+		}
+		knot := 0.5 + 0.5*math.Sin(t*25-frame*0.075)
+		for x := x0; x <= x1; x++ {
+			offset := (float64(x)+0.5-centerX)/width
+			if math.Abs(offset) > 3.2 {
+				continue
+			}
+			core := math.Exp(-0.5 * offset * offset)
+			sheath := math.Exp(-0.5 * offset * offset / 6)
+			alpha := fade * beaming * (0.16*sheath + 0.27*core*(0.72+0.28*knot))
+			c.blend(x, y, jetR, jetG, jetB, alpha)
+			c.blend(x, y, 205, 229, 255, core*fade*beaming*(0.10+0.12*knot))
+		}
+	}
 }
 
 func (r *Renderer) drawBlackHoleStars(c *Canvas, cx, cy, pixelAspectY, horizon, outerDisk float64) {
@@ -118,6 +174,11 @@ func (r *Renderer) drawBlackHoleStars(c *Canvas, cx, cy, pixelAspectY, horizon, 
 func (r *Renderer) drawAccretionDisk(c *Canvas, cx, cy, pixelAspectY, horizon, inner, outer float64, foregroundOnly bool) {
 	const inclination = 0.105
 	frame := float64(r.frame)
+	accentR, accentG, accentB := hexRGB(r.pal.Accent2)
+	hotspotAngle := frame * 0.032
+	hotspotRadius := horizon * 2.05
+	hotspotX := hotspotRadius * math.Cos(hotspotAngle)
+	hotspotY := hotspotRadius * math.Sin(hotspotAngle) * inclination
 	yExtent := outer * inclination
 	x0 := max(0, int(math.Floor(cx-outer)))
 	x1 := min(c.W-1, int(math.Ceil(cx+outer)))
@@ -149,20 +210,67 @@ func (r *Renderer) drawAccretionDisk(c *Canvas, cx, cy, pixelAspectY, horizon, i
 			angle := math.Atan2(dy/inclination, dx)
 			approaching := math.Max(0, -math.Cos(angle))
 			doppler := 0.82 + 0.34*approaching
-			flow := 0.84 + 0.10*math.Sin(angle*15+math.Log(diskRadius/horizon)*12-frame*0.035)
-			flow += 0.06 * math.Sin(angle*31-diskRadius/horizon*8+frame*0.021)
+			flow := 0.84 + 0.10*math.Sin(angle*15+math.Log(diskRadius/horizon)*12-frame*0.058)
+			flow += 0.06 * math.Sin(angle*31-diskRadius/horizon*8+frame*0.038)
 
+			spotDX := dx - hotspotX
+			spotDY := (dy - hotspotY) / inclination
+			spot := math.Exp(-0.5 * (spotDX*spotDX+spotDY*spotDY) / (horizon*horizon*0.105))
 			red := lerp(196, 255, heat)
 			green := lerp(36, 225, heat)
 			blue := lerp(10, 184, heat)
-			red = lerp(red, 255, approaching*0.24)
-			green = lerp(green, 246, approaching*0.19)
-			blue = lerp(blue, 236, approaching*0.15)
-			alpha := (0.34 + 0.38*heat) * edge * flow * doppler
+			// El tema tiñe suavemente las capas exteriores del plasma; el núcleo
+			// sigue en tonos de cuerpo negro, entre el ámbar y el blanco caliente.
+			tint := (1 - heat) * 0.16
+			red = lerp(red, accentR, tint)
+			green = lerp(green, accentG, tint)
+			blue = lerp(blue, accentB, tint)
+			red = lerp(red, 255, approaching*0.24+spot*0.30)
+			green = lerp(green, 246, approaching*0.19+spot*0.34)
+			blue = lerp(blue, 236, approaching*0.15+spot*0.38)
+			alpha := (0.34 + 0.38*heat) * edge * flow * doppler * (1 + spot*0.17)
 			if foregroundOnly {
 				alpha *= 0.24
 			}
 			c.blend(x, y, red, green, blue, alpha)
+		}
+	}
+}
+
+// drawLensedDiskArc simula la luz del lado lejano del disco, doblada alrededor
+// de la sombra. El arco superior es más luminoso; el inferior queda rojo y
+// tenue, como la imagen duplicada por la lente gravitacional.
+func (r *Renderer) drawLensedDiskArc(c *Canvas, cx, cy, pixelAspectY, horizon float64) {
+	ringRadius := horizon * 1.42
+	width := math.Max(0.8, horizon*0.055)
+	bound := ringRadius + width*3
+	x0 := max(0, int(math.Floor(cx-bound)))
+	x1 := min(c.W-1, int(math.Ceil(cx+bound)))
+	y0 := max(0, int(math.Floor((cy-bound)/pixelAspectY)))
+	y1 := min(c.H-1, int(math.Ceil((cy+bound)/pixelAspectY)))
+	accentR, accentG, accentB := hexRGB(r.pal.Accent2)
+	frame := float64(r.frame)
+
+	for y := y0; y <= y1; y++ {
+		dy := (float64(y)+0.5)*pixelAspectY - cy
+		for x := x0; x <= x1; x++ {
+			dx := (float64(x) + 0.5) - cx
+			delta := math.Hypot(dx, dy) - ringRadius
+			if math.Abs(delta) > width*3 {
+				continue
+			}
+			angle := math.Atan2(dy, dx)
+			upperArc := math.Max(0, -math.Sin(angle))
+			arcPower := 0.18 + 0.82*math.Pow(upperArc, 1.35)
+			shimmer := 0.93 + 0.07*math.Sin(frame*0.035+angle*5)
+			core := math.Exp(-0.5 * delta * delta / (width * width))
+			tint := 0.035 + 0.045*(1-upperArc)
+			red := lerp(255, accentR, tint)
+			green := lerp(218, accentG, tint)
+			blue := lerp(158, accentB, tint)
+			c.blend(x, y, red, green, blue, core*arcPower*shimmer*0.48)
+			halo := math.Exp(-0.5 * delta * delta / (width * width * 5))
+			c.blend(x, y, 255, 126, 42, halo*arcPower*0.075)
 		}
 	}
 }
