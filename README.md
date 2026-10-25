@@ -69,9 +69,9 @@ terceros.
 - **Temas adaptativos**: `swaydesk theme --from-wallpaper` extrae los colores
   dominantes de tu fondo (cuantización + HSL + contraste WCAG) y genera una
   paleta completa que se guarda en `~/.config/swaydesk/themes/`.
-- **Fondos animados de verdad**: 12 escenas procedurales (pétalos de sakura,
+- **Fondos animados de verdad**: 11 escenas procedurales (pétalos de sakura,
   nieve, estrellas, lluvia de neón, aurora, olas, ciudad cyberpunk, brasas,
-  rejilla synthwave, pradera, burbujas y nebulosa adaptativa) y reproducción
+  rejilla synthwave, pradera y burbujas) y reproducción
   de **GIF animados**, **imágenes** y **vídeos** (`mp4`, `webm`, `mkv` —
   incluidos los de Wallpaper Engine) con un demonio propio que dibuja en una capa
   `wlr-layer-shell` detrás de las ventanas. Pausa las animaciones solo cuando
