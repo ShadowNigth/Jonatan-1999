@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/ui"
@@ -101,10 +102,12 @@ type Engine struct {
 	still *Still
 	gif   *GIF
 	video *videoSource
-	start time.Time
-	frame int
-	W, H  int
-	last  *Canvas
+	start    time.Time
+	frame    int
+	W, H     int
+	last     *Canvas
+	paused   bool
+	pausedAt time.Time
 }
 
 // NewEngine prepara el motor para la especificación dada.
@@ -263,6 +266,34 @@ func (e *Engine) SizeBytes() int64 {
 	return n
 }
 
+// Pause congela la animación sin perder su posición actual.
+func (e *Engine) Pause() {
+	if e == nil || e.paused {
+		return
+	}
+	e.paused = true
+	e.pausedAt = time.Now()
+	if e.video != nil {
+		e.video.Pause()
+	}
+}
+
+// Resume continúa la animación desde el fotograma en el que se pausó.
+func (e *Engine) Resume() {
+	if e == nil || !e.paused {
+		return
+	}
+	pausedFor := time.Since(e.pausedAt)
+	if e.spec.Kind == KindGIF {
+		e.start = e.start.Add(pausedFor)
+	}
+	if e.video != nil {
+		e.video.Resume()
+	}
+	e.paused = false
+	e.pausedAt = time.Time{}
+}
+
 // Close libera los recursos del motor.
 func (e *Engine) Close() {
 	if e.video != nil {
@@ -298,6 +329,7 @@ type videoSource struct {
 	current     []uint8
 	decodeErr   error
 	errorLogged bool
+	paused      bool
 }
 
 // NewVideoSource valida el archivo y detecta un dispositivo VAAPI accesible.
@@ -588,6 +620,31 @@ func (v *videoSource) reportError(err error) {
 	log.Printf("swaydesk: fondo de vídeo %q: %v", filepath.Base(v.path), err)
 }
 
+func (v *videoSource) Pause() {
+	if v.paused || v.cmd == nil || v.cmd.Process == nil {
+		return
+	}
+	if err := v.cmd.Process.Signal(syscall.SIGSTOP); err != nil {
+		log.Printf("swaydesk: no se pudo pausar ffmpeg: %v", err)
+		return
+	}
+	v.paused = true
+}
+
+func (v *videoSource) Resume() {
+	if !v.paused {
+		return
+	}
+	if v.cmd == nil || v.cmd.Process == nil {
+		v.paused = false
+		return
+	}
+	if err := v.cmd.Process.Signal(syscall.SIGCONT); err != nil {
+		log.Printf("swaydesk: no se pudo reanudar ffmpeg: %v", err)
+	}
+	v.paused = false
+}
+
 func (v *videoSource) stopDecoder() {
 	if v.done == nil {
 		return
@@ -608,6 +665,7 @@ func (v *videoSource) stopDecoder() {
 	v.frames, v.free, v.stop, v.done = nil, nil, nil, nil
 	v.width, v.height = 0, 0
 	v.usingVAAPI = false
+	v.paused = false
 }
 
 // Duration devuelve la duración del vídeo.

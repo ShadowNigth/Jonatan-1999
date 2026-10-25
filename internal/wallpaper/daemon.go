@@ -81,9 +81,11 @@ type daemonState struct {
 	from *Canvas // último fotograma del fondo anterior, congelado
 	last *Canvas // último fotograma dibujado
 
-	source string
-	start  time.Time
-	moving bool
+	source   string
+	start    time.Time
+	moving   bool
+	hidden   bool
+	hiddenAt time.Time
 }
 
 // runDaemonOptions implementa el bucle del fondo animado sobre wlr-layer-shell.
@@ -128,18 +130,20 @@ func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Sig
 		}
 	}
 
-	// Los eventos de sway llegan por un canal aparte para no bloquear el dibujo.
+	// Los eventos de sway y de visibilidad llegan por canales separados para
+	// que las consultas IPC no bloqueen el dibujo ni el control de Wayland.
 	events := workspaceStream(stop)
+	visibility := wallpaperVisibilityStream(stop)
 
 	for {
 		wait := d.eng.Interval()
-		drawFrame := d.last == nil || d.moving || (d.eng.Kind() != KindImage && d.eng.Kind() != KindNone)
-		if d.moving {
-			wait = 16 * time.Millisecond
-		} else if !drawFrame {
-			// Un fondo fijo solo se vuelve a dibujar al quedar sucio (inicio,
-			// cambio de workspace o resize); el loop sigue atendiendo Wayland.
+		drawFrame := !d.hidden && (d.last == nil || d.moving || (d.eng.Kind() != KindImage && d.eng.Kind() != KindNone))
+		if d.hidden || !drawFrame {
+			// El fondo está oculto o es fijo: mantener activos los eventos y
+			// Wayland, pero sin generar fotogramas animados.
 			wait = 250 * time.Millisecond
+		} else if d.moving {
+			wait = 16 * time.Millisecond
 		}
 		select {
 		case <-sig:
@@ -153,6 +157,12 @@ func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Sig
 				continue
 			}
 			d.onWorkspace(ev)
+		case hidden, ok := <-visibility:
+			if !ok {
+				visibility = nil
+				continue
+			}
+			d.setHidden(hidden)
 		case <-time.After(wait):
 			if bg.Closed() {
 				return nil
@@ -167,7 +177,7 @@ func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Sig
 				d.last = nil
 				drawFrame = true
 			}
-			if drawFrame {
+			if drawFrame && !d.hidden {
 				if err := d.frame(); err != nil {
 					return err
 				}
@@ -247,6 +257,9 @@ func (d *daemonState) install(source string, animate bool) error {
 	if err != nil {
 		return err
 	}
+	if d.hidden {
+		next.Pause()
+	}
 	if !animate || !d.opt.Transition.Active() || from == nil || d.eng == nil {
 		if d.eng != nil {
 			d.eng.Close()
@@ -269,6 +282,36 @@ func (d *daemonState) install(source string, animate bool) error {
 	d.moving = true
 	d.source = source
 	return nil
+}
+
+func (d *daemonState) setHidden(hidden bool) {
+	if d.hidden == hidden {
+		return
+	}
+	now := time.Now()
+	if hidden {
+		d.hidden = true
+		d.hiddenAt = now
+		if d.eng != nil {
+			d.eng.Pause()
+		}
+		return
+	}
+
+	if d.eng != nil {
+		d.eng.Resume()
+	}
+	if d.moving && !d.hiddenAt.IsZero() {
+		pausedFrom := d.hiddenAt
+		if d.start.After(pausedFrom) {
+			// Una transición iniciada mientras estaba oculto solo se congela
+			// desde el momento en que comenzó.
+			pausedFrom = d.start
+		}
+		d.start = d.start.Add(now.Sub(pausedFrom))
+	}
+	d.hidden = false
+	d.hiddenAt = time.Time{}
 }
 
 // frame dibuja el siguiente fotograma (con transición si hace falta).

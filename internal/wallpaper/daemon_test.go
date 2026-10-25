@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 )
@@ -107,5 +108,25 @@ func TestDaemonExpandsHomePathForWorkspaceSource(t *testing.T) {
 	}
 	if got := d.eng.Spec().Path; got != path {
 		t.Fatalf("se expandió ~/ a %q, se esperaba %q", got, path)
+	}
+}
+
+func TestDaemonPausePreservesTransitionProgress(t *testing.T) {
+	d := newWorkspaceTestDaemon(t, NewTransition(TransFade, 400))
+	d.moving = true
+	d.start = time.Now().Add(-100 * time.Millisecond)
+	startBeforePause := d.start
+
+	d.setHidden(true)
+	if !d.hidden || !d.eng.paused {
+		t.Fatal("el daemon y su motor deberían pausarse juntos")
+	}
+	time.Sleep(25 * time.Millisecond)
+	d.setHidden(false)
+	if d.hidden || d.eng.paused {
+		t.Fatal("el daemon y su motor deberían reanudarse juntos")
+	}
+	if d.start.Sub(startBeforePause) < 20*time.Millisecond {
+		t.Fatal("la transición no congeló su reloj mientras el fondo estaba oculto")
 	}
 }
