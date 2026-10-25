@@ -18,6 +18,17 @@ type WallpaperResult struct {
 	Applied bool
 }
 
+type previewLoadRequest struct {
+	id   uint64
+	spec wallpaper.Spec
+}
+
+type previewLoadResult struct {
+	id     uint64
+	engine *wallpaper.Engine
+	err    error
+}
+
 // WallpaperPicker abre el selector de fondos animados: escenas procedurales y
 // archivos (imágenes, GIF y vídeos) de las carpetas configuradas.
 //
@@ -33,13 +44,20 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 
 	pane := &listPane{}
 	var (
-		filter    string
-		live      = true
-		engine    *wallpaper.Engine
-		engineErr error
-		result    WallpaperResult
-		tabs      = []string{"todas", "escenas", "archivos"}
-		tabIdx    = 0
+		filter           string
+		live             = true
+		engine           *wallpaper.Engine
+		engineErr        error
+		result           WallpaperResult
+		previewKey       string
+		previewRequestID uint64
+		previewLoading   bool
+		previewLines     []string
+		previewWidth     int
+		previewHeight    int
+		previewAt        time.Time
+		tabs             = []string{"todas", "escenas", "archivos"}
+		tabIdx           = 0
 	)
 
 	files := scanWallpapers(dirs)
@@ -52,6 +70,110 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 	cellAspect := 2 * float64(outputW) / float64(outputH)
 	if cellAspect <= 0 {
 		cellAspect = 32.0 / 9.0
+	}
+
+	// Cargar imágenes, GIF y metadatos de vídeo fuera del bucle de la UI.
+	// Solo se encola la selección más reciente para que navegar rápido no inicie
+	// decodificaciones costosas que ya quedaron obsoletas.
+	previewRequests := make(chan previewLoadRequest, 1)
+	previewResults := make(chan previewLoadResult)
+	stopPreview := make(chan struct{})
+	defer close(stopPreview)
+	go func() {
+		for {
+			select {
+			case <-stopPreview:
+				return
+			case req := <-previewRequests:
+				eng, loadErr := wallpaper.NewEngine(req.spec)
+				loaded := previewLoadResult{id: req.id, engine: eng, err: loadErr}
+				select {
+				case previewResults <- loaded:
+				case <-stopPreview:
+					if eng != nil {
+						eng.Close()
+					}
+					return
+				}
+			}
+		}
+	}()
+
+	requestPreview := func() {
+		entry, ok := pane.current()
+		key := ""
+		if ok {
+			key = entry.Key
+		}
+		if key == previewKey {
+			return
+		}
+		previewKey = key
+		previewRequestID++
+		previewLoading = ok
+		engineErr = nil
+		previewLines = nil
+		previewWidth, previewHeight = 0, 0
+		previewAt = time.Time{}
+		if engine != nil {
+			engine.Close()
+			engine = nil
+		}
+		if !ok {
+			select {
+			case <-previewRequests:
+			default:
+			}
+			return
+		}
+
+		spec := entry.Spec
+		spec.Pal = pal
+		switch spec.Kind {
+		case wallpaper.KindScene:
+			spec.FPS = 24
+		case wallpaper.KindGIF, wallpaper.KindVideo:
+			spec.FPS = 15 // el motor usa la temporización real del archivo
+		default:
+			spec.FPS = 4
+		}
+		req := previewLoadRequest{id: previewRequestID, spec: spec}
+		select {
+		case previewRequests <- req:
+		default:
+			select {
+			case <-previewRequests:
+			default:
+			}
+			select {
+			case previewRequests <- req:
+			default:
+			}
+		}
+	}
+
+	acceptPreviewResults := func() {
+		for {
+			select {
+			case loaded := <-previewResults:
+				if loaded.id != previewRequestID {
+					if loaded.engine != nil {
+						loaded.engine.Close()
+					}
+					continue
+				}
+				engine, engineErr = loaded.engine, loaded.err
+				previewLoading = false
+				previewLines = nil
+				previewWidth, previewHeight = 0, 0
+				previewAt = time.Time{}
+				if engine != nil && !live {
+					engine.Pause()
+				}
+			default:
+				return
+			}
+		}
 	}
 
 	rebuild := func() {
@@ -101,41 +223,15 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 		if pane.cursor >= len(pane.entries) {
 			pane.cursor = max(0, len(pane.entries)-1)
 		}
-		if engine != nil {
-			engine.Close()
-			engine = nil
-		}
-		engineErr = nil
-		if e, ok := pane.current(); ok {
-			spec := e.Spec
-			spec.Pal = pal
-			var fps int
-			switch spec.Kind {
-			case wallpaper.KindScene:
-				fps = 24
-			case wallpaper.KindGIF, wallpaper.KindVideo:
-				fps = 15 // el motor usa la temporización real del archivo
-			default:
-				fps = 4
-			}
-			spec.FPS = fps
-			eng, err := wallpaper.NewEngine(spec)
-			if err == nil {
-				if !live {
-					eng.Pause()
-				}
-				engine = eng
-			} else {
-				engineErr = err
-			}
-		}
+		requestPreview()
 	}
 	rebuild()
 
-	ticker := time.NewTicker(50 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	view := func(w, h int) string {
+		acceptPreviewResults()
 		innerW := w - 4
 		head := header(theme, innerW, "fondos animados", tabs, tabIdx)
 		search := searchBar(theme, innerW, filter, "filtra fondos… (Enter aplica · p ventana completa)", theme.Icons.Search)
@@ -171,7 +267,20 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 		bgTail := ui.Style{Bg: pal.Bg}.Render(strings.Repeat(" ", padRight))
 		var preview []string
 		if engine != nil && live {
-			preview = wallpaper.PreviewBlock(engine, wallW, wallH)
+			// Limita la miniatura animada a 10 Hz para que el render del menú no
+			// compita con la carga de archivos; las imágenes fijas se calculan una vez.
+			refresh := wallW != previewWidth || wallH != previewHeight
+			if engine.Kind() == wallpaper.KindImage {
+				refresh = refresh || len(previewLines) == 0
+			} else {
+				refresh = refresh || time.Since(previewAt) >= 100*time.Millisecond
+			}
+			if refresh {
+				previewLines = wallpaper.PreviewBlock(engine, wallW, wallH)
+				previewWidth, previewHeight = wallW, wallH
+				previewAt = time.Now()
+			}
+			preview = previewLines
 		}
 		if len(preview) > 0 {
 			for _, line := range preview {
@@ -182,6 +291,8 @@ func WallpaperPicker(pal ui.Palette, nerdFont bool, dirs []string, current strin
 			switch {
 			case engineErr != nil:
 				message = "error: " + engineErr.Error()
+			case previewLoading:
+				message = "cargando vista previa…"
 			case !live:
 				message = "vista previa pausada"
 			case engine != nil && engine.PreviewError() != nil:

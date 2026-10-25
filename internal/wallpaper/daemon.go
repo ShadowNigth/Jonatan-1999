@@ -196,8 +196,9 @@ func (d *daemonState) closeEngines() {
 	}
 }
 
-// dims calcula el tamaño del lienzo para un tipo de fondo. Las escenas usan
-// media altura: se dibujan a resolución de terminal (2 píxeles por fila).
+// dims calcula el tamaño del lienzo para un tipo de fondo. El lienzo de una
+// escena ya representa píxeles, no filas de terminal; mantener la proporción
+// completa evita que Wayland la comprima verticalmente al llenar la salida.
 func (d *daemonState) dims(kind Kind) (int, int) {
 	sw, sh := d.bg.Size()
 	scale := d.scale
@@ -212,12 +213,6 @@ func (d *daemonState) dims(kind Kind) (int, int) {
 	}
 	if h < 16 {
 		h = 16
-	}
-	if kind == KindScene {
-		h /= 2
-		if h < 16 {
-			h = 16
-		}
 	}
 	return w, h
 }

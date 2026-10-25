@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
+	"github.com/ShadowNigth/swaydesk/internal/wayland"
 )
 
 func newWorkspaceTestDaemon(t *testing.T, transition Transition) *daemonState {
@@ -128,5 +129,19 @@ func TestDaemonPausePreservesTransitionProgress(t *testing.T) {
 	}
 	if d.start.Sub(startBeforePause) < 20*time.Millisecond {
 		t.Fatal("la transición no congeló su reloj mientras el fondo estaba oculto")
+	}
+}
+
+func TestDaemonSceneDimensionsPreserveOutputAspect(t *testing.T) {
+	d := &daemonState{
+		bg:    &wayland.Background{W: 1920, H: 1080},
+		scale: 2,
+	}
+	w, h := d.dims(KindScene)
+	if w != 960 || h != 540 {
+		t.Fatalf("lienzo de escena = %dx%d; se esperaba proporción 16:9 a escala 1/2", w, h)
+	}
+	if w*1080 != h*1920 {
+		t.Fatalf("lienzo de escena %dx%d deforma la salida 1920x1080", w, h)
 	}
 }

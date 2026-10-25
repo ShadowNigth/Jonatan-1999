@@ -31,6 +31,12 @@ func cmdWallpaper(args []string) {
 	rest := args[1:]
 	cfg, err := config.Load()
 	must(err)
+	if hasFlag(args, "--sync-daemon") {
+		// Tarea interna desacoplada para que aplicar un fondo desde la galería
+		// no espere a que Wayland y el decodificador arranquen.
+		syncWallpaperDaemon(cfg)
+		return
+	}
 	theme := ui.NewTheme(cfg.Theme, cfg.NerdFont)
 
 	// Banderas de conveniencia que funcionan con cualquier subcomando.
@@ -636,6 +642,36 @@ func syncWallpaperDaemon(cfg *config.Config) {
 	fmt.Printf("  %s\n", ui.Dim("demonio de fondo al día con el nuevo fondo"))
 }
 
+// scheduleWallpaperDaemonSync delega el reinicio del demonio a un proceso
+// desacoplado: aplicar el fondo no queda bloqueado por la inicialización de
+// Wayland, FFmpeg ni la primera decodificación.
+func scheduleWallpaperDaemonSync(cfg *config.Config) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if cfg.Cache == "" {
+		return fmt.Errorf("la ruta de caché no está configurada")
+	}
+	if err := os.MkdirAll(cfg.Cache, 0o755); err != nil {
+		return err
+	}
+	logFile, err := os.OpenFile(filepath.Join(cfg.Cache, "wallpaper-sync.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+	cmd := exec.Command(exe, "wallpaper", "--sync-daemon")
+	cmd.Stdout, cmd.Stderr = logFile, logFile
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
+	return nil
+}
+
 // restartWallpaperDaemon aplica los cambios del plan de fondos por workspace.
 func restartWallpaperDaemon(cfg *config.Config) {
 	if _, err := currentSpec(cfg); err != nil {
@@ -859,10 +895,16 @@ func runWallpaperGallery(cfg *config.Config) error {
 	if err := saveWallpaperConfig(cfg); err != nil {
 		return err
 	}
-	applyStaticFallback(cfg, res.Spec)
-	syncWallpaperDaemon(cfg)
 	if cfg.WallpaperAdaptive && res.Spec.Path != "" {
 		_ = adaptThemeToWallpaper(cfg, ui.NewTheme(cfg.Theme, cfg.NerdFont))
+	}
+	applyStaticFallback(cfg, res.Spec)
+	fmt.Printf("✔ fondo aplicado: %s\n", res.Spec.Source())
+	if wallpaperDaemonNeeded(cfg) || wallpaper.RunningPID(cfg.Cache) != 0 {
+		if err := scheduleWallpaperDaemonSync(cfg); err != nil {
+			return fmt.Errorf("fondo guardado, pero no se pudo programar el reinicio del demonio: %w", err)
+		}
+		fmt.Printf("  %s\n", ui.Dim("animación actualizándose en segundo plano"))
 	}
 	return nil
 }
