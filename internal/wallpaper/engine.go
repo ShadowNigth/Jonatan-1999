@@ -183,12 +183,17 @@ func (e *Engine) Size(w, h int) (int, int) {
 	return w, h * 2
 }
 
-// Frame produce el siguiente fotograma al tamaño del lienzo indicado.
+// Frame produce el siguiente fotograma al tamaño del lienzo indicado. La capa
+// Wayland escala cada fila al doble al mostrar el lienzo.
 func (e *Engine) Frame(w, h int) *Canvas {
+	return e.frameWithPixelAspect(w, h, 2)
+}
+
+func (e *Engine) frameWithPixelAspect(w, h int, pixelAspectY float64) *Canvas {
 	e.frame++
 	switch e.spec.Kind {
 	case KindScene:
-		c := e.scene.Frame(w, h)
+		c := e.scene.frameWithPixelAspect(w, h, pixelAspectY)
 		e.last = c
 		return c
 	case KindImage:

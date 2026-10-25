@@ -67,6 +67,10 @@ func PreviewBlock(eng *Engine, w, h int) []string {
 			// como si fuese un fotograma real mientras llega el primero.
 			return nil
 		}
+	case KindScene:
+		// En el bloque de terminal, los medios bloques forman píxeles casi
+		// cuadrados; no se aplica la corrección vertical de la capa Wayland.
+		c = eng.frameWithPixelAspect(w, h*2, 1)
 	default:
 		c = eng.Frame(w, h*2)
 	}
@@ -124,7 +128,7 @@ func RunTerminal(eng *Engine, opts Options) error {
 			h = h / scale
 		}
 		cw, ch := eng.Size(w, h)
-		frame := ANSIFrame(eng.Frame(cw, ch))
+		frame := ANSIFrame(eng.frameWithPixelAspect(cw, ch, 1))
 		if !showInfo {
 			return frame
 		}
@@ -170,7 +174,7 @@ func RunTerminal(eng *Engine, opts Options) error {
 			case key.IsRune('s'):
 				path := fmt.Sprintf("%s/swaydesk-fondo-%s.png", os.TempDir(), time.Now().Format("150405"))
 				cw, ch := eng.Size(sc.W, (sc.H-2)*2)
-				if err := SaveCanvas(eng.Frame(cw, ch), path); err == nil {
+				if err := SaveCanvas(eng.frameWithPixelAspect(cw, ch, 1), path); err == nil {
 					fmt.Printf("\033[?25h\n fondo guardado en %s\n", path)
 					time.Sleep(700 * time.Millisecond)
 				}
