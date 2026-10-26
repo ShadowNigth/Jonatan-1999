@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"io"
@@ -113,6 +114,15 @@ type Engine struct {
 
 // NewEngine prepara el motor para la especificación dada.
 func NewEngine(spec Spec) (*Engine, error) {
+	return NewEngineContext(context.Background(), spec)
+}
+
+// NewEngineContext permite acotar la detección de metadatos de vídeo. Las
+// escenas, imágenes y GIF conservan el mismo flujo de inicialización.
+func NewEngineContext(ctx context.Context, spec Spec) (*Engine, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	e := &Engine{spec: spec, gifFrame: -1}
 	switch spec.Kind {
 	case KindScene:
@@ -130,7 +140,7 @@ func NewEngine(spec Spec) (*Engine, error) {
 		}
 		e.gif = g
 	case KindVideo:
-		v, err := NewVideoSource(spec.Path, spec.FPS)
+		v, err := NewVideoSourceContext(ctx, spec.Path, spec.FPS)
 		if err != nil {
 			return nil, err
 		}
@@ -146,6 +156,15 @@ func NewEngine(spec Spec) (*Engine, error) {
 
 // Kind devuelve el tipo de fondo.
 func (e *Engine) Kind() Kind { return e.spec.Kind }
+
+// FrameReady indica si el motor ya puede ofrecer un fotograma del fondo. En
+// vídeo, el primer canvas puede ser un color de reserva mientras ffmpeg arranca.
+func (e *Engine) FrameReady() bool {
+	if e == nil {
+		return false
+	}
+	return e.spec.Kind != KindVideo || (e.video != nil && e.video.current != nil)
+}
 
 // Spec devuelve la especificación usada.
 func (e *Engine) Spec() Spec { return e.spec }
@@ -353,6 +372,15 @@ type videoSource struct {
 // NewVideoSource valida el archivo y detecta un dispositivo VAAPI accesible.
 // El proceso decodificador se inicia cuando el motor conoce la resolución real.
 func NewVideoSource(path string, fps int) (*videoSource, error) {
+	return NewVideoSourceContext(context.Background(), path, fps)
+}
+
+// NewVideoSourceContext permite cancelar ffprobe si solo se necesita un
+// fotograma puntual y el vídeo no responde con rapidez.
+func NewVideoSourceContext(ctx context.Context, path string, fps int) (*videoSource, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if fps <= 0 {
 		fps = 24
 	}
@@ -362,7 +390,7 @@ func NewVideoSource(path string, fps int) (*videoSource, error) {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return nil, fmt.Errorf("se necesita ffmpeg para los fondos de vídeo")
 	}
-	info, err := probeVideo(path)
+	info, err := probeVideoContext(ctx, path)
 	if err != nil {
 		return nil, err
 	}

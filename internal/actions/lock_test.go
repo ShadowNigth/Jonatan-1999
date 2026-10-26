@@ -7,27 +7,68 @@ import (
 	"testing"
 )
 
-func TestSwaylockEffectsArgs(t *testing.T) {
-	args := swaylockEffectsArgs("24283b", 48)
-	effects := strings.Join(args, " ")
+func TestSwaylockEffectsArgsUseCustomWallpaperAndClock(t *testing.T) {
+	options := lockOptions{
+		Color:              "24283b",
+		Image:              "/cache/anime-lock.png",
+		TimeFormat:         "%I:%M %p",
+		DateFormat:         "%d/%m/%Y",
+		ClockSize:          42,
+		IndicatorRadius:    140,
+		IndicatorThickness: 6,
+	}
+	args := swaylockEffectsArgs(options)
+	joined := strings.Join(args, " ")
 	for _, option := range []string{
-		"--screenshots", "--effect-blur 7x5", "--effect-vignette 0.5:0.5",
-		"--clock", "--indicator", "--fade-in 0.25", "--font-size 48",
-		"--timestr %H:%M", "--datestr %A %d de %B", "-c 24283b",
+		"--image /cache/anime-lock.png", "--scaling fill", "--effect-blur 5x3",
+		"--effect-vignette 0.5:0.5", "--clock", "--indicator", "--fade-in 0.25",
+		"--timestr %I:%M %p", "--datestr %d/%m/%Y", "--font-size 42",
+		"--indicator-radius 140", "--indicator-thickness 6", "-c 24283b",
 	} {
-		if !strings.Contains(effects, option) {
-			t.Errorf("falta la opción de bloqueo %q en %q", option, effects)
+		if !strings.Contains(joined, option) {
+			t.Errorf("falta la opción de bloqueo %q en %q", option, joined)
 		}
+	}
+	if strings.Contains(joined, "--screenshots") {
+		t.Fatal("el fondo de bloqueo no debe capturar las ventanas")
 	}
 }
 
-func TestSwaylockFallbackUsesOnlyStandardArguments(t *testing.T) {
-	args := swaylockArgs("24283b")
-	if len(args) != 3 || args[0] != "-f" || args[1] != "-c" || args[2] != "24283b" {
-		t.Fatalf("argumentos swaylock inesperados: %v", args)
+func TestSwaylockEffectsWithoutWallpaperUsesAdaptiveSolidColor(t *testing.T) {
+	options := lockOptions{
+		Color:              "24283b",
+		TimeFormat:         "%H:%M",
+		DateFormat:         "%A %d de %B",
+		ClockSize:          48,
+		IndicatorRadius:    148,
+		IndicatorThickness: 7,
 	}
-	if strings.Contains(strings.Join(args, " "), "--effect-") || strings.Contains(strings.Join(args, " "), "--clock") {
-		t.Fatalf("el fallback estándar recibió flags de swaylock-effects: %v", args)
+	args := swaylockEffectsArgs(options)
+	joined := strings.Join(args, " ")
+	if strings.Contains(joined, "--image") || strings.Contains(joined, "--screenshots") || strings.Contains(joined, "--effect-blur") {
+		t.Fatalf("sin wallpaper debe quedar un fondo sólido, sin capturas: %v", args)
+	}
+	if !strings.Contains(joined, "-c 24283b") {
+		t.Fatalf("falta el color adaptativo: %v", args)
+	}
+}
+
+func TestSwaylockFallbackUsesImageAndOnlyStandardArguments(t *testing.T) {
+	options := lockOptions{
+		Color:              "24283b",
+		Image:              "/cache/anime-lock.png",
+		IndicatorRadius:    148,
+		IndicatorThickness: 7,
+	}
+	args := swaylockArgs(options)
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--image /cache/anime-lock.png") || !strings.Contains(joined, "--scaling fill") {
+		t.Fatalf("el fallback debe usar el fotograma generado: %v", args)
+	}
+	for _, unsupported := range []string{"--effect-", "--clock", "--timestr", "--screenshots"} {
+		if strings.Contains(joined, unsupported) {
+			t.Fatalf("el fallback estándar recibió la opción %q: %v", unsupported, args)
+		}
 	}
 }
 

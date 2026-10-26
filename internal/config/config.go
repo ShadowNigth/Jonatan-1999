@@ -51,6 +51,14 @@ type Config struct {
 	WallpaperTransition   string
 	WallpaperTransitionMS int
 
+	// Apariencia de la pantalla de bloqueo.
+	LockBackground         string // current, none o una escena/ruta de fondo
+	LockTimeFormat         string // formato strftime del reloj
+	LockDateFormat         string // formato strftime de la fecha
+	LockClockSize          int
+	LockIndicatorRadius    int
+	LockIndicatorThickness int
+
 	// Animación de arranque
 	BootEnabled  bool
 	BootStyle    string // sakura, neon, matrix, minimal
@@ -175,14 +183,20 @@ func Default() *Config {
 		WallpaperWorkspaces:   map[string]string{},
 		WallpaperTransition:   "fade",
 		WallpaperTransitionMS: 450,
-		TerminalOpacity:       0.94,
-		BarOpacity:            0.68,
-		ActiveOpacity:         1.0,
-		InactiveOpacity:       0.94,
-		Blur:                  false,
-		GapsInner:             6,
-		GapsOuter:             8,
-		Rounding:              12,
+		LockBackground:         "current",
+		LockTimeFormat:         "%H:%M",
+		LockDateFormat:         "%A %d de %B",
+		LockClockSize:          48,
+		LockIndicatorRadius:    148,
+		LockIndicatorThickness: 7,
+		TerminalOpacity:        0.94,
+		BarOpacity:             0.68,
+		ActiveOpacity:          1.0,
+		InactiveOpacity:        0.94,
+		Blur:                   false,
+		GapsInner:              6,
+		GapsOuter:              8,
+		Rounding:               12,
 
 		BarEnabled:           true,
 		BarPosition:          "top",
@@ -343,6 +357,12 @@ func (c *Config) apply() {
 	num("wallpaper.fps", &c.WallpaperFPS)
 	bl("wallpaper.adaptive", &c.WallpaperAdaptive)
 	str("wallpaper.transition", &c.WallpaperTransition)
+	str("lock.background", &c.LockBackground)
+	str("lock.time_format", &c.LockTimeFormat)
+	str("lock.date_format", &c.LockDateFormat)
+	num("lock.clock_size", &c.LockClockSize)
+	num("lock.indicator_radius", &c.LockIndicatorRadius)
+	num("lock.indicator_thickness", &c.LockIndicatorThickness)
 	if v, ok := c.values["wallpaper.transition_ms"]; ok {
 		if n, ok := v.(int); ok && n >= 0 {
 			c.WallpaperTransitionMS = n
@@ -591,6 +611,18 @@ dir = %q
 transition = %q
 transition_ms = %d
 %s
+
+[lock]
+# Fondo: current sigue el fondo del workspace sin capturar ventanas;
+# none usa un fondo sólido de la paleta; también admite scene:, image:, gif: y video:.
+background = %q
+# Formatos strftime; la fecha respeta el locale de la sesión.
+time_format = %q
+date_format = %q
+clock_size = %d
+indicator_radius = %d
+indicator_thickness = %d
+
 [bar]
 # barra de estado propia (swaybar). Pon enabled = false para usar waybar.
 enabled = %t
@@ -702,6 +734,8 @@ rounding = %d
 		c.WallpaperKind, c.WallpaperName, c.WallpaperPath, c.WallpaperMode,
 		c.WallpaperFPS, c.WallpaperProto, c.WallpaperAdaptive, c.WallpaperDir,
 		c.WallpaperTransition, c.WallpaperTransitionMS, workspaceSection(c),
+		c.LockBackground, c.LockTimeFormat, c.LockDateFormat, c.LockClockSize,
+		c.LockIndicatorRadius, c.LockIndicatorThickness,
 		c.BarEnabled, c.BarPosition, c.BarHeight, c.BarMargin, c.BarPadding,
 		c.BarGap, c.BarRadius, c.BarBackgroundOpacity, c.BarIslands, c.BarLogo, c.BarFont,
 		c.BarFontScale, c.BarShadow, c.BarExclusive, tomlList(c.BarModules),

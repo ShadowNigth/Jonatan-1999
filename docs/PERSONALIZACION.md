@@ -154,6 +154,34 @@ reinicia desacoplado del proceso que cambia el tema para actualizar la paleta si
 quedarse ligado al selector. Las imágenes estáticas no se tocan. Compruébalo con
 `swaydesk wallpaper status`.
 
+### Pantalla de bloqueo
+
+La sección `[lock]` de `~/.config/swaydesk/config.toml` permite personalizar el fondo y el reloj:
+
+```toml
+[lock]
+background = "current"          # current, none o scene:/image:/gif:/video:
+time_format = "%H:%M"           # strftime: 24 horas por defecto
+# date_format = "%A %d de %B"
+clock_size = 48
+indicator_radius = 148
+indicator_thickness = 7
+```
+
+`current` toma el wallpaper del workspace enfocado; `none` usa solo el fondo de la
+paleta. También puedes indicar una imagen anime dedicada, por ejemplo
+`background = "image:~/Imágenes/Fondos/anime.png"`, o una escena con
+`background = "scene:petals"`. Un GIF aporta un fotograma fijo; para vídeo se
+reutiliza el motor existente y se espera brevemente a que FFmpeg entregue uno.
+Si el vídeo no está disponible, se mantiene el color de la paleta. No se captura
+el escritorio ni el contenido de las ventanas. Con `swaylock-effects` el
+fotograma recibe desenfoque y viñeta y aparece el reloj; con el `swaylock`
+estándar se conserva la imagen y la paleta, sin exigir efectos ni dependencias
+adicionales para escenas, imágenes o GIF.
+
+Aplica los cambios con `swaydesk apply` para regenerar también el radio y el grosor
+del indicador.
+
 ### Añadir tu propia paleta
 
 En `internal/ui/theme.go`, dentro de `BuiltinPalettes`:

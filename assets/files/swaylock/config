@@ -27,8 +27,8 @@ text-caps-lock-color={{THEME_WARN_HEX}}
 separator-color={{THEME_BG_SEL_HEX}}
 font={{FONT}}
 font-size={{LOCK_FONT_SIZE}}
-indicator-radius=160
-indicator-thickness=8
+indicator-radius={{LOCK_INDICATOR_RADIUS}}
+indicator-thickness={{LOCK_INDICATOR_THICKNESS}}
 indicator-idle-visible
 indicator-caps-lock
 ignore-empty-password

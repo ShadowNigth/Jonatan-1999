@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	"os/exec"
@@ -23,13 +24,24 @@ type videoMetadata struct {
 }
 
 func probeVideo(path string) (videoMetadata, error) {
+	return probeVideoContext(context.Background(), path)
+}
+
+func probeVideoContext(ctx context.Context, path string) (videoMetadata, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if _, err := exec.LookPath("ffprobe"); err != nil {
 		return videoMetadata{}, fmt.Errorf("se necesita ffprobe (paquete ffmpeg) para fondos de vídeo")
 	}
-	out, err := exec.Command("ffprobe", "-v", "error",
+	cmd := exec.CommandContext(ctx, "ffprobe", "-v", "error",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=width,height,duration:format=duration",
-		"-of", "default=noprint_wrappers=1", path).Output()
+		"-of", "default=noprint_wrappers=1", path)
+	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return videoMetadata{}, fmt.Errorf("ffprobe superó el límite de tiempo: %w", ctx.Err())
+	}
 	if err != nil {
 		return videoMetadata{}, fmt.Errorf("ffprobe no pudo leer %s: %w", path, err)
 	}

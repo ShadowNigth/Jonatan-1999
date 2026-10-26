@@ -24,6 +24,7 @@ func TestSwaylockTemplateIsCompatibleWithStandardSwaylock(t *testing.T) {
 	for _, option := range []string{
 		"indicator-idle-visible\n", "indicator-caps-lock\n",
 		"ignore-empty-password\n", "show-failed-attempts\n",
+		"indicator-radius=148\n", "indicator-thickness=7\n",
 	} {
 		if !strings.Contains(lock, option) {
 			t.Errorf("falta la opción compatible %q en swaylock/config", strings.TrimSpace(option))
