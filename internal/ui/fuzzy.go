@@ -37,7 +37,6 @@ func (q fuzzyQuery) match(target string, keepPositions bool) (MatchResult, bool)
 	if len(q.runes) == 0 {
 		return MatchResult{Score: 0}, true
 	}
-	t := []rune(target)
 	var pos []int
 	if keepPositions {
 		pos = make([]int, 0, len(q.runes))
@@ -45,35 +44,37 @@ func (q fuzzyQuery) match(target string, keepPositions bool) (MatchResult, bool)
 	score := 0
 	pi := 0
 	lastMatch := -2
-	for i, r := range t {
-		if unicode.ToLower(r) != q.runes[pi] {
-			continue
+	runeIndex := 0
+	var previous rune
+	for _, r := range target {
+		r = unicode.ToLower(r)
+		if pi < len(q.runes) && r == q.runes[pi] {
+			if keepPositions {
+				pos = append(pos, runeIndex)
+			}
+			score += 10
+			if runeIndex == 0 {
+				score += 20
+			} else if isBoundary(previous) {
+				score += 15
+			}
+			if runeIndex == lastMatch+1 {
+				score += 12
+			} else if lastMatch >= 0 {
+				score -= (runeIndex - lastMatch - 1) * 2
+			}
+			lastMatch = runeIndex
+			pi++
 		}
-		if keepPositions {
-			pos = append(pos, i)
-		}
-		score += 10
-		if i == 0 {
-			score += 20
-		} else if isBoundary(t[i-1]) {
-			score += 15
-		}
-		if i == lastMatch+1 {
-			score += 12
-		} else if lastMatch >= 0 {
-			score -= (i - lastMatch - 1) * 2
-		}
-		lastMatch = i
-		pi++
-		if pi == len(q.runes) {
-			break
-		}
+		previous = r
+		runeIndex++
 	}
 	if pi < len(q.runes) {
 		return MatchResult{}, false
 	}
-	// Premio por coincidencia exacta de substring y por cadenas cortas.
+	// Solo se normaliza el string completo cuando ya hubo una coincidencia.
 	lowTarget := strings.ToLower(target)
+	// Premio por coincidencia exacta de substring y por cadenas cortas.
 	if lowTarget == q.lower {
 		score += 200
 	} else if strings.HasPrefix(lowTarget, q.lower) {
@@ -81,7 +82,7 @@ func (q fuzzyQuery) match(target string, keepPositions bool) (MatchResult, bool)
 	} else if strings.Contains(lowTarget, q.lower) {
 		score += 40
 	}
-	score -= len(t) / 4
+	score -= runeIndex / 4
 	return MatchResult{Score: score, Positions: pos}, true
 }
 

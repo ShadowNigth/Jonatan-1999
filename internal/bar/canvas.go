@@ -4,7 +4,6 @@ package bar
 
 import (
 	"image"
-	"image/color"
 	"math"
 
 	"github.com/ShadowNigth/swaydesk/internal/font"
@@ -114,6 +113,18 @@ func (c *Canvas) Over(x, y int, col RGBA) {
 	i := (y*c.W + x) * 4
 	if col.A == 255 {
 		c.Pix[i], c.Pix[i+1], c.Pix[i+2], c.Pix[i+3] = col.R, col.G, col.B, 255
+		return
+	}
+	if c.Pix[i+3] == 0 {
+		c.Pix[i], c.Pix[i+1], c.Pix[i+2], c.Pix[i+3] = col.R, col.G, col.B, col.A
+		return
+	}
+	if c.Pix[i+3] == 255 {
+		sa := uint32(col.A)
+		inv := uint32(255 - col.A)
+		c.Pix[i] = uint8((uint32(col.R)*sa + uint32(c.Pix[i])*inv + 127) / 255)
+		c.Pix[i+1] = uint8((uint32(col.G)*sa + uint32(c.Pix[i+1])*inv + 127) / 255)
+		c.Pix[i+2] = uint8((uint32(col.B)*sa + uint32(c.Pix[i+2])*inv + 127) / 255)
 		return
 	}
 	sa := float64(col.A) / 255
@@ -234,13 +245,22 @@ func (c *Canvas) ScaleCanvas(factor int) *Canvas {
 		return c
 	}
 	out := NewCanvas(c.W*factor, c.H*factor)
-	for y := 0; y < out.H; y++ {
-		sy := y / factor
-		for x := 0; x < out.W; x++ {
-			sx := x / factor
-			si := (sy*c.W + sx) * 4
-			di := (y*out.W + x) * 4
-			copy(out.Pix[di:di+4], c.Pix[si:si+4])
+	srcRowBytes := c.W * 4
+	dstRowBytes := out.W * 4
+	for y := 0; y < c.H; y++ {
+		srcRow := c.Pix[y*srcRowBytes : (y+1)*srcRowBytes]
+		firstRowStart := y * factor * dstRowBytes
+		firstRow := out.Pix[firstRowStart : firstRowStart+dstRowBytes]
+		for x := 0; x < c.W; x++ {
+			srcPixel := srcRow[x*4 : x*4+4]
+			for dx := 0; dx < factor; dx++ {
+				dst := (x*factor + dx) * 4
+				copy(firstRow[dst:dst+4], srcPixel)
+			}
+		}
+		for dy := 1; dy < factor; dy++ {
+			start := firstRowStart + dy*dstRowBytes
+			copy(out.Pix[start:start+dstRowBytes], firstRow)
 		}
 	}
 	return out
@@ -249,14 +269,8 @@ func (c *Canvas) ScaleCanvas(factor int) *Canvas {
 // Image convierte el lienzo en una imagen de Go (para guardar un PNG).
 func (c *Canvas) Image() image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, c.W, c.H))
-	for y := 0; y < c.H; y++ {
-		for x := 0; x < c.W; x++ {
-			i := (y*c.W + x) * 4
-			a := c.Pix[i+3]
-			// PNG sin premultiplicar.
-			img.SetRGBA(x, y, color.RGBA{c.Pix[i], c.Pix[i+1], c.Pix[i+2], a})
-		}
-	}
+	// image.RGBA usa el mismo orden RGBA y stride compacto que Canvas.Pix.
+	copy(img.Pix, c.Pix)
 	return img
 }
 

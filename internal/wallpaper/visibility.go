@@ -6,10 +6,14 @@ import (
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 )
 
-const visibilityPollInterval = 500 * time.Millisecond
+const (
+	visibilityPollInterval = 5 * time.Second
+	visibilityDebounce     = 75 * time.Millisecond
+)
 
 // wallpaperVisibilityStream publica cambios cuando todas las salidas activas
-// quedan cubiertas por ventanas visibles a pantalla completa.
+// quedan cubiertas por ventanas visibles a pantalla completa. Sway avisa de los
+// cambios relevantes; un sondeo lento sirve de respaldo si se pierde una señal.
 func wallpaperVisibilityStream(stop <-chan struct{}) <-chan bool {
 	out := make(chan bool, 1)
 	go func() {
@@ -17,36 +21,118 @@ func wallpaperVisibilityStream(stop <-chan struct{}) <-chan bool {
 		ticker := time.NewTicker(visibilityPollInterval)
 		defer ticker.Stop()
 
-		hidden := fullscreenCoversAllOutputs()
-		out <- hidden
+		last, initialized := false, false
+		publishState := func(next bool) {
+			if initialized && next == last {
+				return
+			}
+			last, initialized = next, true
+			select {
+			case out <- next:
+			default:
+				// Conserva el estado más reciente si el consumidor aún está
+				// aplicando la transición anterior.
+				select {
+				case <-out:
+				default:
+				}
+				select {
+				case out <- next:
+				default:
+				}
+			}
+		}
+		publish := func() { publishState(fullscreenCoversAllOutputs()) }
+		publish()
+
 		for {
 			select {
 			case <-stop:
 				return
-			case <-ticker.C:
-				next := fullscreenCoversAllOutputs()
-				if next == hidden {
-					continue
+			default:
+			}
+			conn, err := swayipc.Dial()
+			if err != nil {
+				// Sin respuesta del compositor, no se asume que todas las salidas
+				// estén cubiertas: el wallpaper debe seguir visible.
+				publishState(false)
+				if waitUntilStop(stop, 2*time.Second) {
+					return
 				}
-				hidden = next
+				continue
+			}
+			if err := conn.Subscribe("workspace", "window", "output"); err != nil {
+				conn.Close()
+				publish()
+				if waitUntilStop(stop, 2*time.Second) {
+					return
+				}
+				continue
+			}
+			// Reconsulta tras suscribirse para cubrir cualquier cambio ocurrido
+			// entre la primera lectura y la instalación del listener.
+			publish()
+			events := conn.Events(32)
+			debounce := time.NewTimer(time.Hour)
+			if !debounce.Stop() {
+				<-debounce.C
+			}
+			var debounceC <-chan time.Time
+			connected := true
+			for connected {
 				select {
-				case out <- hidden:
-				default:
-					// Si el consumidor está ocupado, conserva el estado más
-					// reciente y descarta el cambio obsoleto.
-					select {
-					case <-out:
-					default:
+				case <-stop:
+					conn.Close()
+					debounce.Stop()
+					return
+				case event, ok := <-events:
+					if !ok {
+						conn.Close()
+						publish()
+						connected = false
+						continue
 					}
-					select {
-					case out <- hidden:
-					default:
+					switch event.Type {
+					case swayipc.EventWorkspace, swayipc.EventWindow, swayipc.EventOutput:
+						if !debounce.Stop() {
+							select {
+							case <-debounce.C:
+							default:
+							}
+						}
+						debounce.Reset(visibilityDebounce)
+						debounceC = debounce.C
 					}
+				case <-debounceC:
+					debounceC = nil
+					publish()
+				case <-ticker.C:
+					publish()
 				}
+			}
+			if !debounce.Stop() {
+				select {
+				case <-debounce.C:
+				default:
+				}
+			}
+			if waitUntilStop(stop, time.Second) {
+				return
 			}
 		}
 	}()
 	return out
+}
+
+func waitUntilStop(stop <-chan struct{}, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-stop:
+		return true
+	case <-timer.C:
+		return false
+	}
 }
 
 func fullscreenCoversAllOutputs() bool {

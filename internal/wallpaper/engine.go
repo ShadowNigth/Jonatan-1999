@@ -97,13 +97,14 @@ func ParseSpec(s string, pal ui.Palette) (Spec, error) {
 
 // Engine produce fotogramas RGB del fondo activo a cualquier resolución.
 type Engine struct {
-	spec  Spec
-	scene *Renderer
-	still *Still
-	gif   *GIF
-	video *videoSource
+	spec     Spec
+	scene    *Renderer
+	still    *Still
+	gif      *GIF
+	video    *videoSource
 	start    time.Time
 	frame    int
+	gifFrame int
 	W, H     int
 	last     *Canvas
 	paused   bool
@@ -112,7 +113,7 @@ type Engine struct {
 
 // NewEngine prepara el motor para la especificación dada.
 func NewEngine(spec Spec) (*Engine, error) {
-	e := &Engine{spec: spec}
+	e := &Engine{spec: spec, gifFrame: -1}
 	switch spec.Kind {
 	case KindScene:
 		e.scene = NewRenderer(spec.Scene, spec.Pal)
@@ -192,24 +193,33 @@ func (e *Engine) Frame(w, h int) *Canvas {
 		e.last = c
 		return c
 	case KindImage:
-		if e.last == nil || e.last.W != w || e.last.H != h {
+		canvasHeight := h / 2 * 2
+		if e.last == nil || e.last.W != w || e.last.H != canvasHeight {
 			e.last = imageToCanvasWithBackground(e.still.Img, w, h/2, e.spec.Pal.Bg, false)
 		}
 		return e.last
 	case KindGIF:
-		img, _ := e.gif.FrameAt(time.Since(e.start))
-		e.last = imageToCanvasWithBackground(img, w, h/2, e.spec.Pal.Bg, false)
+		img, _, frameIndex := e.gif.frameAt(time.Since(e.start))
+		canvasHeight := h / 2 * 2
+		if e.last == nil || e.last.W != w || e.last.H != canvasHeight || frameIndex != e.gifFrame {
+			e.last = imageToCanvasWithBackground(img, w, h/2, e.spec.Pal.Bg, false)
+			e.gifFrame = frameIndex
+		}
 		return e.last
 	case KindVideo:
 		frame := e.video.Frame(w, h)
 		if frame == nil {
-			e.last = NewCanvas(w, h, e.spec.Pal.Bg)
+			if e.last == nil || e.last.W != w || e.last.H != h {
+				e.last = NewCanvas(w, h, e.spec.Pal.Bg)
+			}
 			return e.last
 		}
 		e.last = frame
 		return e.last
 	default:
-		e.last = NewCanvas(w, h, e.spec.Pal.Bg)
+		if e.last == nil || e.last.W != w || e.last.H != h {
+			e.last = NewCanvas(w, h, e.spec.Pal.Bg)
+		}
 		return e.last
 	}
 }

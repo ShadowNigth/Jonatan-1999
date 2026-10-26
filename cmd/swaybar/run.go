@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -76,55 +77,110 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		defer p.Close()
 	}
 
-	stop := make(chan struct{}, 1)
+	stop := make(chan struct{})
+	defer close(stop)
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
+	defer signal.Stop(sig)
 
 	collector := host.NewCollector()
-	// El primer muestreo de CPU necesita dos lecturas separadas.
-	_ = collector.Snapshot()
+	refresh := make(chan struct{}, 1)
+	updates := make(chan bar.Snapshot, 1)
+	requestRefresh := func() {
+		select {
+		case refresh <- struct{}{}:
+		default:
+		}
+	}
 
-	tick := time.NewTicker(900 * time.Millisecond)
-	defer tick.Stop()
+	// La recolección puede consultar el bus, sway y herramientas del sistema.
+	// Mantenerla fuera del bucle de Wayland evita que una orden lenta congele el
+	// repintado o el despacho de eventos del compositor.
+	go func() {
+		tick := time.NewTicker(900 * time.Millisecond)
+		defer tick.Stop()
+		publish := func() {
+			snap := snapshot(cfg, collector)
+			select {
+			case updates <- snap:
+			default:
+				// Si el dibujante está ocupado, conserva solo la foto más reciente.
+				select {
+				case <-updates:
+				default:
+				}
+				select {
+				case updates <- snap:
+				default:
+				}
+			}
+		}
+		publish()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-refresh:
+				publish()
+			case <-tick.C:
+				publish()
+			}
+		}
+	}()
 
+	var latest bar.Snapshot
 	last := ""
 	draw := func() error {
 		w, h := panel.Size()
 		if w <= 0 || h <= 0 {
 			return nil
 		}
-		snap := snapshot(cfg, collector)
+		snap := latest
 		snap.Clock = time.Now().Format("15:04")
 		snap.Date = shortDate()
+		// Se evita repintar si nada cambió (menos CPU y parpadeos).
+		key := snapshotKey(w, snap)
+		if key == last {
+			return nil
+		}
 		canvas := r.Render(snap, w/scale)
 		if scale > 1 {
 			canvas = canvas.ScaleCanvas(scale)
 		}
-		// Se evita repintar si nada cambió (menos CPU y parpadeos).
-		key := fmt.Sprintf("%d|%s|%s|%s|%.0f|%.0f|%d|%v|%d|%d|%v|%d",
-			w, snap.Clock, snap.Title, snap.AppID, snap.CPU, snap.RAM, snap.Volumen, snap.Muted,
-			len(snap.Workspaces), snap.Notifications, snap.NotifDND, snap.NotifReplies)
-		if key == last {
-			return nil
+		if err := panel.Draw(canvas.Pix, canvas.W, canvas.H); err != nil {
+			return err
 		}
 		last = key
-		return panel.Draw(canvas.Pix, canvas.W, canvas.H)
+		return nil
 	}
 
+	// Evita una barra vacía al inicio si la primera foto llega enseguida, pero
+	// no retrasa el primer fotograma si una consulta del sistema está lenta.
+	select {
+	case latest = <-updates:
+	case <-time.After(150 * time.Millisecond):
+	}
 	if err := draw(); err != nil {
 		return err
 	}
 
-	// Eventos de sway: se refresca al instante al cambiar de workspace o foco.
+	// Eventos de sway: solicita una foto nueva, pero nunca dibuja desde el
+	// goroutine de eventos ni espera al IPC en el bucle Wayland.
 	events := make(chan struct{}, 1)
 	go watchSway(stop, events)
 
+	tick := time.NewTicker(900 * time.Millisecond)
+	defer tick.Stop()
 	for {
 		select {
-		case <-stop:
+		case <-sig:
 			return nil
 		case <-events:
-			_ = draw()
+			requestRefresh()
+		case latest = <-updates:
+			if err := draw(); err != nil {
+				return err
+			}
 		case name := <-clicks:
 			handleClick(cfg, name)
 		case <-tick.C:
@@ -138,6 +194,20 @@ func runBar(cfg *config.Config, r *bar.Renderer, scale int) error {
 		// Se procesan los eventos pendientes del compositor sin bloquear.
 		_ = panel.Dispatch(0)
 	}
+}
+
+// snapshotKey incluye los campos visibles de la barra para evitar repintados
+// cuando el sondeo devuelve exactamente el mismo estado.
+func snapshotKey(width int, s bar.Snapshot) string {
+	var key strings.Builder
+	fmt.Fprintf(&key, "%d|%q|%q|%q|%q|%.0f|%.0f|%.0f|%.0f|%q|%d|%t|%q|%d|%t|%t|%t|%d|%q|%d|%t|%t|%d|%d",
+		width, s.Clock, s.Date, s.Title, s.AppID, s.CPU, s.RAM, s.Disk, s.Temp, s.Uptime,
+		s.Volumen, s.Muted, s.Wifi, s.Signal, s.Connected, s.HasBattery, s.Charging, s.Battery,
+		s.Media, s.Notifications, s.NotifDND, s.Recording, s.NotifReplies, s.Updates)
+	for _, ws := range s.Workspaces {
+		fmt.Fprintf(&key, "|%q:%t:%t:%t:%d", ws.Name, ws.Focused, ws.Visible, ws.Urgent, ws.Windows)
+	}
+	return key.String()
 }
 
 // handleClick ejecuta la acción de una zona pulsable de la barra.
@@ -176,21 +246,21 @@ func watchSway(stop <-chan struct{}, notify chan<- struct{}) {
 		}
 		c, err := swayipc.Dial()
 		if err != nil {
-			time.Sleep(3 * time.Second)
+			if waitForStop(stop, 3*time.Second) {
+				return
+			}
 			continue
 		}
-		if err := c.Subscribe("workspace", "window"); err != nil {
+		if err := c.Subscribe("workspace", "window", "output"); err != nil {
 			c.Close()
-			time.Sleep(3 * time.Second)
+			if waitForStop(stop, 3*time.Second) {
+				return
+			}
 			continue
 		}
 		ch := c.Events(16)
-		if err != nil {
-			c.Close()
-			time.Sleep(3 * time.Second)
-			continue
-		}
-		for {
+		connected := true
+		for connected {
 			select {
 			case <-stop:
 				c.Close()
@@ -198,7 +268,8 @@ func watchSway(stop <-chan struct{}, notify chan<- struct{}) {
 			case _, ok := <-ch:
 				if !ok {
 					c.Close()
-					goto reconnect
+					connected = false
+					continue
 				}
 				select {
 				case notify <- struct{}{}:
@@ -206,8 +277,21 @@ func watchSway(stop <-chan struct{}, notify chan<- struct{}) {
 				}
 			}
 		}
-	reconnect:
-		time.Sleep(time.Second)
+		if waitForStop(stop, time.Second) {
+			return
+		}
+	}
+}
+
+// waitForStop duerme hasta el plazo indicado o hasta que el bucle se cancele.
+func waitForStop(stop <-chan struct{}, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-stop:
+		return true
+	case <-timer.C:
+		return false
 	}
 }
 

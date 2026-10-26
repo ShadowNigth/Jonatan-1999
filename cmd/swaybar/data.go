@@ -69,21 +69,25 @@ func snapshot(cfg *config.Config, col *host.Collector) bar.Snapshot {
 	}
 	s.Uptime = shortDuration(st.Uptime)
 
-	if mods(cfg.BarModules)["media"] {
+	modules := mods(cfg.BarModules)
+	if modules["media"] {
 		s.Media = mediaTitle()
 	}
-	if mods(cfg.BarModules)["recording"] {
+	if modules["recording"] {
 		s.Recording = running("wf-recorder") || running("wl-screenrec")
 	}
-	if mods(cfg.BarModules)["notify"] {
+	if modules["notify"] {
 		s.Notifications, s.NotifReplies, s.NotifDND = notificationState()
 	}
 
-	// Estado de sway: workspaces y ventana enfocada.
+	// Estado de sway: workspaces y ventana enfocada. El árbol completo es la
+	// respuesta más costosa del IPC; se solicita y decodifica una sola vez.
 	if c, err := swayipc.Dial(); err == nil {
 		defer c.Close()
-		if wss, err := c.Workspaces(); err == nil {
-			counts := windowCounts(c)
+		wss, workspaceErr := c.Workspaces()
+		tree, treeErr := c.Tree()
+		counts, focused := summarizeTree(tree)
+		if workspaceErr == nil {
 			sort.SliceStable(wss, func(i, j int) bool {
 				if wss[i].Num != wss[j].Num {
 					return wss[i].Num < wss[j].Num
@@ -101,42 +105,50 @@ func snapshot(cfg *config.Config, col *host.Collector) bar.Snapshot {
 				})
 			}
 		}
-		if tree, err := c.Tree(); err == nil {
-			if n := tree.FindFocused(); n != nil {
-				s.Title = n.Title()
-				s.AppID = n.App()
-			}
+		if treeErr == nil && focused != nil {
+			s.Title = focused.Title()
+			s.AppID = focused.App()
 		}
 	}
 	return s
 }
 
-// windowCounts cuenta las ventanas visibles de cada workspace.
-func windowCounts(c *swayipc.Conn) map[string]int {
-	out := map[string]int{}
-	tree, err := c.Tree()
-	if err != nil {
-		return out
+// windowCounts cuenta las ventanas de cada workspace a partir del árbol ya
+// recibido, evitando consultas y recorridos duplicados del árbol de Sway.
+func windowCounts(tree *swayipc.Node) map[string]int {
+	counts, _ := summarizeTree(tree)
+	return counts
+}
+
+// summarizeTree recoge los contadores y la ventana enfocada en un solo paseo.
+func summarizeTree(tree *swayipc.Node) (map[string]int, *swayipc.Node) {
+	counts := make(map[string]int)
+	if tree == nil {
+		return counts, nil
 	}
-	for _, ws := range tree.Nodes {
-		if ws.Type != "output" {
-			continue
+	var focused *swayipc.Node
+	var walk func(*swayipc.Node, string, bool)
+	walk = func(node *swayipc.Node, workspace string, inWorkspace bool) {
+		if node == nil {
+			return
 		}
-		for _, content := range ws.Nodes {
-			if content.Type != "con" && content.Type != "floating_con" {
-				continue
-			}
-			n := 0
-			content.Walk(func(x *swayipc.Node) bool {
-				if x.IsWindow() {
-					n++
-				}
-				return true
-			})
-			out[content.Name] += n
+		if focused == nil && node.Focused && node.IsWindow() {
+			focused = node
+		}
+		if node.Type == "workspace" {
+			workspace, inWorkspace = node.Name, true
+		} else if inWorkspace && node.IsWindow() && len(node.Nodes) == 0 && len(node.FloatingNodes) == 0 {
+			counts[workspace]++
+		}
+		for _, child := range node.Nodes {
+			walk(child, workspace, inWorkspace)
+		}
+		for _, child := range node.FloatingNodes {
+			walk(child, workspace, inWorkspace)
 		}
 	}
-	return out
+	walk(tree, "", false)
+	return counts, focused
 }
 
 // mods convierte la lista de módulos en un conjunto.

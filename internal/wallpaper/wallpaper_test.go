@@ -65,6 +65,28 @@ func TestRendererFramesHavePixels(t *testing.T) {
 	}
 }
 
+func TestNearestRGBAFastPathMatchesGenericImage(t *testing.T) {
+	bounds := image.Rect(2, 3, 4, 5)
+	rgba := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			px := color.NRGBA{R: uint8(80 + x*20), G: uint8(40 + y*15), B: 210, A: uint8(90 + x*20)}
+			rgba.Set(x, y, px)
+		}
+	}
+	fast := imageToCanvas(rgba, 8, 4, 20, 30, 40, false)
+	genericImage := struct{ image.Image }{rgba}
+	generic := imageToCanvas(genericImage, 8, 4, 20, 30, 40, false)
+	if len(fast.Pix) != len(generic.Pix) {
+		t.Fatalf("tamaños de lienzo distintos: %d y %d", len(fast.Pix), len(generic.Pix))
+	}
+	for i := range fast.Pix {
+		if fast.Pix[i] != generic.Pix[i] {
+			t.Fatalf("píxel %d difiere: fast=%d, genérico=%d", i, fast.Pix[i], generic.Pix[i])
+		}
+	}
+}
+
 func TestCanvasOps(t *testing.T) {
 	c := NewCanvas(8, 8, ui.Color("#101010"))
 	if c.W != 8 || c.H != 8 || len(c.Pix) != 8*8*3 {
@@ -298,6 +320,51 @@ func TestGIFLoader(t *testing.T) {
 	}
 	if g.Frame(0) == nil {
 		t.Fatal("Frame(0) nulo")
+	}
+}
+
+func TestGIFFrameAtUsesCumulativeBoundaries(t *testing.T) {
+	first := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	second := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	g := &GIF{
+		frames:   []*image.RGBA{first, second},
+		delays:   []time.Duration{50 * time.Millisecond, 100 * time.Millisecond},
+		frameEnd: []time.Duration{50 * time.Millisecond, 150 * time.Millisecond},
+		total:    150 * time.Millisecond,
+	}
+	for _, tc := range []struct {
+		at    time.Duration
+		index int
+	}{
+		{0, 0},
+		{49 * time.Millisecond, 0},
+		{50 * time.Millisecond, 1},
+		{149 * time.Millisecond, 1},
+		{150 * time.Millisecond, 0},
+	} {
+		_, _, got := g.frameAt(tc.at)
+		if got != tc.index {
+			t.Fatalf("fotograma en %s = %d, esperaba %d", tc.at, got, tc.index)
+		}
+	}
+}
+
+func TestGIFEngineReusesCanvasWhileFrameIsUnchanged(t *testing.T) {
+	first := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	second := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	g := &GIF{
+		frames:   []*image.RGBA{first, second},
+		delays:   []time.Duration{time.Hour, time.Hour},
+		frameEnd: []time.Duration{time.Hour, 2 * time.Hour},
+		total:    2 * time.Hour,
+	}
+	eng := &Engine{spec: Spec{Kind: KindGIF, Pal: testPal}, gif: g, start: time.Now()}
+	canvas := eng.Frame(8, 8)
+	if canvas == nil {
+		t.Fatal("el motor no devolvió un lienzo")
+	}
+	if got := eng.Frame(8, 8); got != canvas {
+		t.Fatal("se volvió a convertir el mismo fotograma GIF")
 	}
 }
 

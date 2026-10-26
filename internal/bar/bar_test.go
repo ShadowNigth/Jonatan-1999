@@ -1,6 +1,7 @@
 package bar
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -112,6 +113,28 @@ func TestBlendAndOver(t *testing.T) {
 	c.Over(1, 1, RGBA{0, 255, 0, 0})
 	if c.Pix[(1*4+1)*4+1] != before {
 		t.Fatal("un color transparente modificó el lienzo")
+	}
+
+	// Los atajos de alfa cero y alfa opaco deben conservar source-over.
+	fast := NewCanvas(1, 1)
+	src := RGBA{200, 80, 30, 127}
+	fast.Over(0, 0, src)
+	if got := fast.Pix[:4]; got[0] != src.R || got[1] != src.G || got[2] != src.B || got[3] != src.A {
+		t.Fatalf("source-over sobre transparencia = %v", got)
+	}
+	background := RGBA{10, 20, 30, 255}
+	fast.Set(0, 0, background)
+	fast.Over(0, 0, RGBA{240, 90, 40, 128})
+	want := []uint8{
+		uint8(math.Round(240*128.0/255 + 10*(1-128.0/255))),
+		uint8(math.Round(90*128.0/255 + 20*(1-128.0/255))),
+		uint8(math.Round(40*128.0/255 + 30*(1-128.0/255))),
+		255,
+	}
+	for i := range want {
+		if fast.Pix[i] != want[i] {
+			t.Fatalf("source-over opaco[%d] = %d, esperaba %d", i, fast.Pix[i], want[i])
+		}
 	}
 }
 

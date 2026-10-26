@@ -8,6 +8,7 @@ import (
 	"image/gif"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -36,11 +37,12 @@ func LoadStill(path string) (*Still, error) {
 
 // GIF es un GIF animado cargado en memoria, listo para dibujar.
 type GIF struct {
-	Path   string
-	frames []*image.RGBA
-	delays []time.Duration
-	W, H   int
-	total  time.Duration
+	Path     string
+	frames   []*image.RGBA
+	delays   []time.Duration
+	frameEnd []time.Duration // instante acumulado en que termina cada fotograma
+	W, H     int
+	total    time.Duration
 	// Loop indica si el GIF debe repetirse al terminar (siempre true por ahora).
 	Loop bool
 }
@@ -67,6 +69,8 @@ func LoadGIF(path string) (*GIF, error) {
 	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
 	frames := make([]*image.RGBA, 0, len(g.Image))
 	delays := make([]time.Duration, 0, len(g.Image))
+	frameEnd := make([]time.Duration, 0, len(g.Image))
+	var total time.Duration
 
 	var previousFrame *image.Paletted
 	var canvasBeforePrevious *image.RGBA
@@ -99,12 +103,13 @@ func LoadGIF(path string) (*GIF, error) {
 			d = 100 * time.Millisecond
 		}
 		delays = append(delays, d)
-	}
-	total := time.Duration(0)
-	for _, d := range delays {
 		total += d
+		frameEnd = append(frameEnd, total)
 	}
-	return &GIF{Path: path, frames: frames, delays: delays, W: width, H: height, total: total, Loop: true}, nil
+	return &GIF{
+		Path: path, frames: frames, delays: delays, frameEnd: frameEnd,
+		W: width, H: height, total: total, Loop: true,
+	}, nil
 }
 
 func cloneRGBA(src *image.RGBA) *image.RGBA {
@@ -156,20 +161,34 @@ func transparencyIndex(src *image.Paletted) int {
 
 // FrameAt devuelve el fotograma y su duración para un instante de tiempo.
 func (g *GIF) FrameAt(t time.Duration) (image.Image, time.Duration) {
+	frame, delay, _ := g.frameAt(t)
+	return frame, delay
+}
+
+func (g *GIF) frameAt(t time.Duration) (image.Image, time.Duration, int) {
 	if len(g.frames) == 0 {
-		return nil, time.Second
+		return nil, time.Second, -1
 	}
 	if g.total <= 0 {
-		return g.frames[0], time.Second
+		return g.frames[0], time.Second, 0
 	}
-	t = t % g.total
-	for i, d := range g.delays {
-		if t < d {
-			return g.frames[i], d
+	t %= g.total
+	if len(g.frameEnd) == len(g.frames) {
+		i := sort.Search(len(g.frameEnd), func(i int) bool { return t < g.frameEnd[i] })
+		if i >= len(g.frames) {
+			i = len(g.frames) - 1
 		}
-		t -= d
+		return g.frames[i], g.delays[i], i
 	}
-	return g.frames[len(g.frames)-1], g.delays[len(g.delays)-1]
+	// Compatibilidad defensiva con un GIF construido sin la tabla acumulada.
+	for i, delay := range g.delays {
+		if t < delay {
+			return g.frames[i], delay, i
+		}
+		t -= delay
+	}
+	i := len(g.frames) - 1
+	return g.frames[i], g.delays[i], i
 }
 
 // Frame devuelve el fotograma i (con ajuste circular).

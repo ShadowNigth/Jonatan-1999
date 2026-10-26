@@ -99,6 +99,15 @@ func TestFuzzy(t *testing.T) {
 	if good.Score <= bad.Score {
 		t.Fatalf("puntuación inesperada: %d <= %d", good.Score, bad.Score)
 	}
+
+	match, ok := Fuzzy("ffx", "Firefox")
+	if !ok || len(match.Positions) != 3 || match.Positions[0] != 0 || match.Positions[1] != 4 || match.Positions[2] != 6 {
+		t.Fatalf("posiciones de coincidencia inesperadas: %+v, ok=%v", match, ok)
+	}
+	match, ok = Fuzzy("ñ", "Ñandú")
+	if !ok || len(match.Positions) != 1 || match.Positions[0] != 0 {
+		t.Fatalf("coincidencia Unicode inesperada: %+v, ok=%v", match, ok)
+	}
 }
 
 func TestFilterItems(t *testing.T) {

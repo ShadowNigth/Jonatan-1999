@@ -137,50 +137,87 @@ func (c *Canvas) blend(x, y int, r, g, b, a float64) {
 	if x < 0 || y < 0 || x >= c.W || y >= c.H || a <= 0 {
 		return
 	}
+	c.blendAt((y*c.W+x)*3, r, g, b, a)
+}
+
+func (c *Canvas) blendAt(i int, r, g, b, a float64) {
+	if a <= 0 {
+		return
+	}
 	if a > 1 {
 		a = 1
 	}
-	i := (y*c.W + x) * 3
-	c.Pix[i] = clamp8(float64(c.Pix[i])*(1-a) + r*a)
-	c.Pix[i+1] = clamp8(float64(c.Pix[i+1])*(1-a) + g*a)
-	c.Pix[i+2] = clamp8(float64(c.Pix[i+2])*(1-a) + b*a)
+	inv := 1 - a
+	c.Pix[i] = clamp8(float64(c.Pix[i])*inv + r*a)
+	c.Pix[i+1] = clamp8(float64(c.Pix[i+1])*inv + g*a)
+	c.Pix[i+2] = clamp8(float64(c.Pix[i+2])*inv + b*a)
 }
 
 // glow añade luz con caída suave alrededor de un punto.
 func (c *Canvas) glow(cx, cy, radius, r, g, b, strength float64) {
-	if radius <= 0 {
+	if radius <= 0 || strength <= 0 {
 		return
 	}
 	x0, x1 := int(cx-radius), int(cx+radius)
 	y0, y1 := int(cy-radius), int(cy+radius)
+	if x0 < 0 {
+		x0 = 0
+	}
+	if y0 < 0 {
+		y0 = 0
+	}
+	if x1 >= c.W {
+		x1 = c.W - 1
+	}
+	if y1 >= c.H {
+		y1 = c.H - 1
+	}
+	if x0 > x1 || y0 > y1 {
+		return
+	}
 	for y := y0; y <= y1; y++ {
-		if y < 0 || y >= c.H {
-			continue
-		}
+		dy := float64(y) - cy
 		for x := x0; x <= x1; x++ {
-			if x < 0 || x >= c.W {
-				continue
-			}
-			dx, dy := float64(x)-cx, float64(y)-cy
+			dx := float64(x) - cx
 			d := math.Hypot(dx, dy)
 			if d > radius {
 				continue
 			}
 			f := 1 - d/radius
-			c.blend(x, y, r, g, b, f*f*strength)
+			c.blendAt((y*c.W+x)*3, r, g, b, f*f*strength)
 		}
 	}
 }
 
 func (c *Canvas) disc(cx, cy, radius, r, g, b, a float64) {
+	if radius < 0 || a <= 0 {
+		return
+	}
 	x0, x1 := int(cx-radius), int(cx+radius)
 	y0, y1 := int(cy-radius), int(cy+radius)
-	rr := radius * radius
+	if x0 < 0 {
+		x0 = 0
+	}
+	if y0 < 0 {
+		y0 = 0
+	}
+	if x1 >= c.W {
+		x1 = c.W - 1
+	}
+	if y1 >= c.H {
+		y1 = c.H - 1
+	}
+	if x0 > x1 || y0 > y1 {
+		return
+	}
+	radius2 := radius * radius
 	for y := y0; y <= y1; y++ {
+		dy := float64(y) - cy
+		dy2 := dy * dy
 		for x := x0; x <= x1; x++ {
-			dx, dy := float64(x)-cx, float64(y)-cy
-			if dx*dx+dy*dy <= rr {
-				c.blend(x, y, r, g, b, a)
+			dx := float64(x) - cx
+			if dx*dx+dy2 <= radius2 {
+				c.blendAt((y*c.W+x)*3, r, g, b, a)
 			}
 		}
 	}
@@ -237,16 +274,19 @@ func lerp(a, b, t float64) float64 { return a + (b-a)*t }
 
 // Renderer dibuja una escena animada fotograma a fotograma.
 type Renderer struct {
-	scene   string
-	pal     ui.Palette
-	light   bool
-	canvas  *Canvas
-	part    []particle
-	rng     *rand.Rand
-	frame   int
-	initW   int
-	initH   int
-	flashes []flash
+	scene        string
+	pal          ui.Palette
+	light        bool
+	canvas       *Canvas
+	part         []particle
+	rng          *rand.Rand
+	frame        int
+	initW        int
+	initH        int
+	flashes      []flash
+	skyline      []int
+	meadowHeight []int
+	meadowBloom  []bool
 }
 
 type particle struct {
@@ -284,7 +324,41 @@ func (r *Renderer) Resize(w, h int) {
 	r.initW, r.initH = w, h
 	r.part = nil
 	r.flashes = nil
+	r.prepareStaticScene()
 	r.spawn()
+}
+
+// prepareStaticScene genera una sola vez los detalles aleatorios que no cambian
+// entre fotogramas, en vez de reiniciar el generador en cada render.
+func (r *Renderer) prepareStaticScene() {
+	r.skyline = nil
+	r.meadowHeight = nil
+	r.meadowBloom = nil
+	if r.canvas == nil {
+		return
+	}
+	switch r.scene {
+	case "city":
+		r.skyline = make([]int, r.canvas.W)
+		rng := rand.New(rand.NewSource(7))
+		for x := 0; x < r.canvas.W; {
+			buildingWidth := 3 + rng.Intn(7)
+			buildingHeight := int(float64(r.canvas.H) * (0.25 + rng.Float64()*0.45))
+			for i := 0; i < buildingWidth && x+i < r.canvas.W; i++ {
+				r.skyline[x+i] = buildingHeight
+			}
+			x += buildingWidth
+		}
+	case "meadow":
+		r.meadowHeight = make([]int, r.canvas.W)
+		r.meadowBloom = make([]bool, r.canvas.W)
+		rng := rand.New(rand.NewSource(11))
+		baseHeight := r.canvas.H * 35 / 100
+		for x := 0; x < r.canvas.W; x++ {
+			r.meadowHeight[x] = baseHeight/2 + int(float64(baseHeight)*float64(rng.Intn(100))/100)
+			r.meadowBloom[x] = (x+rng.Intn(3))%7 == 0
+		}
+	}
 }
 
 // Frame dibuja el siguiente fotograma y devuelve el lienzo.
@@ -330,6 +404,8 @@ func (r *Renderer) paintBackdrop() {
 	altR, altG, altB := hexRGB(r.pal.BgAlt)
 	acR, acG, acB := hexRGB(r.pal.Accent)
 	t := float64(r.frame) / 600.0
+	breath := 0.10 + 0.05*math.Sin(t*2*math.Pi)
+	rowBytes := c.W * 3
 	for y := 0; y < c.H; y++ {
 		f := float64(y) / float64(c.H)
 		// curva suave
@@ -338,12 +414,14 @@ func (r *Renderer) paintBackdrop() {
 		gg := lerp(altG, bgG, g)
 		bb := lerp(altB, bgB, g)
 		// halo de acento en el tercio inferior, respirando lentamente
-		halo := math.Pow(f, 3) * (0.10 + 0.05*math.Sin(t*2*math.Pi))
+		halo := math.Pow(f, 3) * breath
 		rr = lerp(rr, acR, halo)
 		gg = lerp(gg, acG, halo)
 		bb = lerp(bb, acB, halo)
-		for x := 0; x < c.W; x++ {
-			c.set(x, y, rr, gg, bb)
+		row := c.Pix[y*rowBytes : (y+1)*rowBytes]
+		red, green, blue := clamp8(rr), clamp8(gg), clamp8(bb)
+		for i := 0; i < rowBytes; i += 3 {
+			row[i], row[i+1], row[i+2] = red, green, blue
 		}
 	}
 }
@@ -631,22 +709,11 @@ func (r *Renderer) drawWave(c *Canvas) {
 func mulHex(r, g, b float64) [3]float64 { return [3]float64{r, g, b} }
 
 func (r *Renderer) drawCity(c *Canvas) {
-	// Silueta de edificios determinista.
-	rng := rand.New(rand.NewSource(7))
-	x := 0
-	skyline := make([]int, c.W)
-	for x < c.W {
-		bw := 3 + rng.Intn(7)
-		bh := int(float64(c.H) * (0.25 + rng.Float64()*0.45))
-		for i := 0; i < bw && x+i < c.W; i++ {
-			skyline[x+i] = bh
-		}
-		x += bw
-	}
+	// La silueta se prepara al redimensionar y permanece igual en cada cuadro.
 	bgR, bgG, bgB := hexRGB(r.pal.BgAlt)
 	dark := 0.55
 	for x := 0; x < c.W; x++ {
-		for y := 0; y < skyline[x]; y++ {
+		for y := 0; y < r.skyline[x]; y++ {
 			row := c.H - 1 - y
 			c.set(x, row, bgR*dark, bgG*dark, bgB*dark)
 		}
@@ -656,7 +723,7 @@ func (r *Renderer) drawCity(c *Canvas) {
 	a2r, a2g, a2b := hexRGB(r.pal.Accent2)
 	fr := float64(r.frame)
 	for x := 1; x < c.W-1; x += 3 {
-		bh := skyline[x]
+		bh := r.skyline[x]
 		if bh == 0 {
 			continue
 		}
@@ -752,18 +819,16 @@ func (r *Renderer) drawMeadow(c *Canvas) {
 	fr := float64(r.frame)
 	gr, gg, gb := hexRGB(r.pal.Ok)
 	ar, ag, ab := hexRGB(r.pal.Accent2)
-	// Hierba: tallos que se mecen.
-	rng := rand.New(rand.NewSource(11))
+	// Hierba: tallos que se mecen; altura y flores se preparan al redimensionar.
 	for x := 0; x < c.W; x++ {
-		baseH := c.H * 35 / 100
-		height := baseH/2 + int(float64(baseH)*float64(rng.Intn(100))/100)
+		height := r.meadowHeight[x]
 		sway := math.Sin(fr*0.04+float64(x)*0.2) * 1.6
 		x0 := float64(x)
 		y0 := float64(c.H - 1)
 		x1 := x0 + sway
 		y1 := float64(c.H - height)
 		c.cline(x0, y0, x1, y1, gr, gg, gb, 0.35)
-		if (x+rng.Intn(3))%7 == 0 {
+		if r.meadowBloom[x] {
 			c.blend(int(x1), int(y1), ar, ag, ab, 0.8)
 		}
 	}

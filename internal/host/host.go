@@ -75,7 +75,10 @@ type Collector struct {
 	prevNet   netSample
 	prevTime  time.Time
 	cache     State
-	haveCache bool
+	wifiAt    time.Time
+	batteryAt time.Time
+	diskAt    time.Time
+	tempAt    time.Time
 	// Estado de audio cacheado por si wpctl es lento.
 	volMu   sync.Mutex
 	volAt   time.Time
@@ -100,43 +103,70 @@ func NewCollector() *Collector {
 	return c
 }
 
-// Snapshot devuelve el estado actual del sistema.
+// Snapshot devuelve el estado actual del sistema. Las métricas de archivos
+// locales se actualizan en cada llamada; las consultas más costosas o estables
+// conservan su último valor y se refrescan con menor frecuencia.
 func (c *Collector) Snapshot() State {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	st := State{Time: time.Now()}
+	now := time.Now()
+	st := c.cache
+	st.Time = now
 
-	// CPU: delta desde la muestra anterior (mínimo 150 ms entre lecturas).
-	cur := readCPUSample()
-	if d := cur.total - c.prevCPU.total; d > 0 {
-		busy := d - (cur.idle - c.prevCPU.idle)
-		st.CPU = float64(busy) * 100 / float64(d)
-	} else {
-		st.CPU = c.cache.CPU
+	// Evita muestras de CPU casi idénticas cuando varios consumidores llaman
+	// Snapshot seguidos; una muestra cada 150 ms ya da una lectura útil.
+	if c.prevTime.IsZero() || now.Sub(c.prevTime) >= 150*time.Millisecond {
+		cur := readCPUSample()
+		if cur.total > 0 {
+			if c.prevCPU.total > 0 && cur.total >= c.prevCPU.total && cur.idle >= c.prevCPU.idle {
+				total := cur.total - c.prevCPU.total
+				idle := cur.idle - c.prevCPU.idle
+				if total > 0 {
+					if idle > total {
+						idle = total
+					}
+					st.CPU = float64(total-idle) * 100 / float64(total)
+				}
+			}
+			c.prevCPU = cur
+		}
+		c.prevTime = now
 	}
-	c.prevCPU = cur
 
-	st.MemTotal, st.MemUsed = readMem()
-	st.SwapTotal, st.SwapUsed = readSwap()
+	st.MemTotal, st.MemUsed, st.SwapTotal, st.SwapUsed = readMemAndSwap()
 	st.LoadAvg = readLoadAvg()
 	st.Uptime = readUptime()
 
 	curNet := readNetSample()
-	st.NetUp = curNet.tx - c.prevNet.tx
-	st.NetDown = curNet.rx - c.prevNet.rx
+	st.NetUp, st.NetDown = 0, 0
+	if curNet.tx >= c.prevNet.tx {
+		st.NetUp = curNet.tx - c.prevNet.tx
+	}
+	if curNet.rx >= c.prevNet.rx {
+		st.NetDown = curNet.rx - c.prevNet.rx
+	}
 	c.prevNet = curNet
 
 	st.Volume, st.Muted = c.audio()
-	st.WifiName, st.WifiSignal, st.WifiEnabled = readWifi()
-	st.Battery = readBattery()
-	st.DiskUsed, st.DiskTotal = DiskUsage("/")
-
-	if t, ok := readTemp(); ok {
-		st.Temp = t
+	if c.wifiAt.IsZero() || now.Sub(c.wifiAt) >= 5*time.Second {
+		st.WifiName, st.WifiSignal, st.WifiEnabled = readWifi()
+		c.wifiAt = now
 	}
+	if c.batteryAt.IsZero() || now.Sub(c.batteryAt) >= 5*time.Second {
+		st.Battery = readBattery()
+		c.batteryAt = now
+	}
+	if c.diskAt.IsZero() || now.Sub(c.diskAt) >= 30*time.Second {
+		st.DiskUsed, st.DiskTotal = DiskUsage("/")
+		c.diskAt = now
+	}
+	if c.tempAt.IsZero() || now.Sub(c.tempAt) >= 2*time.Second {
+		st.Temp, _ = readTemp()
+		c.tempAt = now
+	}
+
 	c.cache = st
-	c.haveCache = true
 	return st
 }
 
@@ -196,13 +226,14 @@ func readNetSample() netSample {
 	return s
 }
 
-func readMem() (total, used uint64) {
+// readMemAndSwap lee /proc/meminfo una sola vez para obtener memoria y swap.
+func readMemAndSwap() (memTotal, memUsed, swapTotal, swapUsed uint64) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0, 0
 	}
 	defer f.Close()
-	var available uint64
+	var memAvailable, swapFree uint64
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())
@@ -212,42 +243,22 @@ func readMem() (total, used uint64) {
 		v, _ := strconv.ParseUint(fields[1], 10, 64)
 		switch strings.TrimSuffix(fields[0], ":") {
 		case "MemTotal":
-			total = v * 1024
+			memTotal = v * 1024
 		case "MemAvailable":
-			available = v * 1024
-		}
-	}
-	if total > 0 {
-		used = total - available
-	}
-	return total, used
-}
-
-func readSwap() (total, used uint64) {
-	f, err := os.Open("/proc/meminfo")
-	if err != nil {
-		return 0, 0
-	}
-	defer f.Close()
-	var free uint64
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		if len(fields) < 2 {
-			continue
-		}
-		v, _ := strconv.ParseUint(fields[1], 10, 64)
-		switch strings.TrimSuffix(fields[0], ":") {
+			memAvailable = v * 1024
 		case "SwapTotal":
-			total = v * 1024
+			swapTotal = v * 1024
 		case "SwapFree":
-			free = v * 1024
+			swapFree = v * 1024
 		}
 	}
-	if total > 0 {
-		used = total - free
+	if memTotal > 0 && memAvailable <= memTotal {
+		memUsed = memTotal - memAvailable
 	}
-	return total, used
+	if swapTotal > 0 && swapFree <= swapTotal {
+		swapUsed = swapTotal - swapFree
+	}
+	return memTotal, memUsed, swapTotal, swapUsed
 }
 
 func readLoadAvg() [3]float64 {
@@ -308,7 +319,7 @@ func readWifi() (ssid string, signal int, enabled bool) {
 				ssid = strings.TrimSpace(strings.TrimPrefix(line, "SSID:"))
 			}
 			if strings.HasPrefix(line, "signal:") {
-				sig := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, "signal:"), ""))
+				sig := strings.TrimSpace(strings.TrimPrefix(line, "signal:"))
 				sig = strings.TrimSuffix(sig, " dBm")
 				if v, err := strconv.Atoi(sig); err == nil {
 					// De dBm (-30 excelente, -90 malo) a porcentaje.

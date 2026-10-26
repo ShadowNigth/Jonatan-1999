@@ -126,6 +126,13 @@ func sampleNearestRGBA(img image.Image, bounds image.Rectangle, x, y float64) (r
 	} else if py >= bounds.Max.Y {
 		py = bounds.Max.Y - 1
 	}
+	// GIF frames and many decoded PNGs are already premultiplied image.RGBA.
+	// Read those bytes directly instead of allocating a color interface for
+	// every pixel of every animated frame.
+	if rgba, ok := img.(*image.RGBA); ok {
+		i := rgba.PixOffset(px, py)
+		return float64(rgba.Pix[i]), float64(rgba.Pix[i+1]), float64(rgba.Pix[i+2]), float64(rgba.Pix[i+3]) / 255
+	}
 	cr, cg, cb, ca := img.At(px, py).RGBA()
 	return float64(cr) / 257, float64(cg) / 257, float64(cb) / 257, float64(ca) / 65535
 }
