@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -91,6 +92,14 @@ type daemonState struct {
 
 // runDaemonOptions implementa el bucle del fondo animado sobre wlr-layer-shell.
 func runDaemonOptions(opt DaemonOptions, stop <-chan struct{}, sig <-chan os.Signal) error {
+	lock, err := acquireDaemonLock(pidFile)
+	if err != nil {
+		return err
+	}
+	if lock != nil {
+		defer lock.Close() // El kernel libera el bloqueo al cerrar o morir el proceso.
+	}
+
 	conn, err := wayland.NewConn()
 	if err != nil {
 		return err
@@ -453,6 +462,33 @@ func PIDPath(cacheDir string) string {
 }
 
 var pidFile string
+
+var errDaemonAlreadyRunning = errors.New("el demonio de fondo ya está en ejecución")
+
+// acquireDaemonLock evita que dos inicios simultáneos pasen la ventana en la
+// que todavía no se ha escrito el PID. El archivo se conserva: flock libera
+// el bloqueo automáticamente cuando termina el proceso.
+func acquireDaemonLock(pidPath string) (*os.File, error) {
+	if pidPath == "" {
+		return nil, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0o755); err != nil {
+		return nil, fmt.Errorf("creando el directorio del bloqueo: %w", err)
+	}
+	lockPath := pidPath + ".lock"
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("abriendo el bloqueo del demonio: %w", err)
+	}
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = file.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			return nil, errDaemonAlreadyRunning
+		}
+		return nil, fmt.Errorf("adquiriendo el bloqueo del demonio: %w", err)
+	}
+	return file, nil
+}
 
 func writePID() {
 	if pidFile == "" {

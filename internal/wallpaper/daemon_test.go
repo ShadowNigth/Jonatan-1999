@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"errors"
 	"image"
 	"image/png"
 	"os"
@@ -11,6 +12,33 @@ import (
 	"github.com/ShadowNigth/swaydesk/internal/swayipc"
 	"github.com/ShadowNigth/swaydesk/internal/wayland"
 )
+
+func TestWallpaperDaemonLockPreventsConcurrentInstances(t *testing.T) {
+	pidPath := filepath.Join(t.TempDir(), "wallpaperd.pid")
+	first, err := acquireDaemonLock(pidPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+
+	if second, err := acquireDaemonLock(pidPath); !errors.Is(err, errDaemonAlreadyRunning) {
+		if second != nil {
+			second.Close()
+		}
+		t.Fatalf("segundo bloqueo = %v, error = %v; se esperaba instancia activa", second, err)
+	}
+
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	third, err := acquireDaemonLock(pidPath)
+	if err != nil {
+		t.Fatalf("el bloqueo no se liberó al cerrar la instancia: %v", err)
+	}
+	if err := third.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func newWorkspaceTestDaemon(t *testing.T, transition Transition) *daemonState {
 	t.Helper()
