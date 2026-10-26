@@ -1,33 +1,35 @@
 # swaydesk · swaylock
+# Esta plantilla usa solo opciones del swaylock estándar. El reloj y los
+# efectos visuales se pasan únicamente a swaylock-effects cuando está instalado.
 color={{THEME_BG_HEX}}
 inside-color={{THEME_BG_HEX}}99
 inside-ver-color={{THEME_BG_SEL_HEX}}cc
 inside-wrong-color={{THEME_ERR_HEX}}cc
 inside-clear-color={{THEME_OK_HEX}}cc
+inside-caps-lock-color={{THEME_WARN_HEX}}cc
 ring-color={{THEME_BORDER_HEX}}
 ring-ver-color={{THEME_ACCENT_HEX}}
 ring-wrong-color={{THEME_ERR_HEX}}
 ring-clear-color={{THEME_OK_HEX}}
+ring-caps-lock-color={{THEME_WARN_HEX}}
 key-hl-color={{THEME_ACCENT_HEX}}
 bs-hl-color={{THEME_ERR_HEX}}
 line-color={{THEME_BORDER_HEX}}
 line-ver-color={{THEME_ACCENT_HEX}}
 line-wrong-color={{THEME_ERR_HEX}}
 line-clear-color={{THEME_OK_HEX}}
+line-caps-lock-color={{THEME_WARN_HEX}}
 text-color={{THEME_FG_HEX}}
 text-ver-color={{THEME_FG_HEX}}
 text-wrong-color={{THEME_ERR_HEX}}
 text-clear-color={{THEME_FG_HEX}}
+text-caps-lock-color={{THEME_WARN_HEX}}
 separator-color={{THEME_BG_SEL_HEX}}
 font={{FONT}}
 font-size={{LOCK_FONT_SIZE}}
 indicator-radius=160
 indicator-thickness=8
-indicator-idle-visible=yes
-ring-ver-color={{THEME_ACCENT_HEX}}
-show-clock=yes
-clock-font={{FONT}}
-clock-color={{THEME_ACCENT_HEX}}
-clock-font-size={{LOCK_CLOCK_SIZE}}
-timestr=%H:%M
-datestr=%A %d de %B
+indicator-idle-visible
+indicator-caps-lock
+ignore-empty-password
+show-failed-attempts

@@ -54,20 +54,22 @@ func Notification(summary, body string, urgency string) {
 	}
 }
 
-// Lock bloquea la sesión con el primer bloqueador disponible, usando el color
-// de fondo del tema activo.
+// Lock bloquea la sesión con la mejor presentación disponible y conserva un
+// fallback compatible con swaylock estándar. Los efectos son opcionales: no se
+// instala ni se requiere swaylock-effects para poder bloquear la sesión.
 func Lock() error {
-	bg := themeBackground()
-	candidates := [][]string{
-		{"swaylock", "-f", "-c", bg},
-		{"swaylock-effects", "-f", "--screenshots", "--clock", "--indicator", "-c", bg},
-		{"swaylock"},
-		{"gtklock"},
+	bg, clockFontSize := lockAppearance()
+	if launcher.HasCommand("swaylock-effects") {
+		return launcher.StartDetached("swaylock-effects", swaylockEffectsArgs(bg, clockFontSize)...)
 	}
-	for _, c := range candidates {
-		if launcher.HasCommand(c[0]) {
-			return launcher.StartDetached(c[0], c[1:]...)
+	if launcher.HasCommand("swaylock") {
+		if swaylockSupportsEffects("swaylock") {
+			return launcher.StartDetached("swaylock", swaylockEffectsArgs(bg, clockFontSize)...)
 		}
+		return launcher.StartDetached("swaylock", swaylockArgs(bg)...)
+	}
+	if launcher.HasCommand("gtklock") {
+		return launcher.StartDetached("gtklock")
 	}
 	if launcher.HasCommand("loginctl") {
 		return launcher.StartDetached("loginctl", "lock-session")
@@ -75,13 +77,50 @@ func Lock() error {
 	return fmt.Errorf("no se encontró un bloqueador de pantalla (instala swaylock)")
 }
 
-// themeBackground devuelve el color de fondo de la paleta configurada.
-func themeBackground() string {
-	cfg, err := config.Load()
-	if err != nil {
-		return "#1a1b26"
+// swaylockEffectsArgs añade desenfoque, viñeta, reloj y fade-in solo para una
+// compilación de swaylock-effects; el swaylock estándar nunca recibe estas flags.
+func swaylockEffectsArgs(bg string, clockFontSize int) []string {
+	return []string{
+		"-f", "--screenshots",
+		"--effect-scale", "0.5", "--effect-blur", "7x5", "--effect-scale", "2",
+		"--effect-vignette", "0.5:0.5", "--clock", "--indicator",
+		"--timestr", "%H:%M", "--datestr", "%A %d de %B",
+		"--font-size", strconv.Itoa(clockFontSize), "--fade-in", "0.25", "-c", bg,
 	}
-	return string(ui.PaletteByName(cfg.Theme).Bg)
+}
+
+// swaylockArgs conserva el bloqueo básico, la paleta y la compatibilidad con
+// swaylock upstream, que no incorpora reloj ni efectos de imagen.
+func swaylockArgs(bg string) []string {
+	return []string{"-f", "-c", bg}
+}
+
+// swaylockSupportsEffects identifica el fork habitual de Arch, que instala el
+// binario como "swaylock" y no como "swaylock-effects".
+func swaylockSupportsEffects(binary string) bool {
+	path, err := exec.LookPath(binary)
+	if err != nil {
+		return false
+	}
+	output, _ := exec.Command(path, "--help").CombinedOutput()
+	return strings.Contains(string(output), "--effect-blur")
+}
+
+// lockAppearance obtiene la paleta activa y el tamaño del reloj de la
+// configuración. El color se devuelve sin '#', como espera --color; la
+// plantilla mantiene el formato #RRGGBB requerido por swaylock/config.
+func lockAppearance() (bg string, clockFontSize int) {
+	cfg, err := config.Load()
+	fontSize := 11
+	if err == nil {
+		bg = strings.TrimPrefix(string(ui.PaletteByName(cfg.Theme).Bg), "#")
+		if cfg.FontSize > 0 {
+			fontSize = cfg.FontSize
+		}
+	} else {
+		bg = "1a1b26"
+	}
+	return bg, fontSize*4 + 4
 }
 
 // PowerActions devuelve las acciones del menú de energía.
